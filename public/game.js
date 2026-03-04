@@ -38,6 +38,15 @@ const GRAVITY = 28;
 const JUMP_SPEED = 11;
 const MAX_FALL_SPEED = 24;
 const EPSILON = 0.0001;
+const AUTH_TOKEN_STORAGE_KEY = "pixelverse_auth_token";
+const AUTH_USER_STORAGE_KEY = "pixelverse_auth_user";
+const TEXTURE47_COLS = 8;
+const TEXTURE47_ROWS = 7;
+const DEFAULT_TEXTURE47_VALID_MASKS = [
+  0, 2, 8, 10, 11, 16, 18, 22, 24, 26, 27, 30, 31, 64, 66, 72, 74, 75, 80, 82, 86, 88, 90,
+  91, 94, 95, 104, 106, 107, 120, 122, 123, 126, 127, 208, 210, 214, 216, 218, 219, 222, 223,
+  248, 250, 251, 254, 255,
+];
 
 const state = {
   token: null,
@@ -54,6 +63,7 @@ const state = {
   lastMoveSentAt: 0,
   blockDefs: new Map(),
   atlases: new Map(),
+  texture47: new Map(),
   selectedBlockId: 1,
   velocity: { x: 0, y: 0 },
   collider: { width: 0.72, height: 0.92 },
@@ -62,9 +72,136 @@ const state = {
   worldRender: null,
 };
 
+function saveAuthSession() {
+  if (!state.token || !state.user) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, state.token);
+    localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(state.user));
+  } catch {
+  }
+}
+
+function clearAuthSession() {
+  try {
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+  } catch {
+  }
+}
+
+function loadAuthSession() {
+  try {
+    const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    const userRaw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    if (!token || !userRaw) {
+      return false;
+    }
+
+    const parsedUser = JSON.parse(userRaw);
+    if (!parsedUser || typeof parsedUser.username !== "string") {
+      return false;
+    }
+
+    state.token = token;
+    state.user = parsedUser;
+    welcomeText.textContent = `Logged in as ${state.user.username}`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isTexture47Block(block) {
+  return typeof block?.ATLAS_ID === "string";
+}
+
+function getForegroundTileIdAt(tileX, tileY) {
+  if (!state.world || tileX < 0 || tileY < 0 || tileX >= state.world.width || tileY >= state.world.height) {
+    return 0;
+  }
+
+  const index = tileY * state.world.width + tileX;
+  return Number(state.world.foreground?.[index] || 0);
+}
+
+function sameTexture47Group(tileX, tileY, atlasId) {
+  const neighborId = getForegroundTileIdAt(tileX, tileY);
+  if (neighborId === 0) {
+    return false;
+  }
+
+  const neighborBlock = state.blockDefs.get(neighborId);
+  return !!neighborBlock && typeof neighborBlock.ATLAS_ID === "string" && neighborBlock.ATLAS_ID === atlasId;
+}
+
+function getTexture47Mask(tileX, tileY, atlasId) {
+  const north = sameTexture47Group(tileX, tileY - 1, atlasId);
+  const east = sameTexture47Group(tileX + 1, tileY, atlasId);
+  const south = sameTexture47Group(tileX, tileY + 1, atlasId);
+  const west = sameTexture47Group(tileX - 1, tileY, atlasId);
+
+  const northEast = north && east && sameTexture47Group(tileX + 1, tileY - 1, atlasId);
+  const southEast = south && east && sameTexture47Group(tileX + 1, tileY + 1, atlasId);
+  const southWest = south && west && sameTexture47Group(tileX - 1, tileY + 1, atlasId);
+  const northWest = north && west && sameTexture47Group(tileX - 1, tileY - 1, atlasId);
+
+  let mask = 0;
+  if (north) mask |= 2;
+  if (east) mask |= 16;
+  if (south) mask |= 64;
+  if (west) mask |= 8;
+  if (northEast) mask |= 1;
+  if (southEast) mask |= 32;
+  if (southWest) mask |= 128;
+  if (northWest) mask |= 4;
+
+  return mask;
+}
+
+function drawConnected47TileToContext(targetContext, block, drawX, drawY) {
+  if (!state.world || !isTexture47Block(block)) {
+    return false;
+  }
+
+  const texture47 = state.texture47.get(block.ATLAS_ID);
+  if (!texture47?.image) {
+    return false;
+  }
+
+  const tileX = Math.floor(drawX / TILE_SIZE);
+  const tileY = Math.floor(drawY / TILE_SIZE);
+  const mask = getTexture47Mask(tileX, tileY, block.ATLAS_ID);
+  const maskToIndex = texture47.maskToIndex;
+  const variantIndex = maskToIndex.get(mask) ?? (texture47.maskOrder.length - 1);
+
+  const sourceX = (variantIndex % TEXTURE47_COLS) * texture47.tileWidth;
+  const sourceY = Math.floor(variantIndex / TEXTURE47_COLS) * texture47.tileHeight;
+
+  targetContext.drawImage(
+    texture47.image,
+    sourceX,
+    sourceY,
+    texture47.tileWidth,
+    texture47.tileHeight,
+    drawX,
+    drawY,
+    TILE_SIZE,
+    TILE_SIZE,
+  );
+
+  return true;
+}
+
 function drawTileToContext(targetContext, tileId, drawX, drawY) {
   const block = state.blockDefs.get(tileId);
   if (!block) {
+    return;
+  }
+
+  if (drawConnected47TileToContext(targetContext, block, drawX, drawY)) {
     return;
   }
 
@@ -132,6 +269,14 @@ function updateWorldRenderTile(tileX, tileY) {
   }
   if (foregroundTile !== 0) {
     drawTileToContext(state.worldRender.context, foregroundTile, drawX, drawY);
+  }
+}
+
+function updateWorldRenderTileArea(centerX, centerY) {
+  for (let y = centerY - 1; y <= centerY + 1; y += 1) {
+    for (let x = centerX - 1; x <= centerX + 1; x += 1) {
+      updateWorldRenderTile(x, y);
+    }
   }
 }
 
@@ -380,6 +525,7 @@ async function loadBlockDefinitions() {
 
   state.blockDefs.clear();
   state.atlases.clear();
+  state.texture47.clear();
 
   for (const atlas of data.atlases || []) {
     const image = await loadImage(atlas.SRC);
@@ -391,6 +537,53 @@ async function loadBlockDefinitions() {
 
   for (const block of data.blocks || []) {
     state.blockDefs.set(block.ID, block);
+  }
+
+  const texture47AtlasIds = new Set(
+    Array.from(state.blockDefs.values())
+      .filter((block) => isTexture47Block(block))
+      .map((block) => block.ATLAS_ID),
+  );
+
+  for (const atlasId of texture47AtlasIds) {
+    try {
+      const image = await loadImage(`/assets/texture47/${atlasId}.png`);
+      let columns = TEXTURE47_COLS;
+      let rows = TEXTURE47_ROWS;
+      let maskOrder = DEFAULT_TEXTURE47_VALID_MASKS;
+
+      try {
+        const config = await requestJson(`/assets/texture47/${atlasId}.json`);
+        const maybeColumns = Number(config?.columns);
+        const maybeRows = Number(config?.rows);
+        if (!Number.isNaN(maybeColumns) && maybeColumns > 0) {
+          columns = Math.floor(maybeColumns);
+        }
+        if (!Number.isNaN(maybeRows) && maybeRows > 0) {
+          rows = Math.floor(maybeRows);
+        }
+
+        if (Array.isArray(config?.maskOrder) && config.maskOrder.length > 0) {
+          maskOrder = config.maskOrder
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value >= 0);
+          if (maskOrder.length === 0) {
+            maskOrder = DEFAULT_TEXTURE47_VALID_MASKS;
+          }
+        }
+      } catch {
+      }
+
+      state.texture47.set(atlasId, {
+        image,
+        tileWidth: Math.floor(image.width / columns),
+        tileHeight: Math.floor(image.height / rows),
+        maskOrder,
+        maskToIndex: new Map(maskOrder.map((value, index) => [value, index])),
+      });
+    } catch (error) {
+      console.warn(`47-tile texture missing for ${atlasId}:`, error.message);
+    }
   }
 
   if (state.world) {
@@ -434,6 +627,7 @@ async function auth(action) {
     state.token = data.token;
     state.user = data.user;
     welcomeText.textContent = `Logged in as ${state.user.username}`;
+    saveAuthSession();
 
     passwordInput.value = "";
     showScreen("world");
@@ -455,6 +649,7 @@ async function authGuest() {
     state.token = data.token;
     state.user = data.user;
     welcomeText.textContent = `Logged in as ${state.user.username}`;
+    saveAuthSession();
 
     usernameInput.value = "";
     passwordInput.value = "";
@@ -605,7 +800,7 @@ function connectSocket() {
       const index = msg.y * state.world.width + msg.x;
       state.world.foreground[index] = Number(msg.foreground ?? msg.tile ?? 0);
       state.world.background[index] = Number(msg.background ?? 0);
-      updateWorldRenderTile(msg.x, msg.y);
+      updateWorldRenderTileArea(msg.x, msg.y);
     }
   });
 
@@ -707,6 +902,7 @@ function logout() {
   leaveWorld();
   state.token = null;
   state.user = null;
+  clearAuthSession();
   usernameInput.value = "";
   passwordInput.value = "";
   loginError.textContent = "";
@@ -940,6 +1136,19 @@ function loop() {
     gameStatus.textContent = "Failed loading block definitions";
   }
 
+  if (loadAuthSession()) {
+    try {
+      await loadWorldList();
+      showScreen("world");
+    } catch {
+      clearAuthSession();
+      state.token = null;
+      state.user = null;
+      showScreen("main");
+    }
+  } else {
+    showScreen("main");
+  }
+
   requestAnimationFrame(loop);
-  showScreen("main");
 })();

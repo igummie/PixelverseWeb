@@ -21,7 +21,7 @@
       "ID": 1,
       "NAME": "DIRT",
       "BLOCK_TYPE": "SOLID",
-      "ATLAS_ID": 0,
+      "ATLAS_ID": "dirt",
       "ATLAS_TEXTURE": { "x": 16, "y": 0, "w": 16, "h": 16 },
       "PLACEABLE": true
     },
