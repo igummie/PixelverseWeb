@@ -52,15 +52,22 @@
 
       input,
       select,
-      button {
+      button,
+      .buttonLink {
         background: #111827;
         color: #e5e7eb;
         border: 1px solid #4b5563;
         border-radius: 8px;
         padding: 10px 12px;
+        text-decoration: none;
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
 
-      button {
+      button,
+      .buttonLink {
         cursor: pointer;
         font-weight: 600;
       }
@@ -179,6 +186,7 @@
           <button id="joinWorldBtn">Enter World</button>
           <button id="refreshWorldsBtn">Refresh</button>
         </div>
+        <a class="buttonLink" href="/texture47-editor.html" target="_blank" rel="noopener">Open Texture47 Tool</a>
         <button id="logoutBtn">Logout</button>
         <div id="worldError" class="error"></div>
       </div>

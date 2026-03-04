@@ -1,0 +1,1459 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Texture47 Editor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #111827;
+        color: #e5e7eb;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 420px 1fr;
+        gap: 16px;
+        min-height: 100vh;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+
+      .panel {
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 12px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .title {
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        opacity: 0.85;
+      }
+
+      input,
+      button,
+      textarea {
+        background: #111827;
+        color: #e5e7eb;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+
+      button {
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 130px;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .row > * {
+        flex: 1;
+      }
+
+      .atlasSearchWrap {
+        position: relative;
+        flex: 1;
+      }
+
+      .atlasSuggestions {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        max-height: 180px;
+        overflow-y: auto;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        background: #111827;
+        z-index: 20;
+        display: none;
+      }
+
+      .atlasSuggestions.visible {
+        display: block;
+      }
+
+      .atlasSuggestion {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        border-bottom: 1px solid #1f2937;
+        border-radius: 0;
+        background: transparent;
+        color: #e5e7eb;
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+
+      .atlasSuggestion:last-child {
+        border-bottom: 0;
+      }
+
+      .atlasSuggestion.active,
+      .atlasSuggestion:hover {
+        background: #1f2937;
+      }
+
+      .atlasWrap {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        overflow: auto;
+        max-height: 340px;
+        background: #0f172a;
+      }
+
+      .atlasControls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .atlasControls input[type="range"] {
+        flex: 1;
+      }
+
+      #atlasCanvas {
+        image-rendering: pixelated;
+        display: block;
+        cursor: pointer;
+      }
+
+      .testCanvasWrap {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        overflow: hidden;
+        width: 100%;
+        max-width: 512px;
+        aspect-ratio: 16 / 10;
+        background: #0f172a;
+      }
+
+      #testCanvas {
+        image-rendering: pixelated;
+        display: block;
+        cursor: crosshair;
+        width: 100%;
+        height: 100%;
+        transform-origin: top left;
+      }
+
+      .status {
+        min-height: 20px;
+        color: #93c5fd;
+        font-size: 13px;
+      }
+
+      .error {
+        color: #fca5a5;
+      }
+
+      .maskGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
+        gap: 8px;
+        align-content: start;
+      }
+
+      .maskCard {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 8px;
+        background: #111827;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .maskCard.active {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 1px #60a5fa inset;
+      }
+
+      .maskHead {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+
+      .miniRow {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .miniMask,
+      .miniTile {
+        width: 44px;
+        height: 44px;
+        border: 1px solid #4b5563;
+        border-radius: 4px;
+        image-rendering: pixelated;
+      }
+
+      .tiny {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+
+      .inspector {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 8px;
+        background: #111827;
+      }
+
+      .toggleGrid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+
+      .toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 34px;
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        font-size: 12px;
+        user-select: none;
+      }
+
+      .toggle input {
+        margin-right: 6px;
+      }
+
+      .toggle.center {
+        background: #1e3a8a;
+        border-color: #60a5fa;
+        font-weight: 700;
+      }
+
+      .links {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+
+      .links a {
+        color: #93c5fd;
+      }
+
+      @media (max-width: 1200px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <div class="panel">
+        <div class="title">Texture47 Visual Editor</div>
+        <div class="subtitle">Click an atlas tile, pick a mask, then assign. Export JSON when done.</div>
+
+        <div class="row">
+          <div class="atlasSearchWrap">
+            <input id="atlasIdInput" type="search" value="dirt" placeholder="search atlas id (ex: dirt)" autocomplete="off" />
+            <div id="atlasSuggestions" class="atlasSuggestions"></div>
+          </div>
+          <button id="loadBtn">Load</button>
+        </div>
+
+        <div class="row">
+          <input id="columnsInput" type="number" min="1" value="8" placeholder="columns" />
+          <input id="rowsInput" type="number" min="1" value="7" placeholder="rows" />
+        </div>
+
+        <div id="atlasWrap" class="atlasWrap">
+          <canvas id="atlasCanvas" width="256" height="224"></canvas>
+        </div>
+
+        <div class="atlasControls">
+          <button id="zoomOutBtn" type="button">-</button>
+          <input id="zoomRange" type="range" min="0.25" max="8" step="0.25" value="1" />
+          <button id="zoomInBtn" type="button">+</button>
+          <button id="zoomResetBtn" type="button">1x</button>
+        </div>
+        <div class="tiny" id="zoomInfo">Atlas Zoom: 1x</div>
+
+        <div class="tiny" id="selectionInfo">Tile: 0 | Mask: 0</div>
+
+        <div class="row">
+          <button id="assignBtn">Assign Selected Tile</button>
+          <button id="clearMaskBtn">Clear Mask Assignment</button>
+        </div>
+
+        <div class="inspector">
+          <div class="tiny" style="margin-bottom: 6px">Mask Inspector (optional)</div>
+          <div class="toggleGrid" id="toggleGrid"></div>
+          <div class="tiny" id="inspectorMaskText" style="margin-top: 8px">Computed mask: 0</div>
+          <div class="row" style="margin-top: 8px">
+            <button id="focusMaskBtn">Focus This Mask</button>
+            <button id="assignInspectorBtn">Assign Tile to This Mask</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="resetDefaultBtn">Reset Default Mapping</button>
+          <button id="generateBtn">Generate JSON</button>
+        </div>
+
+        <div class="inspector">
+          <div class="tiny" style="margin-bottom: 6px">Paint Test Canvas (LMB draw, RMB erase)</div>
+          <div class="row" style="margin-bottom: 8px">
+            <button id="clearTestBtn" type="button">Clear Test</button>
+          </div>
+          <div class="atlasControls" style="margin-bottom: 8px">
+            <button id="testZoomOutBtn" type="button">-</button>
+            <input id="testZoomRange" type="range" min="0.5" max="4" step="0.25" value="1" />
+            <button id="testZoomInBtn" type="button">+</button>
+            <button id="testZoomResetBtn" type="button">1x</button>
+          </div>
+          <div class="tiny" id="testZoomInfo" style="margin-bottom: 8px">Test Zoom: 1.00x</div>
+          <div id="testCanvasWrap" class="testCanvasWrap">
+            <canvas id="testCanvas" width="512" height="320"></canvas>
+          </div>
+        </div>
+
+        <textarea id="jsonOutput" spellcheck="false"></textarea>
+
+        <div class="row">
+          <button id="copyBtn">Copy JSON</button>
+          <button id="saveBtn">Save JSON</button>
+          <button id="downloadBtn">Download JSON</button>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div class="links">Back to game: <a href="/index.html">index.html</a></div>
+      </div>
+
+      <div class="panel">
+        <div class="title">Masks</div>
+        <div class="subtitle">Select a mask card to edit its tile. Blue border = active mask.</div>
+        <div id="maskGrid" class="maskGrid"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      const DEFAULT_TEXTURE47_VALID_MASKS = [
+        0, 2, 8, 10, 11, 16, 18, 22, 24, 26, 27, 30, 31, 64, 66, 72, 74, 75, 80, 82, 86, 88, 90,
+        91, 94, 95, 104, 106, 107, 120, 122, 123, 126, 127, 208, 210, 214, 216, 218, 219, 222, 223,
+        248, 250, 251, 254, 255,
+      ];
+
+      const atlasIdInput = document.getElementById("atlasIdInput");
+      const atlasSuggestions = document.getElementById("atlasSuggestions");
+      const columnsInput = document.getElementById("columnsInput");
+      const rowsInput = document.getElementById("rowsInput");
+      const loadBtn = document.getElementById("loadBtn");
+      const atlasWrap = document.getElementById("atlasWrap");
+      const atlasCanvas = document.getElementById("atlasCanvas");
+      const zoomOutBtn = document.getElementById("zoomOutBtn");
+      const zoomInBtn = document.getElementById("zoomInBtn");
+      const zoomResetBtn = document.getElementById("zoomResetBtn");
+      const zoomRange = document.getElementById("zoomRange");
+      const zoomInfo = document.getElementById("zoomInfo");
+      const selectionInfo = document.getElementById("selectionInfo");
+      const maskGrid = document.getElementById("maskGrid");
+      const assignBtn = document.getElementById("assignBtn");
+      const clearMaskBtn = document.getElementById("clearMaskBtn");
+      const resetDefaultBtn = document.getElementById("resetDefaultBtn");
+      const generateBtn = document.getElementById("generateBtn");
+      const jsonOutput = document.getElementById("jsonOutput");
+      const copyBtn = document.getElementById("copyBtn");
+      const saveBtn = document.getElementById("saveBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
+      const status = document.getElementById("status");
+      const toggleGrid = document.getElementById("toggleGrid");
+      const inspectorMaskText = document.getElementById("inspectorMaskText");
+      const focusMaskBtn = document.getElementById("focusMaskBtn");
+      const assignInspectorBtn = document.getElementById("assignInspectorBtn");
+      const testCanvasWrap = document.getElementById("testCanvasWrap");
+      const testCanvas = document.getElementById("testCanvas");
+      const clearTestBtn = document.getElementById("clearTestBtn");
+      const testZoomOutBtn = document.getElementById("testZoomOutBtn");
+      const testZoomInBtn = document.getElementById("testZoomInBtn");
+      const testZoomResetBtn = document.getElementById("testZoomResetBtn");
+      const testZoomRange = document.getElementById("testZoomRange");
+      const testZoomInfo = document.getElementById("testZoomInfo");
+
+      const atlasContext = atlasCanvas.getContext("2d");
+      atlasContext.imageSmoothingEnabled = false;
+      const testContext = testCanvas.getContext("2d");
+      testContext.imageSmoothingEnabled = false;
+      const MIN_ATLAS_ZOOM = 0.25;
+      const MAX_ATLAS_ZOOM = 8;
+      const ATLAS_ZOOM_STEP = 0.25;
+      const MIN_TEST_ZOOM = 0.5;
+      const MAX_TEST_ZOOM = 4;
+      const TEST_ZOOM_STEP = 0.25;
+
+      const state = {
+        atlasId: "dirt",
+        columns: 8,
+        rows: 7,
+        image: null,
+        tileWidth: 32,
+        tileHeight: 32,
+        selectedTileIndex: 0,
+        selectedMask: DEFAULT_TEXTURE47_VALID_MASKS[0],
+        maskToTile: new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, index])),
+        atlasZoom: 1,
+        saveHandle: null,
+        atlasOptions: ["dirt", "dev", "sand", "cave_background"],
+        filteredAtlasOptions: [],
+        selectedSuggestionIndex: -1,
+      };
+
+      const testState = {
+        width: 16,
+        height: 10,
+        tileSize: 32,
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+        drawing: false,
+        pointerMode: "draw",
+        panning: false,
+        panStartX: 0,
+        panStartY: 0,
+        panOriginX: 0,
+        panOriginY: 0,
+        tiles: [],
+      };
+
+      const atlasPanState = {
+        panning: false,
+        startX: 0,
+        startY: 0,
+        originScrollLeft: 0,
+        originScrollTop: 0,
+      };
+
+      const inspector = {
+        n: false,
+        e: false,
+        s: false,
+        w: false,
+        ne: false,
+        se: false,
+        sw: false,
+        nw: false,
+      };
+
+      const TOGGLE_DEFS = [
+        { key: "nw", label: "NW", bit: 4, edgeA: "n", edgeB: "w" },
+        { key: "n", label: "N", bit: 2 },
+        { key: "ne", label: "NE", bit: 1, edgeA: "n", edgeB: "e" },
+        { key: "w", label: "W", bit: 8 },
+        { key: "center", label: "C", center: true },
+        { key: "e", label: "E", bit: 16 },
+        { key: "sw", label: "SW", bit: 128, edgeA: "s", edgeB: "w" },
+        { key: "s", label: "S", bit: 64 },
+        { key: "se", label: "SE", bit: 32, edgeA: "s", edgeB: "e" },
+      ];
+
+      function setStatus(message, isError = false) {
+        status.textContent = message;
+        status.classList.toggle("error", isError);
+      }
+
+      function initializeTestGrid() {
+        testState.tiles = new Array(testState.width * testState.height).fill(0);
+      }
+
+      function parsePositiveInt(inputValue, fallback) {
+        const value = Number(inputValue);
+        if (!Number.isInteger(value) || value < 1) {
+          return fallback;
+        }
+        return value;
+      }
+
+      function getTileCount() {
+        return state.columns * state.rows;
+      }
+
+      function clampAtlasZoom(value) {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) {
+          return 1;
+        }
+        return Math.min(MAX_ATLAS_ZOOM, Math.max(MIN_ATLAS_ZOOM, numericValue));
+      }
+
+      function clampTestZoom(value) {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) {
+          return 1;
+        }
+        return Math.min(MAX_TEST_ZOOM, Math.max(MIN_TEST_ZOOM, numericValue));
+      }
+
+      function setAtlasZoom(value) {
+        state.atlasZoom = clampAtlasZoom(value);
+        zoomRange.value = String(state.atlasZoom);
+        zoomInfo.textContent = `Atlas Zoom: ${state.atlasZoom.toFixed(2)}x`;
+
+        if (state.image) {
+          atlasCanvas.style.width = `${state.image.width * state.atlasZoom}px`;
+          atlasCanvas.style.height = `${state.image.height * state.atlasZoom}px`;
+        }
+      }
+
+      function setTestZoom(value) {
+        testState.zoom = clampTestZoom(value);
+        testZoomRange.value = String(testState.zoom);
+        testZoomInfo.textContent = `Test Zoom: ${testState.zoom.toFixed(2)}x`;
+
+        if (testState.zoom <= 1) {
+          testState.panX = 0;
+          testState.panY = 0;
+        }
+
+        clampTestPan();
+        applyTestCanvasTransform();
+      }
+
+      function applyTestCanvasTransform() {
+        testCanvas.style.transform = `translate(${testState.panX}px, ${testState.panY}px) scale(${testState.zoom})`;
+      }
+
+      function clampTestPan() {
+        const baseWidth = testState.width * testState.tileSize;
+        const baseHeight = testState.height * testState.tileSize;
+        const scaledWidth = baseWidth * testState.zoom;
+        const scaledHeight = baseHeight * testState.zoom;
+        const viewportWidth = testCanvasWrap.clientWidth || baseWidth;
+        const viewportHeight = testCanvasWrap.clientHeight || baseHeight;
+
+        const minX = Math.min(0, viewportWidth - scaledWidth);
+        const minY = Math.min(0, viewportHeight - scaledHeight);
+
+        testState.panX = Math.max(minX, Math.min(0, testState.panX));
+        testState.panY = Math.max(minY, Math.min(0, testState.panY));
+      }
+
+      function clampTileSelection() {
+        const maxIndex = Math.max(0, getTileCount() - 1);
+        if (state.selectedTileIndex > maxIndex) {
+          state.selectedTileIndex = maxIndex;
+        }
+      }
+
+      function computeInspectorMask() {
+        if (!(inspector.n && inspector.e)) inspector.ne = false;
+        if (!(inspector.s && inspector.e)) inspector.se = false;
+        if (!(inspector.s && inspector.w)) inspector.sw = false;
+        if (!(inspector.n && inspector.w)) inspector.nw = false;
+
+        let mask = 0;
+        if (inspector.n) mask |= 2;
+        if (inspector.e) mask |= 16;
+        if (inspector.s) mask |= 64;
+        if (inspector.w) mask |= 8;
+        if (inspector.ne) mask |= 1;
+        if (inspector.se) mask |= 32;
+        if (inspector.sw) mask |= 128;
+        if (inspector.nw) mask |= 4;
+        return mask;
+      }
+
+      function maskToBooleanBits(mask) {
+        return {
+          n: !!(mask & 2),
+          e: !!(mask & 16),
+          s: !!(mask & 64),
+          w: !!(mask & 8),
+          ne: !!(mask & 1),
+          se: !!(mask & 32),
+          sw: !!(mask & 128),
+          nw: !!(mask & 4),
+        };
+      }
+
+      function applyMaskToInspector(mask) {
+        const bits = maskToBooleanBits(mask);
+        inspector.n = bits.n;
+        inspector.e = bits.e;
+        inspector.s = bits.s;
+        inspector.w = bits.w;
+        inspector.ne = bits.ne && bits.n && bits.e;
+        inspector.se = bits.se && bits.s && bits.e;
+        inspector.sw = bits.sw && bits.s && bits.w;
+        inspector.nw = bits.nw && bits.n && bits.w;
+        renderInspector();
+      }
+
+      function drawMaskMini(canvas, mask) {
+        const context = canvas.getContext("2d");
+        const size = canvas.width;
+        const cell = Math.floor(size / 3);
+        context.clearRect(0, 0, size, size);
+
+        const bits = maskToBooleanBits(mask);
+        const activeColor = "#60a5fa";
+        const inactiveColor = "#1f2937";
+
+        const cells = [
+          bits.nw, bits.n, bits.ne,
+          bits.w, true, bits.e,
+          bits.sw, bits.s, bits.se,
+        ];
+
+        for (let i = 0; i < 9; i += 1) {
+          const x = (i % 3) * cell;
+          const y = Math.floor(i / 3) * cell;
+          context.fillStyle = cells[i] ? activeColor : inactiveColor;
+          context.fillRect(x, y, cell - 1, cell - 1);
+        }
+      }
+
+      function drawTilePreview(canvas, tileIndex) {
+        const context = canvas.getContext("2d");
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.imageSmoothingEnabled = false;
+
+        if (!state.image || tileIndex == null || tileIndex < 0 || tileIndex >= getTileCount()) {
+          context.fillStyle = "#111827";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          return;
+        }
+
+        const sourceX = (tileIndex % state.columns) * state.tileWidth;
+        const sourceY = Math.floor(tileIndex / state.columns) * state.tileHeight;
+
+        context.drawImage(
+          state.image,
+          sourceX,
+          sourceY,
+          state.tileWidth,
+          state.tileHeight,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        );
+      }
+
+      function renderAtlas() {
+        atlasContext.clearRect(0, 0, atlasCanvas.width, atlasCanvas.height);
+
+        if (!state.image) {
+          atlasContext.fillStyle = "#0f172a";
+          atlasContext.fillRect(0, 0, atlasCanvas.width, atlasCanvas.height);
+          return;
+        }
+
+        atlasCanvas.width = state.image.width;
+        atlasCanvas.height = state.image.height;
+
+        atlasContext.drawImage(state.image, 0, 0);
+
+        atlasContext.strokeStyle = "rgba(148, 163, 184, 0.45)";
+        atlasContext.lineWidth = 1;
+
+        for (let col = 1; col < state.columns; col += 1) {
+          const x = col * state.tileWidth + 0.5;
+          atlasContext.beginPath();
+          atlasContext.moveTo(x, 0);
+          atlasContext.lineTo(x, atlasCanvas.height);
+          atlasContext.stroke();
+        }
+
+        for (let row = 1; row < state.rows; row += 1) {
+          const y = row * state.tileHeight + 0.5;
+          atlasContext.beginPath();
+          atlasContext.moveTo(0, y);
+          atlasContext.lineTo(atlasCanvas.width, y);
+          atlasContext.stroke();
+        }
+
+        const selectedX = (state.selectedTileIndex % state.columns) * state.tileWidth;
+        const selectedY = Math.floor(state.selectedTileIndex / state.columns) * state.tileHeight;
+        atlasContext.lineWidth = 2;
+        atlasContext.strokeStyle = "#22c55e";
+        atlasContext.strokeRect(selectedX + 1, selectedY + 1, state.tileWidth - 2, state.tileHeight - 2);
+
+        setAtlasZoom(state.atlasZoom);
+      }
+
+      function renderSelectionInfo() {
+        selectionInfo.textContent = `Tile: ${state.selectedTileIndex} | Mask: ${state.selectedMask}`;
+      }
+
+      function setMaskAssignment(mask, tileIndex) {
+        if (!DEFAULT_TEXTURE47_VALID_MASKS.includes(mask)) {
+          return;
+        }
+
+        if (tileIndex == null || tileIndex < 0 || tileIndex >= getTileCount()) {
+          state.maskToTile.delete(mask);
+        } else {
+          state.maskToTile.set(mask, tileIndex);
+        }
+      }
+
+      function renderMaskGrid() {
+        maskGrid.innerHTML = "";
+
+        for (const mask of DEFAULT_TEXTURE47_VALID_MASKS) {
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = "maskCard" + (mask === state.selectedMask ? " active" : "");
+
+          const assigned = state.maskToTile.has(mask) ? state.maskToTile.get(mask) : null;
+
+          const head = document.createElement("div");
+          head.className = "maskHead";
+          head.innerHTML = `<strong>${mask}</strong><span>tile ${assigned ?? "-"}</span>`;
+
+          const miniRow = document.createElement("div");
+          miniRow.className = "miniRow";
+
+          const miniMask = document.createElement("canvas");
+          miniMask.className = "miniMask";
+          miniMask.width = 44;
+          miniMask.height = 44;
+
+          const miniTile = document.createElement("canvas");
+          miniTile.className = "miniTile";
+          miniTile.width = 44;
+          miniTile.height = 44;
+
+          drawMaskMini(miniMask, mask);
+          drawTilePreview(miniTile, assigned);
+
+          const details = document.createElement("div");
+          details.className = "tiny";
+          details.textContent = assigned == null
+            ? "No assignment"
+            : `Tile r${Math.floor(assigned / state.columns)} c${assigned % state.columns}`;
+
+          miniRow.appendChild(miniMask);
+          miniRow.appendChild(miniTile);
+
+          card.appendChild(head);
+          card.appendChild(miniRow);
+          card.appendChild(details);
+
+          card.addEventListener("click", () => {
+            state.selectedMask = mask;
+            applyMaskToInspector(mask);
+            renderAll();
+          });
+
+          card.addEventListener("dblclick", () => {
+            setMaskAssignment(mask, state.selectedTileIndex);
+            setStatus(`Assigned tile ${state.selectedTileIndex} -> mask ${mask}`);
+            renderAll();
+          });
+
+          maskGrid.appendChild(card);
+        }
+      }
+
+      function renderInspector() {
+        toggleGrid.innerHTML = "";
+
+        for (const toggle of TOGGLE_DEFS) {
+          const item = document.createElement("label");
+          item.className = "toggle" + (toggle.center ? " center" : "");
+
+          if (toggle.center) {
+            item.textContent = "CENTER";
+            toggleGrid.appendChild(item);
+            continue;
+          }
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = !!inspector[toggle.key];
+
+          if (toggle.edgeA && toggle.edgeB) {
+            checkbox.disabled = !(inspector[toggle.edgeA] && inspector[toggle.edgeB]);
+          }
+
+          checkbox.addEventListener("change", () => {
+            inspector[toggle.key] = checkbox.checked;
+            const mask = computeInspectorMask();
+            inspectorMaskText.textContent = `Computed mask: ${mask}`;
+            renderInspector();
+          });
+
+          const text = document.createElement("span");
+          text.textContent = toggle.label;
+
+          item.appendChild(checkbox);
+          item.appendChild(text);
+          toggleGrid.appendChild(item);
+        }
+
+        inspectorMaskText.textContent = `Computed mask: ${computeInspectorMask()}`;
+      }
+
+      function renderAll() {
+        clampTileSelection();
+        renderAtlas();
+        renderSelectionInfo();
+        renderMaskGrid();
+        renderInspector();
+        renderTestCanvas();
+      }
+
+      function isFilledTestTile(tileX, tileY) {
+        if (tileX < 0 || tileY < 0 || tileX >= testState.width || tileY >= testState.height) {
+          return false;
+        }
+
+        return testState.tiles[tileY * testState.width + tileX] === 1;
+      }
+
+      function getMaskFromTestGrid(tileX, tileY) {
+        const north = isFilledTestTile(tileX, tileY - 1);
+        const east = isFilledTestTile(tileX + 1, tileY);
+        const south = isFilledTestTile(tileX, tileY + 1);
+        const west = isFilledTestTile(tileX - 1, tileY);
+
+        const northEast = north && east && isFilledTestTile(tileX + 1, tileY - 1);
+        const southEast = south && east && isFilledTestTile(tileX + 1, tileY + 1);
+        const southWest = south && west && isFilledTestTile(tileX - 1, tileY + 1);
+        const northWest = north && west && isFilledTestTile(tileX - 1, tileY - 1);
+
+        let mask = 0;
+        if (north) mask |= 2;
+        if (east) mask |= 16;
+        if (south) mask |= 64;
+        if (west) mask |= 8;
+        if (northEast) mask |= 1;
+        if (southEast) mask |= 32;
+        if (southWest) mask |= 128;
+        if (northWest) mask |= 4;
+        return mask;
+      }
+
+      function drawMappedTestTile(tileX, tileY, drawX, drawY) {
+        const mask = getMaskFromTestGrid(tileX, tileY);
+        const assignedIndex = state.maskToTile.get(mask);
+        const fallbackIndex = state.maskToTile.get(255) ?? state.selectedTileIndex;
+        const tileIndex = Number.isInteger(assignedIndex) ? assignedIndex : fallbackIndex;
+
+        if (!state.image || !Number.isInteger(tileIndex) || tileIndex < 0 || tileIndex >= getTileCount()) {
+          testContext.fillStyle = "#334155";
+          testContext.fillRect(drawX, drawY, testState.tileSize, testState.tileSize);
+          return;
+        }
+
+        const sourceX = (tileIndex % state.columns) * state.tileWidth;
+        const sourceY = Math.floor(tileIndex / state.columns) * state.tileHeight;
+
+        testContext.drawImage(
+          state.image,
+          sourceX,
+          sourceY,
+          state.tileWidth,
+          state.tileHeight,
+          drawX,
+          drawY,
+          testState.tileSize,
+          testState.tileSize,
+        );
+      }
+
+      function renderTestCanvas() {
+        testCanvas.width = testState.width * testState.tileSize;
+        testCanvas.height = testState.height * testState.tileSize;
+
+        testContext.clearRect(0, 0, testCanvas.width, testCanvas.height);
+        testContext.fillStyle = "#0b1220";
+        testContext.fillRect(0, 0, testCanvas.width, testCanvas.height);
+
+        for (let y = 0; y < testState.height; y += 1) {
+          for (let x = 0; x < testState.width; x += 1) {
+            const drawX = x * testState.tileSize;
+            const drawY = y * testState.tileSize;
+
+            if (isFilledTestTile(x, y)) {
+              drawMappedTestTile(x, y, drawX, drawY);
+            }
+
+            testContext.strokeStyle = "rgba(148, 163, 184, 0.2)";
+            testContext.strokeRect(drawX + 0.5, drawY + 0.5, testState.tileSize - 1, testState.tileSize - 1);
+          }
+        }
+      }
+
+      function setTestTileAtEvent(event, forceMode = null) {
+        const bounds = testCanvas.getBoundingClientRect();
+        const scaledX = (event.clientX - bounds.left) * (testCanvas.width / bounds.width);
+        const scaledY = (event.clientY - bounds.top) * (testCanvas.height / bounds.height);
+        const tileX = Math.floor(scaledX / testState.tileSize);
+        const tileY = Math.floor(scaledY / testState.tileSize);
+
+        if (tileX < 0 || tileY < 0 || tileX >= testState.width || tileY >= testState.height) {
+          return;
+        }
+
+        const index = tileY * testState.width + tileX;
+        const mode = forceMode || testState.pointerMode;
+        testState.tiles[index] = mode === "erase" ? 0 : 1;
+        renderTestCanvas();
+      }
+
+      function buildMaskOrderOutput() {
+        const assignedIndices = Array.from(state.maskToTile.values());
+        const highestAssigned = assignedIndices.length ? Math.max(...assignedIndices) : 0;
+        const totalEntries = Math.max(DEFAULT_TEXTURE47_VALID_MASKS.length, highestAssigned + 1);
+        const fallbackMask = 255;
+
+        const tileToMask = new Array(totalEntries).fill(fallbackMask);
+
+        for (const [mask, tileIndex] of state.maskToTile.entries()) {
+          if (tileIndex >= 0 && tileIndex < totalEntries) {
+            tileToMask[tileIndex] = mask;
+          }
+        }
+
+        return tileToMask;
+      }
+
+      function parseConfigIntoState(config) {
+        if (Array.isArray(config?.maskOrder)) {
+          state.maskToTile.clear();
+          config.maskOrder.forEach((mask, index) => {
+            const value = Number(mask);
+            if (Number.isInteger(value) && value >= 0 && DEFAULT_TEXTURE47_VALID_MASKS.includes(value)) {
+              state.maskToTile.set(value, index);
+            }
+          });
+        } else {
+          state.maskToTile = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, index]));
+        }
+      }
+
+      async function loadAtlasAndConfig() {
+        state.atlasId = atlasIdInput.value.trim() || "dirt";
+        state.columns = parsePositiveInt(columnsInput.value, 8);
+        state.rows = parsePositiveInt(rowsInput.value, 7);
+
+        columnsInput.value = String(state.columns);
+        rowsInput.value = String(state.rows);
+
+        const image = new Image();
+        image.src = `/assets/texture47/${state.atlasId}.png?ts=${Date.now()}`;
+
+        try {
+          await image.decode();
+        } catch {
+          setStatus(`Could not load /assets/texture47/${state.atlasId}.png`, true);
+          return;
+        }
+
+        state.image = image;
+        state.tileWidth = Math.floor(state.image.width / state.columns);
+        state.tileHeight = Math.floor(state.image.height / state.rows);
+
+        try {
+          let response = await fetch(`/assets/texture47/configs/${state.atlasId}.json?ts=${Date.now()}`);
+          if (!response.ok) {
+            response = await fetch(`/assets/texture47/${state.atlasId}.json?ts=${Date.now()}`);
+          }
+          if (!response.ok) {
+            throw new Error("Missing JSON config");
+          }
+          const config = await response.json();
+
+          const maybeColumns = Number(config?.columns);
+          const maybeRows = Number(config?.rows);
+          if (Number.isInteger(maybeColumns) && maybeColumns > 0) {
+            state.columns = maybeColumns;
+            columnsInput.value = String(maybeColumns);
+          }
+          if (Number.isInteger(maybeRows) && maybeRows > 0) {
+            state.rows = maybeRows;
+            rowsInput.value = String(maybeRows);
+          }
+
+          state.tileWidth = Math.floor(state.image.width / state.columns);
+          state.tileHeight = Math.floor(state.image.height / state.rows);
+
+          parseConfigIntoState(config);
+          setStatus(`Loaded ${state.atlasId}.png and ${state.atlasId}.json`);
+        } catch {
+          state.maskToTile = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, index]));
+          setStatus(`Loaded ${state.atlasId}.png. JSON missing, using default mask order.`);
+        }
+
+        clampTileSelection();
+        generateJsonOutput();
+        renderAll();
+      }
+
+      function generateJsonOutput() {
+        const output = {
+          columns: state.columns,
+          rows: state.rows,
+          maskOrder: buildMaskOrderOutput(),
+        };
+
+        jsonOutput.value = JSON.stringify(output, null, 2);
+      }
+
+      function filterAtlasOptions(query) {
+        const normalized = String(query || "").trim().toLowerCase();
+        if (!normalized) {
+          return state.atlasOptions.slice(0, 12);
+        }
+
+        const startsWith = state.atlasOptions.filter((name) => name.startsWith(normalized));
+        const includes = state.atlasOptions.filter(
+          (name) => !name.startsWith(normalized) && name.includes(normalized),
+        );
+
+        return [...startsWith, ...includes].slice(0, 12);
+      }
+
+      function hideAtlasSuggestions() {
+        atlasSuggestions.classList.remove("visible");
+        state.selectedSuggestionIndex = -1;
+      }
+
+      function applyAtlasSuggestion(value) {
+        atlasIdInput.value = value;
+        hideAtlasSuggestions();
+      }
+
+      function renderAtlasSuggestions() {
+        const query = atlasIdInput.value;
+        state.filteredAtlasOptions = filterAtlasOptions(query);
+
+        atlasSuggestions.innerHTML = "";
+        if (state.filteredAtlasOptions.length === 0) {
+          hideAtlasSuggestions();
+          return;
+        }
+
+        state.selectedSuggestionIndex = Math.min(
+          state.selectedSuggestionIndex,
+          state.filteredAtlasOptions.length - 1,
+        );
+
+        state.filteredAtlasOptions.forEach((optionValue, index) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "atlasSuggestion" + (index === state.selectedSuggestionIndex ? " active" : "");
+          button.textContent = optionValue;
+          button.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            applyAtlasSuggestion(optionValue);
+          });
+          atlasSuggestions.appendChild(button);
+        });
+
+        atlasSuggestions.classList.add("visible");
+      }
+
+      async function loadAtlasOptions(forceRefresh = false) {
+        try {
+          const query = forceRefresh ? `?ts=${Date.now()}` : "";
+          const response = await fetch(`/api/tools/texture47/atlases${query}`);
+          if (!response.ok) {
+            throw new Error("failed");
+          }
+
+          const payload = await response.json();
+          const options = Array.isArray(payload?.atlases) ? payload.atlases : [];
+          const normalized = options
+            .map((value) => String(value || "").trim().toLowerCase())
+            .filter((value) => value.length > 0);
+          state.atlasOptions = Array.from(new Set([...state.atlasOptions, ...normalized]));
+          renderAtlasSuggestions();
+        } catch {
+          state.atlasOptions = Array.from(new Set(state.atlasOptions));
+          renderAtlasSuggestions();
+        }
+      }
+
+      async function saveJsonToFile() {
+        const payloadToSave = {
+          atlasId: state.atlasId,
+          columns: state.columns,
+          rows: state.rows,
+          maskOrder: buildMaskOrderOutput(),
+        };
+
+        jsonOutput.value = JSON.stringify(
+          {
+            columns: payloadToSave.columns,
+            rows: payloadToSave.rows,
+            maskOrder: payloadToSave.maskOrder,
+          },
+          null,
+          2,
+        );
+
+        try {
+          const response = await fetch("/api/tools/texture47/save", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            cache: "no-store",
+            body: JSON.stringify(payloadToSave),
+          });
+
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch {
+          }
+
+          if (!response.ok) {
+            setStatus(payload?.detail || "Server save failed", true);
+            return;
+          }
+
+          await loadAtlasAndConfig();
+          setStatus(`Saved and reloaded: ${payload?.path || `${state.atlasId}.json`}`);
+        } catch {
+          setStatus("Could not reach server for save", true);
+        }
+      }
+
+      loadBtn.addEventListener("click", loadAtlasAndConfig);
+
+      atlasIdInput.addEventListener("focus", () => {
+        loadAtlasOptions(true);
+        renderAtlasSuggestions();
+      });
+
+      atlasIdInput.addEventListener("input", () => {
+        state.selectedSuggestionIndex = -1;
+        renderAtlasSuggestions();
+      });
+
+      atlasIdInput.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          if (!atlasSuggestions.classList.contains("visible")) {
+            renderAtlasSuggestions();
+          }
+          if (state.filteredAtlasOptions.length > 0) {
+            event.preventDefault();
+            state.selectedSuggestionIndex = Math.min(
+              state.selectedSuggestionIndex + 1,
+              state.filteredAtlasOptions.length - 1,
+            );
+            renderAtlasSuggestions();
+          }
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          if (state.filteredAtlasOptions.length > 0) {
+            event.preventDefault();
+            state.selectedSuggestionIndex = Math.max(state.selectedSuggestionIndex - 1, 0);
+            renderAtlasSuggestions();
+          }
+          return;
+        }
+
+        if (event.key === "Enter") {
+          event.preventDefault();
+          if (state.selectedSuggestionIndex >= 0 && state.selectedSuggestionIndex < state.filteredAtlasOptions.length) {
+            applyAtlasSuggestion(state.filteredAtlasOptions[state.selectedSuggestionIndex]);
+          }
+          loadAtlasAndConfig();
+          return;
+        }
+
+        if (event.key === "Escape") {
+          hideAtlasSuggestions();
+        }
+      });
+
+      document.addEventListener("pointerdown", (event) => {
+        if (!atlasIdInput.contains(event.target) && !atlasSuggestions.contains(event.target)) {
+          hideAtlasSuggestions();
+        }
+      });
+
+      zoomRange.addEventListener("input", () => {
+        setAtlasZoom(zoomRange.value);
+      });
+
+      zoomOutBtn.addEventListener("click", () => {
+        setAtlasZoom(state.atlasZoom - ATLAS_ZOOM_STEP);
+      });
+
+      zoomInBtn.addEventListener("click", () => {
+        setAtlasZoom(state.atlasZoom + ATLAS_ZOOM_STEP);
+      });
+
+      zoomResetBtn.addEventListener("click", () => {
+        setAtlasZoom(1);
+      });
+
+      atlasCanvas.addEventListener("click", (event) => {
+        if (event.button === 2) {
+          return;
+        }
+
+        if (!state.image) {
+          return;
+        }
+
+        const bounds = atlasCanvas.getBoundingClientRect();
+        const x = Math.floor((event.clientX - bounds.left) * (atlasCanvas.width / bounds.width));
+        const y = Math.floor((event.clientY - bounds.top) * (atlasCanvas.height / bounds.height));
+
+        const tileX = Math.floor(x / state.tileWidth);
+        const tileY = Math.floor(y / state.tileHeight);
+        const index = tileY * state.columns + tileX;
+
+        if (index >= 0 && index < getTileCount()) {
+          state.selectedTileIndex = index;
+          renderAll();
+        }
+      });
+
+      atlasCanvas.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+      });
+
+      atlasCanvas.addEventListener("pointerdown", (event) => {
+        if (event.button !== 2 || state.atlasZoom <= 1) {
+          return;
+        }
+
+        event.preventDefault();
+        atlasPanState.panning = true;
+        atlasPanState.startX = event.clientX;
+        atlasPanState.startY = event.clientY;
+        atlasPanState.originScrollLeft = atlasWrap.scrollLeft;
+        atlasPanState.originScrollTop = atlasWrap.scrollTop;
+      });
+
+      atlasCanvas.addEventListener("pointermove", (event) => {
+        if (!atlasPanState.panning) {
+          return;
+        }
+
+        event.preventDefault();
+        const deltaX = event.clientX - atlasPanState.startX;
+        const deltaY = event.clientY - atlasPanState.startY;
+        atlasWrap.scrollLeft = atlasPanState.originScrollLeft - deltaX;
+        atlasWrap.scrollTop = atlasPanState.originScrollTop - deltaY;
+      });
+
+      const stopAtlasPan = () => {
+        atlasPanState.panning = false;
+      };
+
+      atlasCanvas.addEventListener("pointerup", stopAtlasPan);
+      atlasCanvas.addEventListener("pointerleave", stopAtlasPan);
+      atlasCanvas.addEventListener("pointercancel", stopAtlasPan);
+
+      assignBtn.addEventListener("click", () => {
+        setMaskAssignment(state.selectedMask, state.selectedTileIndex);
+        setStatus(`Assigned tile ${state.selectedTileIndex} -> mask ${state.selectedMask}`);
+        generateJsonOutput();
+        renderAll();
+      });
+
+      clearMaskBtn.addEventListener("click", () => {
+        state.maskToTile.delete(state.selectedMask);
+        setStatus(`Cleared assignment for mask ${state.selectedMask}`);
+        generateJsonOutput();
+        renderAll();
+      });
+
+      resetDefaultBtn.addEventListener("click", () => {
+        state.maskToTile = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, index]));
+        state.selectedMask = DEFAULT_TEXTURE47_VALID_MASKS[0];
+        applyMaskToInspector(state.selectedMask);
+        setStatus("Reset to default sequential mapping");
+        generateJsonOutput();
+        renderAll();
+      });
+
+      clearTestBtn.addEventListener("click", () => {
+        initializeTestGrid();
+        renderTestCanvas();
+      });
+
+      testZoomRange.addEventListener("input", () => {
+        setTestZoom(testZoomRange.value);
+      });
+
+      testZoomOutBtn.addEventListener("click", () => {
+        setTestZoom(testState.zoom - TEST_ZOOM_STEP);
+      });
+
+      testZoomInBtn.addEventListener("click", () => {
+        setTestZoom(testState.zoom + TEST_ZOOM_STEP);
+      });
+
+      testZoomResetBtn.addEventListener("click", () => {
+        setTestZoom(1);
+      });
+
+      testCanvas.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+      });
+
+      testCanvas.addEventListener("pointerdown", (event) => {
+        if (event.button === 2 && testState.zoom > 1) {
+          event.preventDefault();
+          testState.panning = true;
+          testState.panStartX = event.clientX;
+          testState.panStartY = event.clientY;
+          testState.panOriginX = testState.panX;
+          testState.panOriginY = testState.panY;
+          return;
+        }
+
+        const forceMode = event.button === 2 ? "erase" : "draw";
+        testState.pointerMode = forceMode;
+        testState.drawing = true;
+        setTestTileAtEvent(event, forceMode);
+      });
+
+      testCanvas.addEventListener("pointermove", (event) => {
+        if (testState.panning) {
+          event.preventDefault();
+          const deltaX = event.clientX - testState.panStartX;
+          const deltaY = event.clientY - testState.panStartY;
+          testState.panX = testState.panOriginX + deltaX;
+          testState.panY = testState.panOriginY + deltaY;
+          clampTestPan();
+          applyTestCanvasTransform();
+          return;
+        }
+
+        if (!testState.drawing) {
+          return;
+        }
+        setTestTileAtEvent(event);
+      });
+
+      const stopDrawing = () => {
+        testState.drawing = false;
+        testState.panning = false;
+      };
+
+      testCanvas.addEventListener("pointerup", stopDrawing);
+      testCanvas.addEventListener("pointerleave", stopDrawing);
+      testCanvas.addEventListener("pointercancel", stopDrawing);
+
+      generateBtn.addEventListener("click", () => {
+        generateJsonOutput();
+        setStatus("JSON generated");
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(jsonOutput.value);
+          setStatus("Copied JSON to clipboard");
+        } catch {
+          setStatus("Clipboard copy failed", true);
+        }
+      });
+
+      saveBtn.addEventListener("click", async () => {
+        await saveJsonToFile();
+      });
+
+      downloadBtn.addEventListener("click", () => {
+        const blob = new Blob([jsonOutput.value], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${state.atlasId}.json`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        setStatus("Downloaded JSON file");
+      });
+
+      focusMaskBtn.addEventListener("click", () => {
+        const mask = computeInspectorMask();
+        state.selectedMask = mask;
+        if (!DEFAULT_TEXTURE47_VALID_MASKS.includes(mask)) {
+          setStatus(`Mask ${mask} is not in the 47 valid mask list`, true);
+        } else {
+          setStatus(`Focused mask ${mask}`);
+        }
+        renderAll();
+      });
+
+      assignInspectorBtn.addEventListener("click", () => {
+        const mask = computeInspectorMask();
+        if (!DEFAULT_TEXTURE47_VALID_MASKS.includes(mask)) {
+          setStatus(`Mask ${mask} is not valid in this 47-tile set`, true);
+          return;
+        }
+
+        state.selectedMask = mask;
+        setMaskAssignment(mask, state.selectedTileIndex);
+        setStatus(`Assigned tile ${state.selectedTileIndex} -> inspector mask ${mask}`);
+        generateJsonOutput();
+        renderAll();
+      });
+
+      columnsInput.addEventListener("change", () => {
+        state.columns = parsePositiveInt(columnsInput.value, state.columns);
+        state.tileWidth = state.image ? Math.floor(state.image.width / state.columns) : state.tileWidth;
+        clampTileSelection();
+        generateJsonOutput();
+        renderAll();
+      });
+
+      rowsInput.addEventListener("change", () => {
+        state.rows = parsePositiveInt(rowsInput.value, state.rows);
+        state.tileHeight = state.image ? Math.floor(state.image.height / state.rows) : state.tileHeight;
+        clampTileSelection();
+        generateJsonOutput();
+        renderAll();
+      });
+
+      applyMaskToInspector(state.selectedMask);
+      initializeTestGrid();
+      setAtlasZoom(1);
+      setTestZoom(1);
+      generateJsonOutput();
+      renderAll();
+      loadAtlasOptions();
+      loadAtlasAndConfig();
+
+      window.addEventListener("resize", () => {
+        clampTestPan();
+        applyTestCanvasTransform();
+      });
+    </script>
+  </body>
+</html>

@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -391,6 +392,13 @@ class LoginBody(BaseModel):
     password: str
 
 
+class SaveTexture47ConfigBody(BaseModel):
+    atlasId: str = Field(min_length=1, max_length=64)
+    columns: int = Field(ge=1, le=512)
+    rows: int = Field(ge=1, le=512)
+    maskOrder: list[int] = Field(default_factory=list)
+
+
 world_cache: dict[str, dict[str, Any]] = {}
 save_tasks: dict[str, asyncio.Task[Any]] = {}
 
@@ -519,6 +527,64 @@ def list_worlds(authorization: str | None = Header(default=None)) -> dict[str, A
         names.insert(0, "start")
 
     return {"worlds": names}
+
+
+@app.post("/api/tools/texture47/save")
+def save_texture47_config(
+    payload: SaveTexture47ConfigBody,
+) -> dict[str, Any]:
+    atlas_id = normalize_name(payload.atlasId)
+    if not re.fullmatch(r"[a-z0-9_-]+", atlas_id):
+        raise HTTPException(status_code=400, detail="Invalid atlas id")
+
+    sanitized_mask_order: list[int] = []
+    for value in payload.maskOrder:
+        try:
+            mask = int(value)
+        except Exception:
+            continue
+
+        if 0 <= mask <= 255:
+            sanitized_mask_order.append(mask)
+
+    output = {
+        "columns": int(payload.columns),
+        "rows": int(payload.rows),
+        "maskOrder": sanitized_mask_order,
+    }
+
+    texture47_dir = PUBLIC_DIR / "assets" / "texture47" / "configs"
+    texture47_dir.mkdir(parents=True, exist_ok=True)
+    output_path = (texture47_dir / f"{atlas_id}.json").resolve()
+
+    if not str(output_path).startswith(str(texture47_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid atlas id")
+
+    with output_path.open("w", encoding="utf-8") as handle:
+        json.dump(output, handle, indent=2)
+        handle.write("\n")
+
+    return {
+        "ok": True,
+        "path": f"assets/texture47/configs/{atlas_id}.json",
+        "saved": output,
+    }
+
+
+@app.get("/api/tools/texture47/atlases")
+def list_texture47_atlases() -> dict[str, Any]:
+    texture47_dir = PUBLIC_DIR / "assets" / "texture47"
+    atlases: list[str] = []
+
+    if texture47_dir.exists() and texture47_dir.is_dir():
+        for file_path in sorted(texture47_dir.glob("*.png")):
+            name = file_path.stem.strip().lower()
+            if name and re.fullmatch(r"[a-z0-9_-]+", name):
+                atlases.append(name)
+
+    return {
+        "atlases": atlases,
+    }
 
 
 clients: dict[str, dict[str, Any]] = {}

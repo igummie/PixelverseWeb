@@ -176,9 +176,12 @@ function drawConnected47TileToContext(targetContext, block, drawX, drawY) {
   const mask = getTexture47Mask(tileX, tileY, block.ATLAS_ID);
   const maskToIndex = texture47.maskToIndex;
   const variantIndex = maskToIndex.get(mask) ?? (texture47.maskOrder.length - 1);
+  const atlasColumns = Number.isInteger(texture47.columns) && texture47.columns > 0
+    ? texture47.columns
+    : TEXTURE47_COLS;
 
-  const sourceX = (variantIndex % TEXTURE47_COLS) * texture47.tileWidth;
-  const sourceY = Math.floor(variantIndex / TEXTURE47_COLS) * texture47.tileHeight;
+  const sourceX = (variantIndex % atlasColumns) * texture47.tileWidth;
+  const sourceY = Math.floor(variantIndex / atlasColumns) * texture47.tileHeight;
 
   targetContext.drawImage(
     texture47.image,
@@ -553,7 +556,12 @@ async function loadBlockDefinitions() {
       let maskOrder = DEFAULT_TEXTURE47_VALID_MASKS;
 
       try {
-        const config = await requestJson(`/assets/texture47/${atlasId}.json`);
+        let config = null;
+        try {
+          config = await requestJson(`/assets/texture47/configs/${atlasId}.json`);
+        } catch {
+          config = await requestJson(`/assets/texture47/${atlasId}.json`);
+        }
         const maybeColumns = Number(config?.columns);
         const maybeRows = Number(config?.rows);
         if (!Number.isNaN(maybeColumns) && maybeColumns > 0) {
@@ -576,6 +584,8 @@ async function loadBlockDefinitions() {
 
       state.texture47.set(atlasId, {
         image,
+        columns,
+        rows,
         tileWidth: Math.floor(image.width / columns),
         tileHeight: Math.floor(image.height / rows),
         maskOrder,
