@@ -1,6 +1,6 @@
-# BlockWorld (Custom Engine Starter)
+# Pixelverse Web
 
-A starter for a **Growtopia-style** multiplayer 2D build/break game using a custom canvas engine and a Python backend.
+multiplayer 2D build/break game using a custom canvas engine and a Python backend.
 
 ## Features
 
