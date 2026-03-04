@@ -9,6 +9,7 @@ const playBtn = document.getElementById("playBtn");
 const backToMainBtn = document.getElementById("backToMainBtn");
 const loginBtn = document.getElementById("loginBtn");
 const registerBtn = document.getElementById("registerBtn");
+const guestBtn = document.getElementById("guestBtn");
 const usernameInput = document.getElementById("usernameInput");
 const passwordInput = document.getElementById("passwordInput");
 const loginError = document.getElementById("loginError");
@@ -29,6 +30,7 @@ const gameTopbar = document.querySelector(".gameTopbar");
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
 
 const TILE_SIZE = 32;
 const HORIZONTAL_SPEED = 7.5;
@@ -57,7 +59,81 @@ const state = {
   collider: { width: 0.72, height: 0.92 },
   onGround: false,
   jumpQueued: false,
+  worldRender: null,
 };
+
+function drawTileToContext(targetContext, tileId, drawX, drawY) {
+  const block = state.blockDefs.get(tileId);
+  if (!block) {
+    return;
+  }
+
+  const atlas = state.atlases.get(block.ATLAS_ID);
+  if (!atlas || !atlas.image) {
+    return;
+  }
+
+  const tex = block.ATLAS_TEXTURE;
+  targetContext.drawImage(
+    atlas.image,
+    tex.x,
+    tex.y,
+    tex.w,
+    tex.h,
+    drawX,
+    drawY,
+    TILE_SIZE,
+    TILE_SIZE,
+  );
+}
+
+function rebuildWorldRenderCache() {
+  if (!state.world) {
+    state.worldRender = null;
+    return;
+  }
+
+  const renderCanvas = document.createElement("canvas");
+  renderCanvas.width = state.world.width * TILE_SIZE;
+  renderCanvas.height = state.world.height * TILE_SIZE;
+  const renderContext = renderCanvas.getContext("2d");
+  renderContext.imageSmoothingEnabled = false;
+
+  state.worldRender = {
+    canvas: renderCanvas,
+    context: renderContext,
+  };
+
+  for (let y = 0; y < state.world.height; y += 1) {
+    for (let x = 0; x < state.world.width; x += 1) {
+      updateWorldRenderTile(x, y);
+    }
+  }
+}
+
+function updateWorldRenderTile(tileX, tileY) {
+  if (!state.worldRender || !state.world) {
+    return;
+  }
+
+  if (tileX < 0 || tileY < 0 || tileX >= state.world.width || tileY >= state.world.height) {
+    return;
+  }
+
+  const index = tileY * state.world.width + tileX;
+  const foregroundTile = Number(state.world.foreground?.[index] || 0);
+  const backgroundTile = Number(state.world.background?.[index] || 0);
+  const drawX = tileX * TILE_SIZE;
+  const drawY = tileY * TILE_SIZE;
+
+  state.worldRender.context.clearRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+  if (backgroundTile !== 0) {
+    drawTileToContext(state.worldRender.context, backgroundTile, drawX, drawY);
+  }
+  if (foregroundTile !== 0) {
+    drawTileToContext(state.worldRender.context, foregroundTile, drawX, drawY);
+  }
+}
 
 function getForegroundTileId(world, tileX, tileY) {
   if (tileX < 0 || tileY < 0 || tileX >= world.width || tileY >= world.height) {
@@ -317,6 +393,10 @@ async function loadBlockDefinitions() {
     state.blockDefs.set(block.ID, block);
   }
 
+  if (state.world) {
+    rebuildWorldRenderCache();
+  }
+
   const placeableBlocks = Array.from(state.blockDefs.values()).filter((block) => block.PLACEABLE);
 
   blockSelect.innerHTML = "";
@@ -355,6 +435,28 @@ async function auth(action) {
     state.user = data.user;
     welcomeText.textContent = `Logged in as ${state.user.username}`;
 
+    passwordInput.value = "";
+    showScreen("world");
+    await loadWorldList();
+  } catch (error) {
+    loginError.textContent = error.message;
+  }
+}
+
+async function authGuest() {
+  loginError.textContent = "";
+
+  try {
+    const data = await requestJson("/api/auth/guest", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+
+    state.token = data.token;
+    state.user = data.user;
+    welcomeText.textContent = `Logged in as ${state.user.username}`;
+
+    usernameInput.value = "";
     passwordInput.value = "";
     showScreen("world");
     await loadWorldList();
@@ -454,6 +556,7 @@ function connectSocket() {
       }
       state.selfId = msg.selfId;
       state.players.clear();
+      rebuildWorldRenderCache();
 
       for (const player of msg.world.players) {
         state.players.set(player.id, player);
@@ -502,6 +605,7 @@ function connectSocket() {
       const index = msg.y * state.world.width + msg.x;
       state.world.foreground[index] = Number(msg.foreground ?? msg.tile ?? 0);
       state.world.background[index] = Number(msg.background ?? 0);
+      updateWorldRenderTile(msg.x, msg.y);
     }
   });
 
@@ -589,6 +693,7 @@ async function enterWorld(targetWorldName = null) {
 function leaveWorld() {
   sendWs({ type: "leave_world" });
   state.world = null;
+  state.worldRender = null;
   state.players.clear();
   state.velocity.x = 0;
   state.velocity.y = 0;
@@ -613,6 +718,7 @@ playBtn.addEventListener("click", () => showScreen("login"));
 backToMainBtn.addEventListener("click", () => showScreen("main"));
 loginBtn.addEventListener("click", () => auth("login"));
 registerBtn.addEventListener("click", () => auth("register"));
+guestBtn.addEventListener("click", authGuest);
 joinWorldBtn.addEventListener("click", () => enterWorld());
 refreshWorldsBtn.addEventListener("click", loadWorldList);
 logoutBtn.addEventListener("click", logout);
@@ -756,62 +862,41 @@ function update() {
   state.camera.y = Math.max(0, Math.min(state.camera.y, state.world.height * TILE_SIZE - canvas.height));
 }
 
-function drawTile(tileId, screenX, screenY) {
-  const block = state.blockDefs.get(tileId);
-  if (!block) {
+function drawWorld() {
+  if (!state.world) {
     return;
   }
 
-  const atlas = state.atlases.get(block.ATLAS_ID);
-  if (!atlas || !atlas.image) {
+  if (!state.worldRender) {
+    rebuildWorldRenderCache();
+  }
+
+  if (!state.worldRender) {
     return;
   }
 
-  const tex = block.ATLAS_TEXTURE;
+  const sourceX = Math.max(0, Math.floor(state.camera.x));
+  const sourceY = Math.max(0, Math.floor(state.camera.y));
+  const maxSourceW = state.worldRender.canvas.width - sourceX;
+  const maxSourceH = state.worldRender.canvas.height - sourceY;
+  const sourceW = Math.max(0, Math.min(canvas.width, maxSourceW));
+  const sourceH = Math.max(0, Math.min(canvas.height, maxSourceH));
+
+  if (sourceW <= 0 || sourceH <= 0) {
+    return;
+  }
+
   ctx.drawImage(
-    atlas.image,
-    tex.x,
-    tex.y,
-    tex.w,
-    tex.h,
-    screenX,
-    screenY,
-    TILE_SIZE,
-    TILE_SIZE,
+    state.worldRender.canvas,
+    sourceX,
+    sourceY,
+    sourceW,
+    sourceH,
+    0,
+    0,
+    sourceW,
+    sourceH,
   );
-}
-
-function drawGrid() {
-  if (!state.world) return;
-
-  const startX = Math.floor(state.camera.x / TILE_SIZE);
-  const startY = Math.floor(state.camera.y / TILE_SIZE);
-  const endX = Math.ceil((state.camera.x + canvas.width) / TILE_SIZE);
-  const endY = Math.ceil((state.camera.y + canvas.height) / TILE_SIZE);
-
-  for (let y = startY; y <= endY; y += 1) {
-    for (let x = startX; x <= endX; x += 1) {
-      if (x < 0 || y < 0 || x >= state.world.width || y >= state.world.height) {
-        continue;
-      }
-
-      const index = y * state.world.width + x;
-      const foregroundTile = Number(state.world.foreground?.[index] || 0);
-      const backgroundTile = Number(state.world.background?.[index] || 0);
-      const drawX = x * TILE_SIZE - state.camera.x;
-      const drawY = y * TILE_SIZE - state.camera.y;
-
-      if (backgroundTile !== 0) {
-        drawTile(backgroundTile, drawX, drawY);
-      }
-      if (foregroundTile !== 0) {
-        drawTile(foregroundTile, drawX, drawY);
-      }
-
-      ctx.strokeStyle = "rgba(255,255,255,0.05)";
-      ctx.strokeRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
-    }
-  }
 }
 
 function drawPlayers() {
@@ -828,28 +913,6 @@ function drawPlayers() {
   }
 }
 
-function drawDoor() {
-  if (!state.world?.door) {
-    return;
-  }
-
-  const doorX = Number(state.world.door.x);
-  const doorY = Number(state.world.door.y);
-  if (Number.isNaN(doorX) || Number.isNaN(doorY)) {
-    return;
-  }
-
-  const screenX = doorX * TILE_SIZE - state.camera.x;
-  const screenY = doorY * TILE_SIZE - state.camera.y;
-
-  ctx.fillStyle = "#6b3f1d";
-  ctx.fillRect(screenX + 6, screenY + 2, TILE_SIZE - 12, TILE_SIZE - 2);
-  ctx.fillStyle = "#8b5a2b";
-  ctx.fillRect(screenX + 8, screenY + 4, TILE_SIZE - 16, TILE_SIZE - 6);
-  ctx.fillStyle = "#facc15";
-  ctx.fillRect(screenX + TILE_SIZE - 12, screenY + TILE_SIZE / 2, 3, 3);
-}
-
 function loop() {
   update();
 
@@ -861,8 +924,7 @@ function loop() {
       ctx.font = "20px system-ui";
       ctx.fillText("Loading world...", 30, 50);
     } else {
-      drawGrid();
-      drawDoor();
+      drawWorld();
       drawPlayers();
     }
   }

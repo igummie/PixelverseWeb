@@ -145,6 +145,15 @@
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 0, "y": 32, "w": 16, "h": 16 },
       "PLACEABLE": true
+    },
+    {
+      "ID": 17,
+      "NAME": "WORLD_DOOR",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 16, "y": 32, "w": 16, "h": 16 },
+      "PLACEABLE": false,
+      "BREAKABLE": false
     }
   ]
 }

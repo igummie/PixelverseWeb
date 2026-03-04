@@ -7,6 +7,7 @@ AIR_BLOCK_ID = 0
 DIRT_BLOCK_ID = 1
 BEDROCK_BLOCK_ID = 2
 STONE_BLOCK_ID = 3
+DOOR_BLOCK_ID = 17
 
 DEFAULT_WORLDGEN_CONFIG: dict[str, float | int] = {
     "surface_ratio": 0.58,
@@ -69,7 +70,7 @@ def generate_world_layers(
     door_y = max(1, surface_y - 1)
 
     door_index = door_y * width + door_x
-    foreground[door_index] = AIR_BLOCK_ID
+    foreground[door_index] = DOOR_BLOCK_ID
 
     if door_y - 1 >= 0:
         headroom_index = (door_y - 1) * width + door_x

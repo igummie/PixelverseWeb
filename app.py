@@ -24,8 +24,10 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_SECONDS = 7 * 24 * 60 * 60
 WORLD_WIDTH = 120
 WORLD_HEIGHT = 70
+AIR_BLOCK_ID = 0
 BEDROCK_BLOCK_ID = 2
 DIRT_BLOCK_ID = 1
+DOOR_BLOCK_ID = 17
 
 BASE_DIR = Path(__file__).resolve().parent
 PUBLIC_DIR = BASE_DIR / "public"
@@ -200,7 +202,7 @@ def sanitize_door(door: Any, width: int, height: int) -> dict[str, int]:
 def get_spawn_from_door(world: dict[str, Any]) -> tuple[float, float]:
     door = sanitize_door(world.get("door"), world["width"], world["height"])
     spawn_x = float(door["x"] + 0.14)
-    spawn_y = float(max(0, door["y"] - 0.05))
+    spawn_y = float(max(0, door["y"] - 0.92))
     return spawn_x, spawn_y
 
 
@@ -220,6 +222,11 @@ def enforce_bedrock_under_door(world: dict[str, Any], previous_door: dict[str, i
                 old_index = old_floor_y * width + old_door["x"]
                 foreground = world.get("foreground")
                 if isinstance(foreground, list) and old_index < len(foreground):
+                    old_door_index = old_door["y"] * width + old_door["x"]
+                    if old_door_index < len(foreground) and int(foreground[old_door_index]) == DOOR_BLOCK_ID:
+                        foreground[old_door_index] = AIR_BLOCK_ID
+                        changed = True
+
                     if int(foreground[old_index]) == BEDROCK_BLOCK_ID:
                         foreground[old_index] = DIRT_BLOCK_ID
                         changed = True
@@ -232,6 +239,11 @@ def enforce_bedrock_under_door(world: dict[str, Any], previous_door: dict[str, i
     foreground = world.get("foreground")
     if not isinstance(foreground, list) or index >= len(foreground):
         return changed
+
+    door_index = door["y"] * width + door["x"]
+    if door_index < len(foreground) and int(foreground[door_index]) != DOOR_BLOCK_ID:
+        foreground[door_index] = DOOR_BLOCK_ID
+        changed = True
 
     if int(foreground[index]) == BEDROCK_BLOCK_ID:
         return changed
@@ -471,6 +483,22 @@ def login(payload: LoginBody) -> dict[str, Any]:
 
     token = create_token(int(user["id"]), user["username"])
     return {"token": token, "user": {"id": int(user["id"]), "username": user["username"]}}
+
+
+@app.post("/api/auth/guest")
+def guest_login() -> dict[str, Any]:
+    guest_number = secrets.randbelow(900) + 100
+    guest_username = f"Guest_{guest_number}"
+    guest_id = -int(time.time() * 1000)
+
+    token = create_token(guest_id, guest_username)
+    return {
+        "token": token,
+        "user": {
+            "id": guest_id,
+            "username": guest_username,
+        },
+    }
 
 
 @app.get("/api/worlds")
