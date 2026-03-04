@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixelverse pre-pre</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #111827;
+        color: #e5e7eb;
+      }
+
+      .screen {
+        min-height: 100vh;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+
+      .screen.active {
+        display: flex;
+      }
+
+      .panel {
+        width: min(420px, 100%);
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 14px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .title {
+        font-size: 26px;
+        font-weight: 700;
+      }
+
+      .subtitle {
+        opacity: 0.85;
+        font-size: 14px;
+      }
+
+      input,
+      select,
+      button {
+        background: #111827;
+        color: #e5e7eb;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 600;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+      }
+
+      .row > * {
+        flex: 1;
+      }
+
+      .error {
+        min-height: 20px;
+        color: #fca5a5;
+        font-size: 13px;
+      }
+
+      #gameScreen {
+        flex-direction: column;
+        padding: 0;
+        align-items: stretch;
+        justify-content: flex-start;
+      }
+
+      .gameTopbar {
+        min-height: 58px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 10px 12px;
+        box-sizing: border-box;
+        background: #1f2937;
+        border-bottom: 1px solid #374151;
+        position: relative;
+        z-index: 5;
+      }
+
+      .spacer {
+        margin-left: auto;
+        font-size: 12px;
+        opacity: 0.9;
+        white-space: nowrap;
+        flex: 1;
+      }
+
+      #game {
+        display: block;
+        width: 100vw;
+        height: calc(100vh - 58px);
+        image-rendering: pixelated;
+        background: #0f172a;
+        position: relative;
+        z-index: 1;
+      }
+
+      #leaveWorldBtn {
+        flex-shrink: 0;
+        position: relative;
+        z-index: 30;
+        pointer-events: auto;
+      }
+
+      #worldList {
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 8px;
+        background: #111827;
+      }
+
+      .worldItem {
+        width: 100%;
+        margin: 4px 0;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body>
+    <section id="mainScreen" class="screen active">
+      <div class="panel">
+        <div class="title">Pixelverse pre-preview</div>
+        <div class="subtitle">Build, break, and hang out in shared worlds.</div>
+        <button id="playBtn">Play</button>
+      </div>
+    </section>
+
+    <section id="loginScreen" class="screen">
+      <div class="panel">
+        <div class="title">Login</div>
+        <div class="subtitle">Use an account to enter multiplayer worlds.</div>
+        <input id="usernameInput" placeholder="Username" maxlength="16" />
+        <input id="passwordInput" placeholder="Password" type="password" maxlength="72" />
+        <div class="row">
+          <button id="loginBtn">Login</button>
+          <button id="registerBtn">Register</button>
+        </div>
+        <button id="backToMainBtn">Back</button>
+        <div id="loginError" class="error"></div>
+      </div>
+    </section>
+
+    <section id="worldScreen" class="screen">
+      <div class="panel">
+        <div class="title">World Selection</div>
+        <div id="welcomeText" class="subtitle"></div>
+        <div id="worldList"></div>
+        <input id="worldInput" placeholder="Enter world name" maxlength="24" value="start" />
+        <div class="row">
+          <button id="joinWorldBtn">Enter World</button>
+          <button id="refreshWorldsBtn">Refresh</button>
+        </div>
+        <button id="logoutBtn">Logout</button>
+        <div id="worldError" class="error"></div>
+      </div>
+    </section>
+
+    <section id="gameScreen" class="screen">
+      <div class="gameTopbar">
+        <div id="gameStatus">Connecting...</div>
+        <label for="blockSelect">Block:</label>
+        <select id="blockSelect"></select>
+        <div id="blockTypeInfo" style="font-size: 12px; opacity: 0.8"></div>
+        <div class="spacer">LMB: place | RMB: break | WASD/Arrows: move | ESC: leave</div>
+        <button id="leaveWorldBtn">Leave World</button>
+      </div>
+      <canvas id="game"></canvas>
+    </section>
+
+    <script type="module" src="/game.js"></script>
+  </body>
+</html>

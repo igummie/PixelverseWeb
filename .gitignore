@@ -1,0 +1,32 @@
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+.Python
+.venv/
+venv/
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Editor/OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Local runtime data
+data/db/*.db
+data/db/*.sqlite
+data/db/*.sqlite3
+.server_console_settings.bat
+
+# Optional legacy node artifacts
+node_modules/
+npm-debug.log*

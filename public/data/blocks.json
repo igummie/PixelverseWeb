@@ -1,0 +1,150 @@
+{
+  "VERSION": 1,
+  "atlases": [
+    {
+      "ATLAS_ID": 0,
+      "NAME": "BASIC_ATLAS",
+      "SRC": "/assets/atlases/basic_atlas.svg",
+      "TILE_SIZE": 16
+    }
+  ],
+  "blocks": [
+    {
+      "ID": 0,
+      "NAME": "AIR",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "PLACEABLE": false
+    },
+    {
+      "ID": 1,
+      "NAME": "DIRT",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 16, "y": 0, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 2,
+      "NAME": "BEDROCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 32, "y": 0, "w": 16, "h": 16 },
+      "PLACEABLE": true,
+      "BREAKABLE": false
+    },
+    {
+      "ID": 3,
+      "NAME": "STONE",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 48, "y": 0, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 4,
+      "NAME": "RED_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 64, "y": 0, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 5,
+      "NAME": "GREEN_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 80, "y": 0, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 6,
+      "NAME": "BLUE_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 96, "y": 0, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 7,
+      "NAME": "YELLOW_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 112, "y": 0, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 8,
+      "NAME": "PURPLE_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 0, "y": 16, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 9,
+      "NAME": "WOOD_PLATFORM",
+      "BLOCK_TYPE": "PLATFORM",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 16, "y": 16, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 10,
+      "NAME": "METAL_PLATFORM",
+      "BLOCK_TYPE": "PLATFORM",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 32, "y": 16, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 11,
+      "NAME": "SKY_BG",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 48, "y": 16, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 12,
+      "NAME": "BRICK_BG",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 64, "y": 16, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 13,
+      "NAME": "LEAF_DECOR",
+      "BLOCK_TYPE": "DECORATION",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 80, "y": 16, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 14,
+      "NAME": "LAMP",
+      "BLOCK_TYPE": "DECORATION",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 96, "y": 16, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 15,
+      "NAME": "WATER",
+      "BLOCK_TYPE": "LIQUID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 112, "y": 16, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    },
+    {
+      "ID": 16,
+      "NAME": "LAVA",
+      "BLOCK_TYPE": "LIQUID",
+      "ATLAS_ID": 0,
+      "ATLAS_TEXTURE": { "x": 0, "y": 32, "w": 16, "h": 16 },
+      "PLACEABLE": true
+    }
+  ]
+}
