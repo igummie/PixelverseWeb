@@ -18,11 +18,11 @@ if exist "%SETTINGS_FILE%" (
 :menu
 echo.
 echo ==================================
-echo   BlockWorld Server Console
+echo   Pixelverse Server Console
 echo ==================================
 echo Current settings: PORT=!PORT! ^| PYTHON=!PYTHON_CMD!
 echo [0] Install Requirements
-echo [1] Start Server ^(same console^)
+echo [1] Start Server ^(hotkeys: R restart, X stop^)
 echo [2] Stop Server ^(configured port^)
 echo [3] Server Status
 echo [4] Open Game URL
@@ -56,32 +56,88 @@ goto menu
 
 :start_server
 echo.
-if exist "scripts\build_bundle.py" (
-	echo Building client bundle...
-	"%PYTHON_CMD%" scripts\build_bundle.py
-	if errorlevel 1 (
-		echo Bundle build failed. Server not started.
-		echo.
-		pause
-		goto menu
-	)
-	echo Bundle build complete.
+call :build_bundle
+if errorlevel 1 (
+	echo Bundle build failed. Server not started.
 	echo.
+	pause
+	goto menu
 )
 
-echo Starting server on port !PORT! in this console...
-echo Press Ctrl+C to stop and return here.
-echo ----------------------------------
+call :start_server_background
+
 if "!AUTO_OPEN_BROWSER!"=="1" (
 	start "" "http://localhost:!PORT!"
 )
-"%PYTHON_CMD%" app.py
-set "SERVER_EXIT=%ERRORLEVEL%"
-echo ----------------------------------
-echo Server exited with code !SERVER_EXIT!.
+
+echo Server controls are active while running on port !PORT!.
+echo Press [R] to restart server, [X] to stop server and return to menu.
+
+:server_hotkeys
+choice /c RX /n /m "Hotkey [R=restart, X=stop]: "
+if errorlevel 2 goto stop_and_return
+if errorlevel 1 goto restart_server
+goto server_hotkeys
+
+:restart_server
 echo.
-pause
+echo Restarting server on port !PORT!...
+call :stop_server_silent
+call :build_bundle
+if errorlevel 1 (
+	echo Bundle build failed. Server remains stopped.
+	echo.
+	goto server_hotkeys
+)
+call :start_server_background
+goto server_hotkeys
+
+:build_bundle
+if not exist "scripts\build_bundle.py" (
+	exit /b 0
+)
+
+echo Building client bundle...
+"%PYTHON_CMD%" scripts\build_bundle.py
+if errorlevel 1 (
+	exit /b 1
+)
+echo Bundle build complete.
+echo.
+exit /b 0
+
+:stop_and_return
+echo.
+echo Stopping server on port !PORT!... 
+call :stop_server_silent
 goto menu
+
+:start_server_background
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":!PORT! .*LISTENING"') do (
+	echo Server already running on port !PORT! ^(PID %%P^).
+	echo.
+	goto :eof
+)
+
+echo Starting server on port !PORT!... ^(logs: server.log^)
+start "" /b cmd /c ""%PYTHON_CMD%" app.py >> server.log 2>&1"
+
+set "SERVER_STARTED="
+for /l %%I in (1,1,5) do (
+	timeout /t 1 >nul
+	for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":!PORT! .*LISTENING"') do (
+		echo Server started. PID %%P
+		echo.
+		set "SERVER_STARTED=1"
+		goto :after_start_check
+	)
+)
+
+:after_start_check
+if defined SERVER_STARTED goto :eof
+echo Warning: server process not detected on port !PORT! yet.
+echo.
+goto :eof
 
 :stop_server
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":!PORT! .*LISTENING"') do (
