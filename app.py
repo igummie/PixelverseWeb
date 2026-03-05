@@ -1089,7 +1089,7 @@ def get_public_cache_headers(safe_path: str) -> dict[str, str]:
     lower = safe_path.lower()
 
     # Keep HTML and bundle entrypoint fresh so deployments propagate quickly.
-    if lower == "index.html" or lower == "game.bundle.js":
+    if lower == "index.html" or lower == "build/game.bundle.js":
         return {"Cache-Control": "no-cache"}
 
     # Heavily cache static assets and JSON data consumed by the bundle.

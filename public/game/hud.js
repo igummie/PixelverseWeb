@@ -1,0 +1,231 @@
+export function createHudController({ state, screens, canvas, ctx, elements, settings }) {
+  const {
+    zoomLevel,
+    gemCount,
+    debugOverlay,
+    debugInfo,
+    debugGridToggle,
+    gameTopbar,
+    chatDrawer,
+    chatInputPanel,
+    chatInput,
+    worldChatDrawer,
+    loadingChatDrawer,
+  } = elements;
+
+  const {
+    CHAT_DRAWER_HANDLE_PEEK,
+    CHAT_INPUT_PANEL_HEIGHT,
+    CHAT_LOG_DRAWER_HEIGHT,
+    DEBUG_INFO_REFRESH_MS,
+  } = settings;
+
+  function updateZoomUi() {
+    if (!zoomLevel) {
+      return;
+    }
+    zoomLevel.textContent = `Zoom ${state.camera.zoom.toFixed(2)}x`;
+  }
+
+  function updateGemUi() {
+    if (!gemCount) {
+      return;
+    }
+    gemCount.textContent = `Gems: ${Math.max(0, Math.floor(Number(state.gems) || 0))}`;
+  }
+
+  function updateDebugUi() {
+    debugOverlay?.classList.toggle("hidden", !state.debugEnabled);
+    if (debugGridToggle) {
+      debugGridToggle.checked = !!state.debugGridEnabled;
+    }
+  }
+
+  function updateDebugInfo(force = false) {
+    if (!state.debugEnabled || !debugInfo) {
+      return;
+    }
+
+    const now = performance.now();
+    if (!force && now - state.debugLastInfoAt < DEBUG_INFO_REFRESH_MS) {
+      return;
+    }
+    state.debugLastInfoAt = now;
+
+    const worldName = state.world?.name || "-";
+    const worldW = Number(state.world?.width || 0);
+    const worldH = Number(state.world?.height || 0);
+    const playerTileX = Math.floor(state.me.x);
+    const playerTileY = Math.floor(state.me.y);
+    const mouseWorldX = state.camera.x + state.mouse.x / Math.max(0.0001, state.camera.zoom);
+    const mouseWorldY = state.camera.y + state.mouse.y / Math.max(0.0001, state.camera.zoom);
+    const pingText = Number.isFinite(state.debugPingMs) ? `${Math.round(state.debugPingMs)}ms` : "--";
+
+    debugInfo.textContent = [
+      `world: ${worldName} (${worldW}x${worldH})`,
+      `players: ${state.players.size}  gems: ${Math.floor(Number(state.gems) || 0)}`,
+      `pos: ${state.me.x.toFixed(3)}, ${state.me.y.toFixed(3)}  tile: ${playerTileX}, ${playerTileY}`,
+      `vel: ${state.velocity.x.toFixed(3)}, ${state.velocity.y.toFixed(3)}  onGround: ${state.onGround}`,
+      `camera: ${state.camera.x.toFixed(2)}, ${state.camera.y.toFixed(2)}  zoom: ${state.camera.zoom.toFixed(2)}x`,
+      `mouse(world): ${mouseWorldX.toFixed(2)}, ${mouseWorldY.toFixed(2)}`,
+      `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}`,
+      `drops: ${state.gemDrops.size}  damageTiles: ${state.tileDamage.size}`,
+    ].join("\n");
+  }
+
+  function getChatDrawerMaxHeight() {
+    return CHAT_LOG_DRAWER_HEIGHT + (state.chatInputOpen ? CHAT_INPUT_PANEL_HEIGHT : 0);
+  }
+
+  function getChatDrawerHiddenOffset() {
+    const drawerHeight = getChatDrawerMaxHeight();
+    return -(drawerHeight - CHAT_DRAWER_HANDLE_PEEK);
+  }
+
+  function updateDebugOverlayPosition() {
+    if (!debugOverlay) {
+      return;
+    }
+
+    const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
+    const visibleDrawerHeight = Math.max(0, state.chatDrawerHeight + state.chatDrawerOffsetY);
+    const drawerPushDown = Math.max(0, visibleDrawerHeight - CHAT_DRAWER_HANDLE_PEEK);
+    const debugTop = topbarHeight + 10 + drawerPushDown;
+    debugOverlay.style.top = `${Math.round(debugTop)}px`;
+  }
+
+  function applyChatDrawerPosition(nextOffsetY, immediate = false) {
+    const drawerHeight = getChatDrawerMaxHeight();
+    const hiddenOffset = getChatDrawerHiddenOffset();
+    state.chatDrawerHeight = drawerHeight;
+    state.chatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
+
+    if (chatDrawer) {
+      if (immediate) {
+        chatDrawer.classList.add("dragging");
+      } else {
+        chatDrawer.classList.remove("dragging");
+      }
+      chatDrawer.style.height = `${drawerHeight}px`;
+      chatDrawer.style.transform = `translateY(${state.chatDrawerOffsetY}px)`;
+    }
+
+    updateDebugOverlayPosition();
+  }
+
+  function setChatLogOpen(open) {
+    state.chatLogOpen = !!open;
+
+    if (!state.chatLogOpen) {
+      state.chatInputOpen = false;
+    }
+
+    chatInputPanel?.classList.toggle("hidden", !state.chatInputOpen);
+    const targetOffset = state.chatLogOpen ? 0 : getChatDrawerHiddenOffset();
+    applyChatDrawerPosition(targetOffset);
+  }
+
+  function setChatInputOpen(open) {
+    state.chatInputOpen = !!open;
+    chatInputPanel?.classList.toggle("hidden", !state.chatInputOpen);
+
+    if (state.chatInputOpen) {
+      state.chatLogOpen = true;
+    }
+
+    const targetOffset = state.chatLogOpen ? 0 : getChatDrawerHiddenOffset();
+    applyChatDrawerPosition(targetOffset);
+
+    if (state.chatInputOpen) {
+      chatInput?.focus();
+    } else if (chatInput) {
+      chatInput.value = "";
+    }
+  }
+
+  function getWorldChatDrawerHiddenOffset() {
+    return -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK);
+  }
+
+  function applyWorldChatDrawerPosition(nextOffsetY, immediate = false) {
+    const hiddenOffset = getWorldChatDrawerHiddenOffset();
+    state.worldChatDrawerHeight = CHAT_LOG_DRAWER_HEIGHT;
+    state.worldChatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
+
+    if (worldChatDrawer) {
+      if (immediate) {
+        worldChatDrawer.classList.add("dragging");
+      } else {
+        worldChatDrawer.classList.remove("dragging");
+      }
+      worldChatDrawer.style.height = `${CHAT_LOG_DRAWER_HEIGHT}px`;
+      worldChatDrawer.style.transform = `translateY(${state.worldChatDrawerOffsetY}px)`;
+    }
+  }
+
+  function setWorldChatLogOpen(open) {
+    state.worldChatLogOpen = !!open;
+    const targetOffset = state.worldChatLogOpen ? 0 : getWorldChatDrawerHiddenOffset();
+    applyWorldChatDrawerPosition(targetOffset);
+  }
+
+  function getLoadingChatDrawerHiddenOffset() {
+    return -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK);
+  }
+
+  function applyLoadingChatDrawerPosition(nextOffsetY, immediate = false) {
+    const hiddenOffset = getLoadingChatDrawerHiddenOffset();
+    state.loadingChatDrawerHeight = CHAT_LOG_DRAWER_HEIGHT;
+    state.loadingChatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
+
+    if (loadingChatDrawer) {
+      if (immediate) {
+        loadingChatDrawer.classList.add("dragging");
+      } else {
+        loadingChatDrawer.classList.remove("dragging");
+      }
+      loadingChatDrawer.style.height = `${CHAT_LOG_DRAWER_HEIGHT}px`;
+      loadingChatDrawer.style.transform = `translateY(${state.loadingChatDrawerOffsetY}px)`;
+    }
+  }
+
+  function setLoadingChatLogOpen(open) {
+    state.loadingChatLogOpen = !!open;
+    const targetOffset = state.loadingChatLogOpen ? 0 : getLoadingChatDrawerHiddenOffset();
+    applyLoadingChatDrawerPosition(targetOffset);
+  }
+
+  function resizeCanvas() {
+    if (!screens.game.classList.contains("active")) {
+      return;
+    }
+
+    const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
+    screens.game.style.setProperty("--hud-height", `${topbarHeight}px`);
+    canvas.width = window.innerWidth;
+    canvas.height = Math.max(1, window.innerHeight - topbarHeight);
+    // Resizing resets canvas context state, so restore pixel-art rendering.
+    ctx.imageSmoothingEnabled = false;
+    updateDebugOverlayPosition();
+  }
+
+  return {
+    updateZoomUi,
+    updateGemUi,
+    updateDebugUi,
+    updateDebugInfo,
+    getChatDrawerMaxHeight,
+    getChatDrawerHiddenOffset,
+    updateDebugOverlayPosition,
+    applyChatDrawerPosition,
+    setChatLogOpen,
+    setChatInputOpen,
+    getWorldChatDrawerHiddenOffset,
+    applyWorldChatDrawerPosition,
+    setWorldChatLogOpen,
+    getLoadingChatDrawerHiddenOffset,
+    applyLoadingChatDrawerPosition,
+    setLoadingChatLogOpen,
+    resizeCanvas,
+  };
+}

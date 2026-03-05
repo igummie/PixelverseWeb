@@ -1,0 +1,377 @@
+      :root {
+        color-scheme: dark;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #111827;
+        color: #e5e7eb;
+      }
+
+      .pageControls {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(17, 24, 39, 0.92);
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      .pageControls input[type="checkbox"] {
+        width: 14px;
+        height: 14px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 420px 1fr;
+        gap: 16px;
+        min-height: 100vh;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+
+      .panel {
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 12px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .title {
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        opacity: 0.85;
+      }
+
+      input,
+      select,
+      button,
+      textarea {
+        background: #111827;
+        color: #e5e7eb;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+
+      button {
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 130px;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .row > * {
+        flex: 1;
+      }
+
+      .fieldStack {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .atlasSearchWrap {
+        position: relative;
+        flex: 1;
+      }
+
+      .atlasSuggestions {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        max-height: 180px;
+        overflow-y: auto;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        background: #111827;
+        z-index: 20;
+        display: none;
+      }
+
+      .atlasSuggestions.visible {
+        display: block;
+      }
+
+      .atlasSuggestion {
+        width: 100%;
+        text-align: left;
+        border: 0;
+        border-bottom: 1px solid #1f2937;
+        border-radius: 0;
+        background: transparent;
+        color: #e5e7eb;
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+
+      .atlasSuggestion:last-child {
+        border-bottom: 0;
+      }
+
+      .atlasSuggestion.active,
+      .atlasSuggestion:hover {
+        background: #1f2937;
+      }
+
+      .atlasWrap {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        overflow: auto;
+        max-height: 340px;
+        background: #0f172a;
+      }
+
+      .atlasControls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .inlineToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .atlasControls input[type="range"] {
+        flex: 1;
+      }
+
+      #atlasCanvas {
+        image-rendering: pixelated;
+        display: block;
+        cursor: pointer;
+      }
+
+      .testCanvasWrap {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        overflow: hidden;
+        width: 100%;
+        max-width: 512px;
+        aspect-ratio: 16 / 10;
+        background: #0f172a;
+      }
+
+      #testCanvas {
+        image-rendering: pixelated;
+        display: block;
+        cursor: crosshair;
+        width: 100%;
+        height: 100%;
+        transform-origin: top left;
+      }
+
+      .status {
+        min-height: 20px;
+        color: #93c5fd;
+        font-size: 13px;
+      }
+
+      .error {
+        color: #fca5a5;
+      }
+
+      .maskGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
+        gap: 8px;
+        align-content: start;
+      }
+
+      .maskCard {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 8px;
+        background: #111827;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        cursor: pointer;
+      }
+
+      .maskCard.active {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 1px #60a5fa inset;
+      }
+
+      .maskHead {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+
+      .miniRow {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .miniMask,
+      .miniTile {
+        width: 44px;
+        height: 44px;
+        border: 1px solid #4b5563;
+        border-radius: 4px;
+        image-rendering: pixelated;
+      }
+
+      .tiny {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+
+      .tileUsage {
+        font-size: 12px;
+        opacity: 0.95;
+        line-height: 1.4;
+        max-height: 84px;
+        overflow-y: auto;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #0f172a;
+        padding: 6px 8px;
+      }
+
+      .tileUsageHeader {
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+
+      .tileUsageList {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .tileUsageMaskBtn {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid #334155;
+        background: #111827;
+        color: #dbeafe;
+      }
+
+      .tileUsageMaskBtn:hover {
+        background: #1e293b;
+      }
+
+      .variantList {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 2px;
+      }
+
+      .variantDetailsBlock {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      body.hideVariantDetails .variantDetailsBlock {
+        display: none;
+      }
+
+      .variantItem {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #374151;
+        border-radius: 6px;
+        padding: 5px;
+        background: #0f172a;
+      }
+
+      .variantThumb {
+        width: 28px;
+        height: 28px;
+        border: 1px solid #4b5563;
+        border-radius: 4px;
+        image-rendering: pixelated;
+        flex: 0 0 auto;
+      }
+
+      .variantMeta {
+        flex: 1;
+        font-size: 11px;
+        opacity: 0.95;
+      }
+
+      .variantBadge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        border: 1px solid #14532d;
+        background: #166534;
+        color: #dcfce7;
+        border-radius: 4px;
+        padding: 1px 5px;
+        margin-right: 6px;
+      }
+
+      .removeVariantBtn {
+        flex: 0 0 auto;
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid #7f1d1d;
+        background: #3f0b0b;
+        color: #fecaca;
+      }
+
+      .removeVariantBtn:hover {
+        background: #5b1111;
+      }
+
+      .inspector {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 8px;
+        background: #111827;
+      }
+
+      .links {
+        font-size: 12px;
+        opacity: 0.9;
+      }
+
+      .links a {
+        color: #93c5fd;
+      }
+
+      @media (max-width: 1200px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+    
+

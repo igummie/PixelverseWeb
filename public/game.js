@@ -42,6 +42,7 @@ import {
   saveAuthSession,
 } from "./game/session.js";
 import { getGemDrawSizeForValue, getGemFrameForValue } from "./game/gems.js";
+import { createHudController } from "./game/hud.js";
 
 const screens = {
   main: document.getElementById("mainScreen"),
@@ -161,61 +162,50 @@ const state = {
   transientWorldTexts: [],
 };
 
+const hud = createHudController({
+  state,
+  screens,
+  canvas,
+  ctx,
+  elements: {
+    zoomLevel,
+    gemCount,
+    debugOverlay,
+    debugInfo,
+    debugGridToggle,
+    gameTopbar,
+    chatDrawer,
+    chatInputPanel,
+    chatInput,
+    worldChatDrawer,
+    loadingChatDrawer,
+  },
+  settings: {
+    CHAT_DRAWER_HANDLE_PEEK,
+    CHAT_INPUT_PANEL_HEIGHT,
+    CHAT_LOG_DRAWER_HEIGHT,
+    DEBUG_INFO_REFRESH_MS,
+  },
+});
+
 function clampCameraZoom(value) {
   return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
 }
 
 function updateZoomUi() {
-  if (!zoomLevel) {
-    return;
-  }
-  zoomLevel.textContent = `Zoom ${state.camera.zoom.toFixed(2)}x`;
+  hud.updateZoomUi();
 }
 
 function updateGemUi() {
-  if (!gemCount) {
-    return;
-  }
-  gemCount.textContent = `Gems: ${Math.max(0, Math.floor(Number(state.gems) || 0))}`;
+  hud.updateGemUi();
 }
 
 function updateDebugUi() {
-  debugOverlay?.classList.toggle("hidden", !state.debugEnabled);
-  if (debugGridToggle) {
-    debugGridToggle.checked = !!state.debugGridEnabled;
-  }
+  hud.updateDebugUi();
 }
 
 function updateDebugInfo(force = false) {
-  if (!state.debugEnabled || !debugInfo) {
-    return;
-  }
-
-  const now = performance.now();
-  if (!force && now - state.debugLastInfoAt < DEBUG_INFO_REFRESH_MS) {
-    return;
-  }
-  state.debugLastInfoAt = now;
-
-  const worldName = state.world?.name || "-";
-  const worldW = Number(state.world?.width || 0);
-  const worldH = Number(state.world?.height || 0);
-  const playerTileX = Math.floor(state.me.x);
-  const playerTileY = Math.floor(state.me.y);
-  const mouseWorldX = state.camera.x + state.mouse.x / Math.max(0.0001, state.camera.zoom);
-  const mouseWorldY = state.camera.y + state.mouse.y / Math.max(0.0001, state.camera.zoom);
-  const pingText = Number.isFinite(state.debugPingMs) ? `${Math.round(state.debugPingMs)}ms` : "--";
-
-  debugInfo.textContent = [
-    `world: ${worldName} (${worldW}x${worldH})`,
-    `players: ${state.players.size}  gems: ${Math.floor(Number(state.gems) || 0)}`,
-    `pos: ${state.me.x.toFixed(3)}, ${state.me.y.toFixed(3)}  tile: ${playerTileX}, ${playerTileY}`,
-    `vel: ${state.velocity.x.toFixed(3)}, ${state.velocity.y.toFixed(3)}  onGround: ${state.onGround}`,
-    `camera: ${state.camera.x.toFixed(2)}, ${state.camera.y.toFixed(2)}  zoom: ${state.camera.zoom.toFixed(2)}x`,
-    `mouse(world): ${mouseWorldX.toFixed(2)}, ${mouseWorldY.toFixed(2)}`,
-    `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}`,
-    `drops: ${state.gemDrops.size}  damageTiles: ${state.tileDamage.size}`,
-  ].join("\n");
+  hud.updateDebugInfo(force);
 }
 
 function stopPingTimer() {
@@ -443,125 +433,51 @@ function renderChatLog() {
 }
 
 function getChatDrawerMaxHeight() {
-  return CHAT_LOG_DRAWER_HEIGHT + (state.chatInputOpen ? CHAT_INPUT_PANEL_HEIGHT : 0);
+  return hud.getChatDrawerMaxHeight();
 }
 
 function getChatDrawerHiddenOffset() {
-  const drawerHeight = getChatDrawerMaxHeight();
-  return -(drawerHeight - CHAT_DRAWER_HANDLE_PEEK);
+  return hud.getChatDrawerHiddenOffset();
 }
 
 function updateDebugOverlayPosition() {
-  if (!debugOverlay) {
-    return;
-  }
-
-  const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
-  const visibleDrawerHeight = Math.max(0, state.chatDrawerHeight + state.chatDrawerOffsetY);
-  const drawerPushDown = Math.max(0, visibleDrawerHeight - CHAT_DRAWER_HANDLE_PEEK);
-  const debugTop = topbarHeight + 10 + drawerPushDown;
-  debugOverlay.style.top = `${Math.round(debugTop)}px`;
+  hud.updateDebugOverlayPosition();
 }
 
 function applyChatDrawerPosition(nextOffsetY, immediate = false) {
-  const drawerHeight = getChatDrawerMaxHeight();
-  const hiddenOffset = getChatDrawerHiddenOffset();
-  state.chatDrawerHeight = drawerHeight;
-  state.chatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
-
-  if (chatDrawer) {
-    if (immediate) {
-      chatDrawer.classList.add("dragging");
-    } else {
-      chatDrawer.classList.remove("dragging");
-    }
-    chatDrawer.style.height = `${drawerHeight}px`;
-    chatDrawer.style.transform = `translateY(${state.chatDrawerOffsetY}px)`;
-  }
-
-  updateDebugOverlayPosition();
+  hud.applyChatDrawerPosition(nextOffsetY, immediate);
 }
 
 function setChatLogOpen(open) {
-  state.chatLogOpen = !!open;
-
-  if (!state.chatLogOpen) {
-    state.chatInputOpen = false;
-  }
-
-  chatInputPanel?.classList.toggle("hidden", !state.chatInputOpen);
-  const targetOffset = state.chatLogOpen ? 0 : getChatDrawerHiddenOffset();
-  applyChatDrawerPosition(targetOffset);
+  hud.setChatLogOpen(open);
 }
 
 function setChatInputOpen(open) {
-  state.chatInputOpen = !!open;
-  chatInputPanel?.classList.toggle("hidden", !state.chatInputOpen);
-
-  if (state.chatInputOpen) {
-    state.chatLogOpen = true;
-  }
-
-  const targetOffset = state.chatLogOpen ? 0 : getChatDrawerHiddenOffset();
-  applyChatDrawerPosition(targetOffset);
-
-  if (state.chatInputOpen) {
-    chatInput?.focus();
-  } else if (chatInput) {
-    chatInput.value = "";
-  }
+  hud.setChatInputOpen(open);
 }
 
 function getWorldChatDrawerHiddenOffset() {
-  return -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK);
+  return hud.getWorldChatDrawerHiddenOffset();
 }
 
 function applyWorldChatDrawerPosition(nextOffsetY, immediate = false) {
-  const hiddenOffset = getWorldChatDrawerHiddenOffset();
-  state.worldChatDrawerHeight = CHAT_LOG_DRAWER_HEIGHT;
-  state.worldChatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
-
-  if (worldChatDrawer) {
-    if (immediate) {
-      worldChatDrawer.classList.add("dragging");
-    } else {
-      worldChatDrawer.classList.remove("dragging");
-    }
-    worldChatDrawer.style.height = `${CHAT_LOG_DRAWER_HEIGHT}px`;
-    worldChatDrawer.style.transform = `translateY(${state.worldChatDrawerOffsetY}px)`;
-  }
+  hud.applyWorldChatDrawerPosition(nextOffsetY, immediate);
 }
 
 function setWorldChatLogOpen(open) {
-  state.worldChatLogOpen = !!open;
-  const targetOffset = state.worldChatLogOpen ? 0 : getWorldChatDrawerHiddenOffset();
-  applyWorldChatDrawerPosition(targetOffset);
+  hud.setWorldChatLogOpen(open);
 }
 
 function getLoadingChatDrawerHiddenOffset() {
-  return -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK);
+  return hud.getLoadingChatDrawerHiddenOffset();
 }
 
 function applyLoadingChatDrawerPosition(nextOffsetY, immediate = false) {
-  const hiddenOffset = getLoadingChatDrawerHiddenOffset();
-  state.loadingChatDrawerHeight = CHAT_LOG_DRAWER_HEIGHT;
-  state.loadingChatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
-
-  if (loadingChatDrawer) {
-    if (immediate) {
-      loadingChatDrawer.classList.add("dragging");
-    } else {
-      loadingChatDrawer.classList.remove("dragging");
-    }
-    loadingChatDrawer.style.height = `${CHAT_LOG_DRAWER_HEIGHT}px`;
-    loadingChatDrawer.style.transform = `translateY(${state.loadingChatDrawerOffsetY}px)`;
-  }
+  hud.applyLoadingChatDrawerPosition(nextOffsetY, immediate);
 }
 
 function setLoadingChatLogOpen(open) {
-  state.loadingChatLogOpen = !!open;
-  const targetOffset = state.loadingChatLogOpen ? 0 : getLoadingChatDrawerHiddenOffset();
-  applyLoadingChatDrawerPosition(targetOffset);
+  hud.setLoadingChatLogOpen(open);
 }
 
 function setPlayerChatBubble(playerId, messageText) {
@@ -1002,17 +918,7 @@ function showScreen(name) {
 }
 
 function resizeCanvas() {
-  if (!screens.game.classList.contains("active")) {
-    return;
-  }
-
-  const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
-  screens.game.style.setProperty("--hud-height", `${topbarHeight}px`);
-  canvas.width = window.innerWidth;
-  canvas.height = Math.max(1, window.innerHeight - topbarHeight);
-  // Resizing resets canvas context state, so restore pixel-art rendering.
-  ctx.imageSmoothingEnabled = false;
-  updateDebugOverlayPosition();
+  hud.resizeCanvas();
 }
 
 window.addEventListener("resize", resizeCanvas);
@@ -1860,13 +1766,12 @@ const endChatDrawerDrag = (event) => {
   chatDrawer?.classList.remove("dragging");
   chatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
 
-  const drawerHeight = getChatDrawerMaxHeight();
-  const hiddenOffset = -(drawerHeight - CHAT_DRAWER_HANDLE_PEEK);
-  const openThreshold = (hiddenOffset + 0) * 0.5;
-  if (state.chatDrawerOffsetY > openThreshold) {
-    setChatLogOpen(true);
-  } else {
-    setChatLogOpen(false);
+  // Keep the drawer exactly where the user dropped it (no snap open/closed).
+  applyChatDrawerPosition(state.chatDrawerOffsetY);
+  const hiddenOffset = getChatDrawerHiddenOffset();
+  state.chatLogOpen = state.chatDrawerOffsetY > hiddenOffset + 0.5;
+  if (!state.chatLogOpen && state.chatInputOpen) {
+    setChatInputOpen(false);
   }
 };
 
@@ -1907,13 +1812,10 @@ const endWorldChatDrawerDrag = (event) => {
   worldChatDrawer?.classList.remove("dragging");
   worldChatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
 
+  // Keep the drawer exactly where the user dropped it (no snap open/closed).
+  applyWorldChatDrawerPosition(state.worldChatDrawerOffsetY);
   const hiddenOffset = getWorldChatDrawerHiddenOffset();
-  const openThreshold = hiddenOffset * 0.5;
-  if (state.worldChatDrawerOffsetY > openThreshold) {
-    setWorldChatLogOpen(true);
-  } else {
-    setWorldChatLogOpen(false);
-  }
+  state.worldChatLogOpen = state.worldChatDrawerOffsetY > hiddenOffset + 0.5;
 };
 
 worldChatDrawerHandle?.addEventListener("pointerup", endWorldChatDrawerDrag);
@@ -1953,13 +1855,10 @@ const endLoadingChatDrawerDrag = (event) => {
   loadingChatDrawer?.classList.remove("dragging");
   loadingChatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
 
+  // Keep the drawer exactly where the user dropped it (no snap open/closed).
+  applyLoadingChatDrawerPosition(state.loadingChatDrawerOffsetY);
   const hiddenOffset = getLoadingChatDrawerHiddenOffset();
-  const openThreshold = hiddenOffset * 0.5;
-  if (state.loadingChatDrawerOffsetY > openThreshold) {
-    setLoadingChatLogOpen(true);
-  } else {
-    setLoadingChatLogOpen(false);
-  }
+  state.loadingChatLogOpen = state.loadingChatDrawerOffsetY > hiddenOffset + 0.5;
 };
 
 loadingChatDrawerHandle?.addEventListener("pointerup", endLoadingChatDrawerDrag);

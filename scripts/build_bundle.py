@@ -10,7 +10,8 @@ GAME_JS = PUBLIC / "game.js"
 CONSTANTS_JS = PUBLIC / "game" / "constants.js"
 SESSION_JS = PUBLIC / "game" / "session.js"
 GEMS_JS = PUBLIC / "game" / "gems.js"
-OUT_JS = PUBLIC / "game.bundle.js"
+HUD_JS = PUBLIC / "game" / "hud.js"
+OUT_JS = PUBLIC / "build" / "game.bundle.js"
 
 
 def strip_exports(source: str) -> str:
@@ -33,6 +34,11 @@ def strip_imports(source: str) -> str:
         "",
         source,
     )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/hud\.js\";\s*",
+        "",
+        source,
+    )
     return source
 
 
@@ -40,6 +46,7 @@ def main() -> None:
     constants = strip_exports(CONSTANTS_JS.read_text(encoding="utf-8")).strip()
     session = strip_exports(SESSION_JS.read_text(encoding="utf-8")).strip()
     gems = strip_exports(GEMS_JS.read_text(encoding="utf-8")).strip()
+    hud = strip_exports(HUD_JS.read_text(encoding="utf-8")).strip()
     game = strip_imports(GAME_JS.read_text(encoding="utf-8")).strip()
 
     output = "\n\n".join(
@@ -48,11 +55,13 @@ def main() -> None:
             constants,
             session,
             gems,
+            hud,
             game,
             "",
         ]
     )
 
+    OUT_JS.parent.mkdir(parents=True, exist_ok=True)
     OUT_JS.write_text(output, encoding="utf-8")
     print(f"Wrote {OUT_JS}")
 
