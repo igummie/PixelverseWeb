@@ -165,6 +165,50 @@ def normalize_atlas_texture_rect(value: Any) -> dict[str, int] | None:
     }
 
 
+def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
+    compacted: dict[str, Any] = {}
+
+    atlas_id_value = block.get("ATLAS_ID")
+    normalized_atlas_id = normalize_atlas_id_value(atlas_id_value)
+    if normalized_atlas_id is not None:
+        atlas_id_value = normalized_atlas_id
+
+    uses_texture47 = isinstance(atlas_id_value, str) and bool(str(atlas_id_value).strip())
+
+    for key, value in block.items():
+        next_value = value
+        if key == "ATLAS_ID":
+            next_value = atlas_id_value
+
+        # Texture47 blocks derive tile data from mask config, so explicit atlas rect is redundant.
+        if key == "ATLAS_TEXTURE" and uses_texture47:
+            continue
+
+        # Keep payload compact by omitting false boolean flags. BREAKABLE is intentionally
+        # excluded here because runtime currently defaults missing BREAKABLE to true.
+        if isinstance(next_value, bool) and next_value is False and key != "BREAKABLE":
+            continue
+
+        compacted[key] = next_value
+
+    return compacted
+
+
+def compact_blocks_payload_for_storage(payload: dict[str, Any]) -> None:
+    blocks = payload.get("blocks")
+    if not isinstance(blocks, list):
+        return
+
+    compacted_blocks: list[Any] = []
+    for block in blocks:
+        if isinstance(block, dict):
+            compacted_blocks.append(compact_block_for_storage(block))
+            continue
+        compacted_blocks.append(block)
+
+    payload["blocks"] = compacted_blocks
+
+
 def get_user_gems(user_id: int) -> int:
     if user_id <= 0:
         return 0
@@ -1328,6 +1372,8 @@ def save_regular_atlas_textures(payload: SaveRegularAtlasTexturesBody) -> dict[s
         block["ATLAS_TEXTURE"] = texture_rect
         updated_block_ids.append(block_id)
 
+    compact_blocks_payload_for_storage(raw)
+
     with BLOCKS_PATH.open("w", encoding="utf-8") as handle:
         json.dump(raw, handle, indent=2)
         handle.write("\n")
@@ -1377,13 +1423,19 @@ def save_blocks_data(payload: SaveBlocksDataBody) -> dict[str, Any]:
         except Exception:
             raise HTTPException(status_code=400, detail="Edited block is missing a valid ID")
 
-        if block_id not in block_index_by_id:
-            raise HTTPException(status_code=400, detail=f"Unknown block id: {block_id}")
-
         # Preserve canonical integer ID value.
         edited_block["ID"] = block_id
-        blocks[block_index_by_id[block_id]] = edited_block
+
+        compacted = compact_block_for_storage(edited_block)
+        if block_id not in block_index_by_id:
+            block_index_by_id[block_id] = len(blocks)
+            blocks.append(compacted)
+        else:
+            blocks[block_index_by_id[block_id]] = compacted
+
         updated_block_ids.append(block_id)
+
+    compact_blocks_payload_for_storage(raw)
 
     with BLOCKS_PATH.open("w", encoding="utf-8") as handle:
         json.dump(raw, handle, indent=2)

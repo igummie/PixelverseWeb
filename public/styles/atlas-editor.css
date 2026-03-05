@@ -42,7 +42,7 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: 420px 1fr;
+  grid-template-columns: 520px 1fr;
   gap: 16px;
   min-height: 100vh;
   padding: 64px 16px 16px;
@@ -83,6 +83,51 @@ body {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+}
+
+.atlasSearchWrap {
+  position: relative;
+}
+
+.atlasSuggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 90;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  background: #0b1220;
+  display: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.atlasSuggestions.visible {
+  display: block;
+}
+
+.atlasSuggestion {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid #1e293b;
+  background: transparent;
+  color: #e5e7eb;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.atlasSuggestion:last-child {
+  border-bottom: 0;
+}
+
+.atlasSuggestion:hover,
+.atlasSuggestion.active {
+  background: #1d4ed8;
+  color: #ffffff;
 }
 
 .loadAtlasBtn {
@@ -171,7 +216,8 @@ textarea {
   border: 1px solid #374151;
   border-radius: 8px;
   overflow: auto;
-  max-height: 360px;
+  max-height: 560px;
+  min-height: 420px;
   background: #0f172a;
 }
 
@@ -223,6 +269,104 @@ textarea {
   font-weight: 700;
 }
 
+.blockPreview {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #020617;
+  image-rendering: pixelated;
+}
+
+.blockHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.addBlockCard {
+  border: 1px dashed #60a5fa;
+  color: #bfdbfe;
+  background: #0f172a;
+  justify-content: center;
+  align-items: center;
+  min-height: 116px;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(2, 6, 23, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.modalBackdrop[hidden] {
+  display: none;
+}
+
+.modalCard {
+  width: min(760px, 100%);
+  max-height: 88vh;
+  overflow: auto;
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.modalGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.modalAtlasWrap {
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #020617;
+  max-height: 340px;
+  min-height: 220px;
+  overflow: auto;
+}
+
+#createAtlasCanvas {
+  display: block;
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+
+.texture47PreviewWrap {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #020617;
+}
+
+#createTexture47PreviewCanvas {
+  display: block;
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+
 .tiny {
   font-size: 12px;
   opacity: 0.9;
@@ -249,6 +393,10 @@ textarea {
 
 @media (max-width: 1200px) {
   .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .modalGrid {
     grid-template-columns: 1fr;
   }
 }

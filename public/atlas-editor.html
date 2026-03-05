@@ -99,6 +99,94 @@
       </div>
     </div>
 
+    <div id="createBlockModal" class="modalBackdrop" hidden>
+      <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="createBlockTitle">
+        <div class="modalHeader">
+          <div id="createBlockTitle" class="title">Create New Block</div>
+          <button id="closeCreateBlockBtn" type="button">Close</button>
+        </div>
+
+        <div class="modalGrid">
+          <div class="fieldStack">
+            <label for="createBlockIdInput">ID</label>
+            <input id="createBlockIdInput" type="number" min="0" step="1" />
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockNameInput">NAME</label>
+            <input id="createBlockNameInput" type="text" maxlength="64" placeholder="NEW_BLOCK" />
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockTypeSelect">BLOCK_TYPE</label>
+            <select id="createBlockTypeSelect">
+              <option value="SOLID">SOLID</option>
+              <option value="BACKGROUND">BACKGROUND</option>
+              <option value="PLATFORM">PLATFORM</option>
+            </select>
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockTexture47Toggle">Uses Texture47</label>
+            <select id="createBlockTexture47Toggle">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+          <div class="fieldStack" id="createRegularAtlasField">
+            <label for="createRegularAtlasSelect">Regular Atlas</label>
+            <select id="createRegularAtlasSelect"></select>
+            <div class="modalAtlasWrap">
+              <canvas id="createAtlasCanvas" width="256" height="256"></canvas>
+            </div>
+            <div id="createAtlasSelectionInfo" class="tiny">Rect: 0,0,16,16</div>
+          </div>
+          <div class="fieldStack" id="createTexture47Field" hidden>
+            <label for="createTexture47AtlasInput">Texture47 Atlas ID</label>
+            <div class="atlasSearchWrap">
+              <input id="createTexture47AtlasInput" type="search" placeholder="dirt" autocomplete="off" />
+              <div id="createTexture47Suggestions" class="atlasSuggestions"></div>
+            </div>
+            <div class="texture47PreviewWrap">
+              <canvas id="createTexture47PreviewCanvas" width="64" height="64"></canvas>
+            </div>
+            <div id="createTexture47PreviewInfo" class="tiny">Preview: none</div>
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockPlaceableToggle">PLACEABLE</label>
+            <select id="createBlockPlaceableToggle">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockBreakableToggle">BREAKABLE</label>
+            <select id="createBlockBreakableToggle">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockToughnessInput">TOUGHNESS</label>
+            <input id="createBlockToughnessInput" type="number" min="0" step="1" value="1" />
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockGemChanceInput">GEM_CHANCE</label>
+            <input id="createBlockGemChanceInput" type="number" min="0" max="1" step="0.01" value="0" />
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockGemAmountInput">GEM_AMOUNT</label>
+            <input id="createBlockGemAmountInput" type="number" min="0" step="1" value="0" />
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockGemAmountVarInput">GEM_AMOUNT_VAR</label>
+            <input id="createBlockGemAmountVarInput" type="number" min="0" step="1" value="0" />
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="createBlockSubmitBtn" type="button">Create Block</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module">
       const atlasSelect = document.getElementById("atlasSelect");
       const tileSizeInput = document.getElementById("tileSizeInput");
@@ -128,9 +216,35 @@
       const reloadBtn = document.getElementById("reloadBtn");
       const status = document.getElementById("status");
       const blockList = document.getElementById("blockList");
+      const createBlockModal = document.getElementById("createBlockModal");
+      const closeCreateBlockBtn = document.getElementById("closeCreateBlockBtn");
+      const createBlockIdInput = document.getElementById("createBlockIdInput");
+      const createBlockNameInput = document.getElementById("createBlockNameInput");
+      const createBlockTypeSelect = document.getElementById("createBlockTypeSelect");
+      const createBlockTexture47Toggle = document.getElementById("createBlockTexture47Toggle");
+      const createRegularAtlasField = document.getElementById("createRegularAtlasField");
+      const createRegularAtlasSelect = document.getElementById("createRegularAtlasSelect");
+      const createAtlasCanvas = document.getElementById("createAtlasCanvas");
+      const createAtlasSelectionInfo = document.getElementById("createAtlasSelectionInfo");
+      const createTexture47Field = document.getElementById("createTexture47Field");
+      const createTexture47AtlasInput = document.getElementById("createTexture47AtlasInput");
+      const createTexture47Suggestions = document.getElementById("createTexture47Suggestions");
+      const createTexture47PreviewCanvas = document.getElementById("createTexture47PreviewCanvas");
+      const createTexture47PreviewInfo = document.getElementById("createTexture47PreviewInfo");
+      const createBlockPlaceableToggle = document.getElementById("createBlockPlaceableToggle");
+      const createBlockBreakableToggle = document.getElementById("createBlockBreakableToggle");
+      const createBlockToughnessInput = document.getElementById("createBlockToughnessInput");
+      const createBlockGemChanceInput = document.getElementById("createBlockGemChanceInput");
+      const createBlockGemAmountInput = document.getElementById("createBlockGemAmountInput");
+      const createBlockGemAmountVarInput = document.getElementById("createBlockGemAmountVarInput");
+      const createBlockSubmitBtn = document.getElementById("createBlockSubmitBtn");
 
       const context = atlasCanvas.getContext("2d");
       context.imageSmoothingEnabled = false;
+      const createAtlasContext = createAtlasCanvas.getContext("2d");
+      createAtlasContext.imageSmoothingEnabled = false;
+      const createTexture47PreviewContext = createTexture47PreviewCanvas.getContext("2d");
+      createTexture47PreviewContext.imageSmoothingEnabled = false;
 
       const MIN_ZOOM = 0.25;
       const MAX_ZOOM = 8;
@@ -154,6 +268,18 @@
         tileWidth: 16,
         tileHeight: 16,
         selectedTileIndex: 0,
+        regularAtlasImageCache: new Map(),
+        texture47PreviewCache: new Map(),
+        texture47AtlasOptions: [],
+        filteredTexture47AtlasOptions: [],
+        selectedTexture47SuggestionIndex: -1,
+        createModalAtlasKey: "",
+        createModalAtlasImage: null,
+        createModalColumns: 1,
+        createModalRows: 1,
+        createModalTileWidth: 16,
+        createModalTileHeight: 16,
+        createModalSelectedTileIndex: 0,
       };
 
       function normalizeAtlasIdValue(value) {
@@ -175,6 +301,515 @@
 
       function formatAtlasId(value) {
         return typeof value === "string" ? `"${value}"` : String(value);
+      }
+
+      function getNextAvailableBlockId() {
+        let candidate = 0;
+        const used = new Set(state.blocks.map((block) => Number(block.ID)).filter((value) => Number.isInteger(value) && value >= 0));
+        while (used.has(candidate)) {
+          candidate += 1;
+        }
+        return candidate;
+      }
+
+      function renderCreateRegularAtlasOptions() {
+        if (!createRegularAtlasSelect) {
+          return;
+        }
+
+        createRegularAtlasSelect.innerHTML = "";
+        for (const atlas of state.atlases) {
+          const option = document.createElement("option");
+          option.value = atlasKey(atlas.ATLAS_ID);
+          option.textContent = `${formatAtlasId(atlas.ATLAS_ID)} - ${atlas.NAME || "atlas"}`;
+          createRegularAtlasSelect.appendChild(option);
+        }
+
+        if (state.selectedAtlasKey && state.atlasByKey.has(state.selectedAtlasKey)) {
+          createRegularAtlasSelect.value = state.selectedAtlasKey;
+        }
+      }
+
+      function updateCreateBlockAtlasModeUi() {
+        const usesTexture47 = createBlockTexture47Toggle?.value === "true";
+        if (createRegularAtlasField) {
+          createRegularAtlasField.hidden = usesTexture47;
+          createRegularAtlasField.style.display = usesTexture47 ? "none" : "flex";
+        }
+        if (createTexture47Field) {
+          createTexture47Field.hidden = !usesTexture47;
+          createTexture47Field.style.display = usesTexture47 ? "flex" : "none";
+        }
+
+        if (usesTexture47) {
+          renderCreateTexture47Preview();
+        }
+      }
+
+      function drawCreateTexture47PreviewPlaceholder(text) {
+        createTexture47PreviewContext.clearRect(0, 0, createTexture47PreviewCanvas.width, createTexture47PreviewCanvas.height);
+        createTexture47PreviewContext.fillStyle = "#020617";
+        createTexture47PreviewContext.fillRect(0, 0, createTexture47PreviewCanvas.width, createTexture47PreviewCanvas.height);
+        createTexture47PreviewContext.strokeStyle = "#334155";
+        createTexture47PreviewContext.strokeRect(0.5, 0.5, createTexture47PreviewCanvas.width - 1, createTexture47PreviewCanvas.height - 1);
+        createTexture47PreviewContext.fillStyle = "#94a3b8";
+        createTexture47PreviewContext.font = "10px monospace";
+        createTexture47PreviewContext.fillText(text, 4, 34);
+      }
+
+      async function renderCreateTexture47Preview() {
+        if (createTexture47Field?.hidden) {
+          return;
+        }
+
+        const atlasId = String(createTexture47AtlasInput?.value || "").trim().toLowerCase();
+        if (!atlasId) {
+          drawCreateTexture47PreviewPlaceholder("47");
+          if (createTexture47PreviewInfo) {
+            createTexture47PreviewInfo.textContent = "Preview: none";
+          }
+          return;
+        }
+
+        drawCreateTexture47PreviewPlaceholder("47");
+        const data = await getTexture47PreviewData(atlasId);
+        if (!data) {
+          if (createTexture47PreviewInfo) {
+            createTexture47PreviewInfo.textContent = `Preview: ${atlasId} not found`;
+          }
+          return;
+        }
+
+        const tileX = data.previewIndex % data.columns;
+        const tileY = Math.floor(data.previewIndex / data.columns);
+        createTexture47PreviewContext.clearRect(0, 0, createTexture47PreviewCanvas.width, createTexture47PreviewCanvas.height);
+        createTexture47PreviewContext.drawImage(
+          data.image,
+          tileX * data.tileWidth,
+          tileY * data.tileHeight,
+          data.tileWidth,
+          data.tileHeight,
+          0,
+          0,
+          createTexture47PreviewCanvas.width,
+          createTexture47PreviewCanvas.height,
+        );
+
+        if (createTexture47PreviewInfo) {
+          createTexture47PreviewInfo.textContent = `Preview: ${atlasId}`;
+        }
+      }
+
+      function filterTexture47AtlasOptions(query) {
+        const normalized = String(query || "").trim().toLowerCase();
+        if (!normalized) {
+          return state.texture47AtlasOptions.slice(0, 20);
+        }
+
+        const startsWith = state.texture47AtlasOptions.filter((name) => name.startsWith(normalized));
+        const includes = state.texture47AtlasOptions.filter(
+          (name) => !name.startsWith(normalized) && name.includes(normalized),
+        );
+        return [...startsWith, ...includes].slice(0, 20);
+      }
+
+      function hideTexture47Suggestions() {
+        if (!createTexture47Suggestions) {
+          return;
+        }
+        createTexture47Suggestions.classList.remove("visible");
+        state.selectedTexture47SuggestionIndex = -1;
+      }
+
+      function applyTexture47Suggestion(value) {
+        createTexture47AtlasInput.value = value;
+        hideTexture47Suggestions();
+        renderCreateTexture47Preview();
+      }
+
+      function renderTexture47AtlasOptions() {
+        if (!createTexture47Suggestions) {
+          return;
+        }
+
+        if (createTexture47Field?.hidden) {
+          hideTexture47Suggestions();
+          return;
+        }
+
+        state.filteredTexture47AtlasOptions = filterTexture47AtlasOptions(createTexture47AtlasInput.value);
+        createTexture47Suggestions.innerHTML = "";
+
+        if (state.filteredTexture47AtlasOptions.length === 0) {
+          hideTexture47Suggestions();
+          return;
+        }
+
+        state.selectedTexture47SuggestionIndex = Math.min(
+          state.selectedTexture47SuggestionIndex,
+          state.filteredTexture47AtlasOptions.length - 1,
+        );
+
+        state.filteredTexture47AtlasOptions.forEach((optionValue, index) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "atlasSuggestion" + (index === state.selectedTexture47SuggestionIndex ? " active" : "");
+          button.textContent = optionValue;
+          button.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            applyTexture47Suggestion(optionValue);
+          });
+          createTexture47Suggestions.appendChild(button);
+        });
+
+        createTexture47Suggestions.classList.add("visible");
+      }
+
+      async function loadTexture47AtlasOptions() {
+        try {
+          const response = await fetch(`/api/tools/texture47/atlases?ts=${Date.now()}`);
+          if (!response.ok) {
+            return;
+          }
+
+          const payload = await response.json();
+          const atlases = Array.isArray(payload?.atlases)
+            ? payload.atlases
+              .map((value) => String(value || "").trim().toLowerCase())
+              .filter((value) => value.length > 0)
+            : [];
+
+          state.texture47AtlasOptions = Array.from(new Set(atlases)).sort((a, b) => a.localeCompare(b));
+          renderTexture47AtlasOptions();
+        } catch {
+        }
+      }
+
+      function openCreateBlockModal() {
+        if (!createBlockModal) {
+          return;
+        }
+
+        renderCreateRegularAtlasOptions();
+        createBlockIdInput.value = String(getNextAvailableBlockId());
+        createBlockNameInput.value = "";
+        createBlockTypeSelect.value = "SOLID";
+        createBlockTexture47Toggle.value = "false";
+        createTexture47AtlasInput.value = "";
+        createBlockPlaceableToggle.value = "false";
+        createBlockBreakableToggle.value = "true";
+        createBlockToughnessInput.value = "1";
+        createBlockGemChanceInput.value = "0";
+        createBlockGemAmountInput.value = "0";
+        createBlockGemAmountVarInput.value = "0";
+        state.createModalSelectedTileIndex = 0;
+        updateCreateBlockAtlasModeUi();
+        renderTexture47AtlasOptions();
+
+        createBlockModal.hidden = false;
+        loadCreateModalAtlasPreview();
+        loadTexture47AtlasOptions();
+        renderCreateTexture47Preview();
+      }
+
+      function closeCreateBlockModal() {
+        if (!createBlockModal) {
+          return;
+        }
+        hideTexture47Suggestions();
+        createBlockModal.hidden = true;
+      }
+
+      async function getRegularAtlasImageByKey(key) {
+        if (state.regularAtlasImageCache.has(key)) {
+          return state.regularAtlasImageCache.get(key);
+        }
+
+        const atlas = state.atlasByKey.get(key);
+        if (!atlas || !atlas.SRC) {
+          state.regularAtlasImageCache.set(key, null);
+          return null;
+        }
+
+        const image = new Image();
+        image.src = `${atlas.SRC}?ts=${Date.now()}`;
+        try {
+          await image.decode();
+          state.regularAtlasImageCache.set(key, image);
+          return image;
+        } catch {
+          state.regularAtlasImageCache.set(key, null);
+          return null;
+        }
+      }
+
+      function getCreateModalSelectedTextureRect() {
+        const tileX = state.createModalSelectedTileIndex % state.createModalColumns;
+        const tileY = Math.floor(state.createModalSelectedTileIndex / state.createModalColumns);
+        return {
+          x: tileX * state.createModalTileWidth,
+          y: tileY * state.createModalTileHeight,
+          w: state.createModalTileWidth,
+          h: state.createModalTileHeight,
+        };
+      }
+
+      function getCreateModalFitZoom(image) {
+        if (!image) {
+          return 1;
+        }
+
+        const wrap = createAtlasCanvas?.parentElement;
+        if (!wrap) {
+          return 1;
+        }
+
+        const wrapWidth = Math.max(1, (Number(wrap.clientWidth) || 1) - 2);
+        const wrapHeight = Math.max(1, (Number(wrap.clientHeight) || 1) - 2);
+        const ratioX = wrapWidth / image.width;
+        const ratioY = wrapHeight / image.height;
+        return clampZoom(Math.min(ratioX, ratioY));
+      }
+
+      function renderCreateModalAtlasPreview() {
+        if (!createAtlasCanvas || !createAtlasContext) {
+          return;
+        }
+
+        const image = state.createModalAtlasImage;
+        if (!image) {
+          createAtlasCanvas.width = 256;
+          createAtlasCanvas.height = 256;
+          createAtlasCanvas.style.width = "256px";
+          createAtlasCanvas.style.height = "256px";
+          createAtlasContext.fillStyle = "#020617";
+          createAtlasContext.fillRect(0, 0, createAtlasCanvas.width, createAtlasCanvas.height);
+          if (createAtlasSelectionInfo) {
+            createAtlasSelectionInfo.textContent = "Rect: unavailable";
+          }
+          return;
+        }
+
+        createAtlasCanvas.width = image.width;
+        createAtlasCanvas.height = image.height;
+
+        createAtlasContext.clearRect(0, 0, image.width, image.height);
+        createAtlasContext.drawImage(image, 0, 0);
+
+        createAtlasContext.strokeStyle = "rgba(148, 163, 184, 0.5)";
+        createAtlasContext.lineWidth = 1;
+        for (let col = 1; col < state.createModalColumns; col += 1) {
+          const x = col * state.createModalTileWidth + 0.5;
+          createAtlasContext.beginPath();
+          createAtlasContext.moveTo(x, 0);
+          createAtlasContext.lineTo(x, image.height);
+          createAtlasContext.stroke();
+        }
+
+        for (let row = 1; row < state.createModalRows; row += 1) {
+          const y = row * state.createModalTileHeight + 0.5;
+          createAtlasContext.beginPath();
+          createAtlasContext.moveTo(0, y);
+          createAtlasContext.lineTo(image.width, y);
+          createAtlasContext.stroke();
+        }
+
+        const selectedRect = getCreateModalSelectedTextureRect();
+        createAtlasContext.strokeStyle = "#22c55e";
+        createAtlasContext.lineWidth = 2;
+        createAtlasContext.strokeRect(
+          selectedRect.x + 1,
+          selectedRect.y + 1,
+          Math.max(2, selectedRect.w - 2),
+          Math.max(2, selectedRect.h - 2),
+        );
+
+        if (createAtlasSelectionInfo) {
+          createAtlasSelectionInfo.textContent = `Rect: ${selectedRect.x},${selectedRect.y},${selectedRect.w},${selectedRect.h}`;
+        }
+
+        const fitZoom = getCreateModalFitZoom(image);
+        createAtlasCanvas.style.width = `${image.width * fitZoom}px`;
+        createAtlasCanvas.style.height = `${image.height * fitZoom}px`;
+      }
+
+      async function loadCreateModalAtlasPreview() {
+        const atlasKeyValue = createRegularAtlasSelect?.value || "";
+        state.createModalAtlasKey = atlasKeyValue;
+
+        if (!atlasKeyValue) {
+          state.createModalAtlasImage = null;
+          renderCreateModalAtlasPreview();
+          return;
+        }
+
+        const atlas = state.atlasByKey.get(atlasKeyValue);
+        if (!atlas) {
+          state.createModalAtlasImage = null;
+          renderCreateModalAtlasPreview();
+          return;
+        }
+
+        const image = await getRegularAtlasImageByKey(atlasKeyValue);
+        state.createModalAtlasImage = image;
+
+        if (image) {
+          const tileSize = parsePositiveInt(atlas?.TILE_SIZE, 16);
+          state.createModalColumns = Math.max(1, Math.floor(image.width / tileSize));
+          state.createModalRows = Math.max(1, Math.floor(image.height / tileSize));
+          state.createModalTileWidth = Math.max(1, Math.floor(image.width / state.createModalColumns));
+          state.createModalTileHeight = Math.max(1, Math.floor(image.height / state.createModalRows));
+
+          const maxIndex = Math.max(0, state.createModalColumns * state.createModalRows - 1);
+          if (state.createModalSelectedTileIndex > maxIndex) {
+            state.createModalSelectedTileIndex = 0;
+          }
+        }
+
+        renderCreateModalAtlasPreview();
+      }
+
+      function pickTexture47PreviewIndex(config) {
+        const maskVariants = config?.maskVariants;
+        if (maskVariants && typeof maskVariants === "object") {
+          const variantZero = Array.isArray(maskVariants[0]) ? maskVariants[0] : Array.isArray(maskVariants["0"]) ? maskVariants["0"] : null;
+          if (Array.isArray(variantZero)) {
+            const first = Number(variantZero[0]);
+            if (Number.isInteger(first) && first >= 0) {
+              return first;
+            }
+          }
+
+          const variant255 = Array.isArray(maskVariants[255]) ? maskVariants[255] : Array.isArray(maskVariants["255"]) ? maskVariants["255"] : null;
+          if (Array.isArray(variant255)) {
+            const first = Number(variant255[0]);
+            if (Number.isInteger(first) && first >= 0) {
+              return first;
+            }
+          }
+        }
+
+        const maskOrder = Array.isArray(config?.maskOrder) ? config.maskOrder : [];
+        const index0 = maskOrder.findIndex((value) => Number(value) === 0);
+        if (index0 >= 0) {
+          return index0;
+        }
+        const index255 = maskOrder.findIndex((value) => Number(value) === 255);
+        if (index255 >= 0) {
+          return index255;
+        }
+
+        return 0;
+      }
+
+      async function getTexture47PreviewData(atlasId) {
+        const key = String(atlasId || "").trim().toLowerCase();
+        if (!key) {
+          return null;
+        }
+
+        if (state.texture47PreviewCache.has(key)) {
+          return state.texture47PreviewCache.get(key);
+        }
+
+        const image = new Image();
+        image.src = `/assets/texture47/${key}.png?ts=${Date.now()}`;
+
+        try {
+          await image.decode();
+        } catch {
+          state.texture47PreviewCache.set(key, null);
+          return null;
+        }
+
+        let config = null;
+        try {
+          let response = await fetch(`/assets/texture47/configs/${key}.json?ts=${Date.now()}`);
+          if (!response.ok) {
+            response = await fetch(`/assets/texture47/${key}.json?ts=${Date.now()}`);
+          }
+          if (response.ok) {
+            config = await response.json();
+          }
+        } catch {
+        }
+
+        const columns = Math.max(1, parsePositiveInt(config?.columns, 8));
+        const rows = Math.max(1, parsePositiveInt(config?.rows, 6));
+        const tileWidth = Math.max(1, Math.floor(image.width / columns));
+        const tileHeight = Math.max(1, Math.floor(image.height / rows));
+        const previewIndex = pickTexture47PreviewIndex(config);
+
+        const data = {
+          image,
+          columns,
+          rows,
+          tileWidth,
+          tileHeight,
+          previewIndex,
+        };
+
+        state.texture47PreviewCache.set(key, data);
+        return data;
+      }
+
+      function drawPreviewPlaceholder(canvas, label) {
+        const previewContext = canvas.getContext("2d");
+        previewContext.imageSmoothingEnabled = false;
+        previewContext.fillStyle = "#020617";
+        previewContext.fillRect(0, 0, canvas.width, canvas.height);
+        previewContext.strokeStyle = "#334155";
+        previewContext.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+        previewContext.fillStyle = "#94a3b8";
+        previewContext.font = "10px monospace";
+        previewContext.fillText(label, 4, canvas.height / 2 + 3);
+      }
+
+      async function drawBlockPreview(canvas, assignment) {
+        if (!canvas || !assignment) {
+          return;
+        }
+
+        if (typeof assignment.atlasId === "string") {
+          drawPreviewPlaceholder(canvas, "47");
+          const data = await getTexture47PreviewData(assignment.atlasId);
+          if (!data) {
+            return;
+          }
+
+          const previewContext = canvas.getContext("2d");
+          const tileX = data.previewIndex % data.columns;
+          const tileY = Math.floor(data.previewIndex / data.columns);
+          previewContext.clearRect(0, 0, canvas.width, canvas.height);
+          previewContext.drawImage(
+            data.image,
+            tileX * data.tileWidth,
+            tileY * data.tileHeight,
+            data.tileWidth,
+            data.tileHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          );
+          return;
+        }
+
+        const key = atlasKey(assignment.atlasId);
+        drawPreviewPlaceholder(canvas, "...");
+        const image = await getRegularAtlasImageByKey(key);
+        if (!image) {
+          return;
+        }
+
+        const tex = assignment.texture;
+        if (!tex) {
+          return;
+        }
+
+        const previewContext = canvas.getContext("2d");
+        previewContext.clearRect(0, 0, canvas.width, canvas.height);
+        previewContext.drawImage(image, tex.x, tex.y, tex.w, tex.h, 0, 0, canvas.width, canvas.height);
       }
 
       function normalizeStatusMessage(message) {
@@ -218,6 +853,20 @@
           atlasCanvas.style.width = `${state.image.width * state.atlasZoom}px`;
           atlasCanvas.style.height = `${state.image.height * state.atlasZoom}px`;
         }
+      }
+
+      function computeFitZoomForCurrentAtlas() {
+        if (!state.image) {
+          return 1;
+        }
+
+        // Subtract a couple pixels so we stay just under overflow and avoid scrollbars.
+        const wrapWidth = Math.max(1, (Number(atlasWrap?.clientWidth) || 1) - 2);
+        const wrapHeight = Math.max(1, (Number(atlasWrap?.clientHeight) || 1) - 2);
+        const ratioX = wrapWidth / state.image.width;
+        const ratioY = wrapHeight / state.image.height;
+        const fit = Math.min(ratioX, ratioY);
+        return clampZoom(fit);
       }
 
       function getTileCount() {
@@ -264,6 +913,28 @@
 
       function isTexture47Assigned(block) {
         return typeof block?.ATLAS_ID === "string" && block.ATLAS_ID.trim().length > 0;
+      }
+
+      function compactBlockForJsonOutput(block) {
+        if (!block || typeof block !== "object") {
+          return block;
+        }
+
+        const compacted = {};
+        const usesTexture47 = isTexture47Assigned(block);
+        for (const [key, value] of Object.entries(block)) {
+          if (key === "ATLAS_TEXTURE" && usesTexture47) {
+            continue;
+          }
+
+          if (typeof value === "boolean" && value === false && key !== "BREAKABLE") {
+            continue;
+          }
+
+          compacted[key] = value;
+        }
+
+        return compacted;
       }
 
       function updateTexture47Button(block) {
@@ -398,7 +1069,13 @@
             input = document.createElement("input");
             input.className = "blockFieldInput";
             input.type = "number";
-            input.step = "any";
+            if (key === "GEM_CHANCE") {
+              input.step = "0.01";
+              input.min = "0";
+              input.max = "1";
+            } else {
+              input.step = "any";
+            }
             input.value = String(value);
             input.dataset.kind = "number";
           } else if (typeof value === "string") {
@@ -542,25 +1219,36 @@
           title.className = "blockName";
           title.textContent = `${block.ID} - ${block.NAME || "BLOCK"}`;
 
-          const atlasRow = document.createElement("div");
-          atlasRow.className = "tiny";
-          atlasRow.textContent = `ATLAS_ID: ${formatAtlasId(assignment.atlasId)}`;
+          const preview = document.createElement("canvas");
+          preview.className = "blockPreview";
+          preview.width = 44;
+          preview.height = 44;
 
-          const texture = assignment.texture;
-          const textureRow = document.createElement("div");
-          textureRow.className = "tiny";
-          textureRow.textContent = `ATLAS_TEXTURE: x=${texture.x}, y=${texture.y}, w=${texture.w}, h=${texture.h}`;
+          const header = document.createElement("div");
+          header.className = "blockHeader";
+          header.appendChild(preview);
+          header.appendChild(title);
 
-          card.appendChild(title);
-          card.appendChild(atlasRow);
-          card.appendChild(textureRow);
+          card.appendChild(header);
 
           card.addEventListener("click", async () => {
             await selectBlock(block.ID);
           });
 
           blockList.appendChild(card);
+
+          drawBlockPreview(preview, assignment);
         }
+
+        const addCard = document.createElement("button");
+        addCard.type = "button";
+        addCard.className = "blockCard addBlockCard";
+        addCard.textContent = "+";
+        addCard.title = "Create new block";
+        addCard.addEventListener("click", () => {
+          openCreateBlockModal();
+        });
+        blockList.appendChild(addCard);
       }
 
       function renderAtlas() {
@@ -611,7 +1299,10 @@
 
       function syncJsonOutput() {
         const effectiveBlocks = state.blocks
-          .map((block) => getEffectiveBlock(block.ID) || deepClone(block))
+          .map((block) => {
+            const effective = getEffectiveBlock(block.ID) || deepClone(block);
+            return compactBlockForJsonOutput(effective);
+          })
           .filter((block) => block && typeof block === "object");
 
         const payload = {
@@ -655,6 +1346,11 @@
         clampTileSelection();
         updateSelectionInfo();
         renderAtlas();
+
+        // Refit after layout settles so we maximize zoom without introducing scrollbars.
+        requestAnimationFrame(() => {
+          setZoom(computeFitZoomForCurrentAtlas());
+        });
       }
 
       function renderAtlasOptions() {
@@ -672,6 +1368,8 @@
         } else {
           state.selectedAtlasKey = "";
         }
+
+        renderCreateRegularAtlasOptions();
       }
 
       function renderBlockOptions() {
@@ -867,32 +1565,6 @@
         }
 
         try {
-          if (updates.length > 0) {
-            const response = await fetch("/api/tools/blocks/save-textures", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              cache: "no-store",
-              body: JSON.stringify({ updates }),
-            });
-
-            let payload = null;
-            try {
-              payload = await response.json();
-            } catch {
-            }
-
-            if (!response.ok) {
-              if (response.status === 404) {
-                setStatus("Save API not available on current server. Restart backend to enable atlas editor save routes.", true);
-                return;
-              }
-              setStatus(payload?.detail || "Texture save failed", true);
-              return;
-            }
-          }
-
           if (blocks.length > 0) {
             const response = await fetch("/api/tools/blocks/save-data", {
               method: "POST",
@@ -915,6 +1587,32 @@
                 return;
               }
               setStatus(payload?.detail || "Block data save failed", true);
+              return;
+            }
+          }
+
+          if (updates.length > 0) {
+            const response = await fetch("/api/tools/blocks/save-textures", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              cache: "no-store",
+              body: JSON.stringify({ updates }),
+            });
+
+            let payload = null;
+            try {
+              payload = await response.json();
+            } catch {
+            }
+
+            if (!response.ok) {
+              if (response.status === 404) {
+                setStatus("Save API not available on current server. Restart backend to enable atlas editor save routes.", true);
+                return;
+              }
+              setStatus(payload?.detail || "Texture save failed", true);
               return;
             }
           }
@@ -1000,6 +1698,174 @@
 
       assignBtn.addEventListener("click", () => {
         assignSelectedTileToBlock();
+      });
+
+      createBlockTexture47Toggle.addEventListener("change", () => {
+        updateCreateBlockAtlasModeUi();
+      });
+
+      createRegularAtlasSelect.addEventListener("change", async () => {
+        await loadCreateModalAtlasPreview();
+      });
+
+      createTexture47AtlasInput.addEventListener("focus", () => {
+        loadTexture47AtlasOptions();
+        renderTexture47AtlasOptions();
+      });
+
+      createTexture47AtlasInput.addEventListener("input", () => {
+        state.selectedTexture47SuggestionIndex = -1;
+        renderTexture47AtlasOptions();
+        renderCreateTexture47Preview();
+      });
+
+      createTexture47AtlasInput.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          if (!createTexture47Suggestions.classList.contains("visible")) {
+            renderTexture47AtlasOptions();
+          }
+          if (state.filteredTexture47AtlasOptions.length > 0) {
+            event.preventDefault();
+            state.selectedTexture47SuggestionIndex = Math.min(
+              state.selectedTexture47SuggestionIndex + 1,
+              state.filteredTexture47AtlasOptions.length - 1,
+            );
+            renderTexture47AtlasOptions();
+          }
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          if (state.filteredTexture47AtlasOptions.length > 0) {
+            event.preventDefault();
+            state.selectedTexture47SuggestionIndex = Math.max(state.selectedTexture47SuggestionIndex - 1, 0);
+            renderTexture47AtlasOptions();
+          }
+          return;
+        }
+
+        if (event.key === "Enter") {
+          if (state.selectedTexture47SuggestionIndex >= 0
+            && state.selectedTexture47SuggestionIndex < state.filteredTexture47AtlasOptions.length) {
+            event.preventDefault();
+            applyTexture47Suggestion(state.filteredTexture47AtlasOptions[state.selectedTexture47SuggestionIndex]);
+          }
+          return;
+        }
+
+        if (event.key === "Escape") {
+          hideTexture47Suggestions();
+        }
+      });
+
+      document.addEventListener("pointerdown", (event) => {
+        if (!createTexture47Field || createTexture47Field.hidden) {
+          return;
+        }
+
+        if (!createTexture47AtlasInput.contains(event.target) && !createTexture47Suggestions.contains(event.target)) {
+          hideTexture47Suggestions();
+        }
+      });
+
+      createAtlasCanvas.addEventListener("click", (event) => {
+        const image = state.createModalAtlasImage;
+        if (!image) {
+          return;
+        }
+
+        const bounds = createAtlasCanvas.getBoundingClientRect();
+        const x = Math.floor((event.clientX - bounds.left) * (createAtlasCanvas.width / bounds.width));
+        const y = Math.floor((event.clientY - bounds.top) * (createAtlasCanvas.height / bounds.height));
+        const tileX = Math.floor(x / state.createModalTileWidth);
+        const tileY = Math.floor(y / state.createModalTileHeight);
+        const index = tileY * state.createModalColumns + tileX;
+
+        if (index >= 0 && index < state.createModalColumns * state.createModalRows) {
+          state.createModalSelectedTileIndex = index;
+          renderCreateModalAtlasPreview();
+        }
+      });
+
+      closeCreateBlockBtn.addEventListener("click", () => {
+        closeCreateBlockModal();
+      });
+
+      createBlockModal.addEventListener("click", (event) => {
+        if (event.target === createBlockModal) {
+          closeCreateBlockModal();
+        }
+      });
+
+      createBlockSubmitBtn.addEventListener("click", async () => {
+        const blockId = Number(createBlockIdInput.value);
+        if (!Number.isInteger(blockId) || blockId < 0) {
+          setStatus("New block ID must be a non-negative integer", true);
+          return;
+        }
+
+        if (state.blockById.has(blockId)) {
+          setStatus(`Block ID ${blockId} already exists`, true);
+          return;
+        }
+
+        const blockName = String(createBlockNameInput.value || "").trim();
+        if (!blockName) {
+          setStatus("New block requires a NAME", true);
+          return;
+        }
+
+        const usesTexture47 = createBlockTexture47Toggle.value === "true";
+        const selectedRegularAtlas = state.atlasByKey.get(createRegularAtlasSelect.value);
+        const regularAtlasId = selectedRegularAtlas?.ATLAS_ID;
+        const texture47AtlasId = String(createTexture47AtlasInput.value || "").trim().toLowerCase();
+
+        let atlasId = regularAtlasId;
+        if (usesTexture47) {
+          if (!texture47AtlasId) {
+            setStatus("Texture47 block requires a Texture47 atlas ID", true);
+            return;
+          }
+          atlasId = texture47AtlasId;
+        } else if (atlasId == null) {
+          setStatus("Regular block requires a valid atlas", true);
+          return;
+        }
+
+        const newBlock = {
+          ID: blockId,
+          NAME: blockName,
+          BLOCK_TYPE: String(createBlockTypeSelect.value || "SOLID"),
+          ATLAS_ID: atlasId,
+          TOUGHNESS: Math.max(0, Number(createBlockToughnessInput.value) || 0),
+          GEM_CHANCE: Math.max(0, Math.min(1, Number(createBlockGemChanceInput.value) || 0)),
+          GEM_AMOUNT: Math.max(0, Math.floor(Number(createBlockGemAmountInput.value) || 0)),
+          GEM_AMOUNT_VAR: Math.max(0, Math.floor(Number(createBlockGemAmountVarInput.value) || 0)),
+          PLACEABLE: createBlockPlaceableToggle.value === "true",
+          BREAKABLE: createBlockBreakableToggle.value === "true",
+        };
+
+        if (!usesTexture47) {
+          newBlock.ATLAS_TEXTURE = getCreateModalSelectedTextureRect();
+        }
+
+        state.blocks.push(newBlock);
+        state.blocks.sort((a, b) => Number(a.ID) - Number(b.ID));
+        state.blockById.set(blockId, newBlock);
+        state.pendingBlockDataById.set(blockId, deepClone(newBlock));
+        if (!usesTexture47) {
+          state.pendingByBlockId.set(blockId, {
+            blockId,
+            atlasId,
+            texture: deepClone(newBlock.ATLAS_TEXTURE),
+          });
+        }
+
+        renderBlockOptions();
+        await selectBlock(blockId);
+        syncJsonOutput();
+        closeCreateBlockModal();
+        setStatus(`Created block ${blockId} (${blockName}). Save to persist.`);
       });
 
       applyBlockDataBtn.addEventListener("click", () => {
