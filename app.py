@@ -16,7 +16,7 @@ from typing import Any
 
 import jwt
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from modules.chat_commands import process_chat_command
 from modules.worldgen import generate_world_layers
 from pydantic import BaseModel, Field
@@ -283,6 +283,58 @@ def refresh_block_definitions_if_changed(force: bool = False) -> None:
     if force or current_mtime_ns != BLOCKS_MTIME_NS:
         BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID = load_block_definitions()
         BLOCKS_MTIME_NS = current_mtime_ns
+
+
+def load_blocks_payload() -> dict[str, Any]:
+    try:
+        with BLOCKS_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return {"atlases": [], "blocks": []}
+
+    if not isinstance(payload, dict):
+        return {"atlases": [], "blocks": []}
+
+    atlases = payload.get("atlases", [])
+    blocks = payload.get("blocks", [])
+    return {
+        "atlases": atlases if isinstance(atlases, list) else [],
+        "blocks": blocks if isinstance(blocks, list) else [],
+    }
+
+
+def load_texture47_configs(atlas_ids: set[str]) -> dict[str, dict[str, Any]]:
+    configs: dict[str, dict[str, Any]] = {}
+    config_dir = PUBLIC_DIR / "assets" / "texture47" / "configs"
+    fallback_dir = PUBLIC_DIR / "assets" / "texture47"
+
+    for atlas_id in atlas_ids:
+        if not re.fullmatch(r"[a-z0-9_-]+", atlas_id):
+            continue
+
+        candidates = [
+            config_dir / f"{atlas_id}.json",
+            fallback_dir / f"{atlas_id}.json",
+        ]
+
+        loaded: dict[str, Any] | None = None
+        for path in candidates:
+            if not path.exists() or not path.is_file():
+                continue
+
+            try:
+                with path.open("r", encoding="utf-8") as handle:
+                    parsed = json.load(handle)
+                if isinstance(parsed, dict):
+                    loaded = parsed
+                    break
+            except Exception:
+                continue
+
+        if loaded is not None:
+            configs[atlas_id] = loaded
+
+    return configs
 
 
 def is_breakable(tile_id: int) -> bool:
@@ -1001,6 +1053,55 @@ def list_worlds(authorization: str | None = Header(default=None)) -> dict[str, A
     return {"worlds": names}
 
 
+@app.get("/api/bootstrap")
+def bootstrap_payload(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    token = authorization[7:]
+    auth_user = parse_token(token)
+    if not auth_user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    blocks_payload = load_blocks_payload()
+
+    texture47_atlas_ids: set[str] = set()
+    for block in blocks_payload.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        atlas_id = str(block.get("ATLAS_ID", "")).strip().lower()
+        if atlas_id:
+            texture47_atlas_ids.add(atlas_id)
+
+    payload = {
+        "blocks": blocks_payload,
+        "texture47Configs": load_texture47_configs(texture47_atlas_ids),
+    }
+    return JSONResponse(
+        payload,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
+def get_public_cache_headers(safe_path: str) -> dict[str, str]:
+    lower = safe_path.lower()
+
+    # Keep HTML and bundle entrypoint fresh so deployments propagate quickly.
+    if lower == "index.html" or lower == "game.bundle.js":
+        return {"Cache-Control": "no-cache"}
+
+    # Heavily cache static assets and JSON data consumed by the bundle.
+    if lower.startswith("assets/") or lower.startswith("data/"):
+        return {"Cache-Control": "public, max-age=31536000, immutable"}
+
+    if lower.endswith((".png", ".svg", ".jpg", ".jpeg", ".webp", ".gif", ".json", ".css", ".js")):
+        return {"Cache-Control": "public, max-age=31536000, immutable"}
+
+    return {"Cache-Control": "no-cache"}
+
+
 @app.post("/api/tools/texture47/save")
 def save_texture47_config(
     payload: SaveTexture47ConfigBody,
@@ -1547,6 +1648,10 @@ def public_files(file_path: str) -> FileResponse:
     if not safe_path:
         safe_path = "index.html"
 
+    # Serve bundled client only; avoid exposing modular source entrypoints.
+    if safe_path == "game.js" or (safe_path.startswith("game/") and safe_path.endswith(".js")):
+        raise HTTPException(status_code=404, detail="Not Found")
+
     target = (PUBLIC_DIR / safe_path).resolve()
     public_root = PUBLIC_DIR.resolve()
 
@@ -1556,7 +1661,7 @@ def public_files(file_path: str) -> FileResponse:
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Not Found")
 
-    return FileResponse(target)
+    return FileResponse(target, headers=get_public_cache_headers(safe_path))
 
 
 if __name__ == "__main__":

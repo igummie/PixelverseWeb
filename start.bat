@@ -56,6 +56,19 @@ goto menu
 
 :start_server
 echo.
+if exist "scripts\build_bundle.py" (
+	echo Building client bundle...
+	"%PYTHON_CMD%" scripts\build_bundle.py
+	if errorlevel 1 (
+		echo Bundle build failed. Server not started.
+		echo.
+		pause
+		goto menu
+	)
+	echo Bundle build complete.
+	echo.
+)
+
 echo Starting server on port !PORT! in this console...
 echo Press Ctrl+C to stop and return here.
 echo ----------------------------------
