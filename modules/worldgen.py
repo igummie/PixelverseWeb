@@ -7,6 +7,7 @@ AIR_BLOCK_ID = 0
 DIRT_BLOCK_ID = 1
 BEDROCK_BLOCK_ID = 2
 STONE_BLOCK_ID = 3
+CAVE_BACKGROUND_BLOCK_ID = 9
 DOOR_BLOCK_ID = 17
 
 DEFAULT_WORLDGEN_CONFIG: dict[str, float | int] = {
@@ -15,7 +16,7 @@ DEFAULT_WORLDGEN_CONFIG: dict[str, float | int] = {
     "bedrock_layers": 3,
     "door_margin": 6,
     "stone_chance_base": 0.03,
-    "stone_chance_depth_bonus": 0.17,
+    "stone_chance_depth_bonus": 0.01,
 }
 
 
@@ -50,11 +51,13 @@ def generate_world_layers(
 
             if y >= bedrock_start_y:
                 foreground[index] = BEDROCK_BLOCK_ID
+                background[index] = CAVE_BACKGROUND_BLOCK_ID
                 continue
 
             depth = y - surface_y
             if depth <= 0:
                 foreground[index] = DIRT_BLOCK_ID
+                background[index] = CAVE_BACKGROUND_BLOCK_ID
                 continue
 
             depth_ratio = depth / max(1, (bedrock_start_y - surface_y))
@@ -64,6 +67,8 @@ def generate_world_layers(
                 foreground[index] = STONE_BLOCK_ID
             else:
                 foreground[index] = DIRT_BLOCK_ID
+
+            background[index] = CAVE_BACKGROUND_BLOCK_ID
 
     min_door_x = max(0, door_margin)
     max_door_x = min(width - 1, width - door_margin - 1)
@@ -75,6 +80,7 @@ def generate_world_layers(
 
     door_index = door_y * width + door_x
     foreground[door_index] = DOOR_BLOCK_ID
+    background[door_index] = CAVE_BACKGROUND_BLOCK_ID
 
     if door_y - 1 >= 0:
         headroom_index = (door_y - 1) * width + door_x

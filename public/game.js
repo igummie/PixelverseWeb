@@ -24,6 +24,7 @@ const worldError = document.getElementById("worldError");
 
 const leaveWorldBtn = document.getElementById("leaveWorldBtn");
 const gameStatus = document.getElementById("gameStatus");
+const gemCount = document.getElementById("gemCount");
 const blockSelect = document.getElementById("blockSelect");
 const blockTypeInfo = document.getElementById("blockTypeInfo");
 const zoomOutBtn = document.getElementById("zoomOutBtn");
@@ -31,12 +32,16 @@ const zoomInBtn = document.getElementById("zoomInBtn");
 const zoomResetBtn = document.getElementById("zoomResetBtn");
 const zoomLevel = document.getElementById("zoomLevel");
 const chatToggleBtn = document.getElementById("chatToggleBtn");
+const debugToggleBtn = document.getElementById("debugToggleBtn");
 const chatDrawerHandle = document.getElementById("chatDrawerHandle");
 const chatDrawer = document.getElementById("chatDrawer");
 const chatLogPanel = document.getElementById("chatLogPanel");
 const chatLog = document.getElementById("chatLog");
 const chatInputPanel = document.getElementById("chatInputPanel");
 const chatInput = document.getElementById("chatInput");
+const debugOverlay = document.getElementById("debugOverlay");
+const debugInfo = document.getElementById("debugInfo");
+const debugGridToggle = document.getElementById("debugGridToggle");
 const gameHud = document.getElementById("gameHud");
 const gameTopbar = document.querySelector(".gameTopbar");
 
@@ -61,14 +66,32 @@ const MAX_CHAT_LOG_LINES = 180;
 const CHAT_LOG_DRAWER_HEIGHT = 220;
 const CHAT_INPUT_PANEL_HEIGHT = 56;
 const CHAT_DRAWER_HANDLE_PEEK = 16;
+const CRACK_ATLAS_SRC = "/assets/atlases/cracks_atlas.svg";
+const CRACK_ATLAS_COLUMNS = 4;
+const CRACK_ATLAS_ROWS = 1;
+const GEM_ATLAS_ID = "gems";
+const GEM_TILE_SIZE = 16;
+const GEM_BOB_BASE_AMPLITUDE_PX = 1.4;
+const GEM_BOB_AMPLITUDE_VARIANCE_PX = 1.1;
+const GEM_BOB_BASE_SPEED = 0.0015;
+const GEM_BOB_SPEED_VARIANCE = 0.002;
+const DEBUG_PING_INTERVAL_MS = 2000;
+const GEM_VALUE_TO_FRAME = {
+  1: 0,
+  5: 1,
+  10: 2,
+  50: 3,
+  100: 4,
+};
 const AUTH_TOKEN_STORAGE_KEY = "pixelverse_auth_token";
 const AUTH_USER_STORAGE_KEY = "pixelverse_auth_user";
+const GUEST_DEVICE_STORAGE_KEY = "pixelverse_guest_device_id";
 const TEXTURE47_COLS = 8;
-const TEXTURE47_ROWS = 7;
+const TEXTURE47_ROWS = 6;
 const DEFAULT_TEXTURE47_VALID_MASKS = [
-  0, 2, 8, 10, 11, 16, 18, 22, 24, 26, 27, 30, 31, 64, 66, 72, 74, 75, 80, 82, 86, 88, 90,
-  91, 94, 95, 104, 106, 107, 120, 122, 123, 126, 127, 208, 210, 214, 216, 218, 219, 222, 223,
-  248, 250, 251, 254, 255,
+  255, 248, 31, 115, 206, 112, 200, 19, 14, 66, 64, 2, 0, 251, 254, 127, 223, 250, 95, 123,
+  222, 219, 126, 94, 91, 218, 122, 90, 24, 16, 8, 114, 83, 82, 202, 78, 74, 120, 216, 88, 27,
+  30, 26, 18, 10, 80, 72, 255,
 ];
 
 const state = {
@@ -78,6 +101,8 @@ const state = {
   connected: false,
   selfId: null,
   world: null,
+  gems: 0,
+  gemDrops: new Map(),
   players: new Map(),
   me: { x: 8, y: 8 },
   camera: { x: 0, y: 0, zoom: 1 },
@@ -93,6 +118,8 @@ const state = {
   onGround: false,
   jumpQueued: false,
   worldRender: null,
+  crackAtlas: null,
+  tileDamage: new Map(),
   chatLogLines: [],
   chatLogOpen: false,
   chatInputOpen: false,
@@ -103,6 +130,12 @@ const state = {
   chatDrawerDragStartOffsetY: 0,
   flyEnabled: false,
   noclipEnabled: false,
+  debugEnabled: false,
+  debugGridEnabled: false,
+  debugFps: 0,
+  debugPingMs: null,
+  debugLastFrameAt: 0,
+  pingTimerId: null,
 };
 
 function saveAuthSession() {
@@ -147,6 +180,52 @@ function loadAuthSession() {
   }
 }
 
+function isGuestUser(user) {
+  if (!user) {
+    return false;
+  }
+
+  const id = Number(user.id);
+  if (Number.isFinite(id) && id < 0) {
+    return true;
+  }
+
+  return String(user.username || "").toLowerCase().startsWith("guest_");
+}
+
+function createGuestDeviceId() {
+  try {
+    if (window.crypto?.randomUUID) {
+      return window.crypto.randomUUID().replaceAll("-", "").toLowerCase();
+    }
+
+    const bytes = new Uint8Array(16);
+    window.crypto?.getRandomValues?.(bytes);
+    const hasEntropy = bytes.some((value) => value !== 0);
+    if (hasEntropy) {
+      return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+    }
+  } catch {
+  }
+
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 16)}`.toLowerCase();
+}
+
+function getGuestDeviceId() {
+  try {
+    const existing = (localStorage.getItem(GUEST_DEVICE_STORAGE_KEY) || "").trim().toLowerCase();
+    if (/^[a-z0-9_-]{12,128}$/.test(existing)) {
+      return existing;
+    }
+
+    const created = createGuestDeviceId();
+    localStorage.setItem(GUEST_DEVICE_STORAGE_KEY, created);
+    return created;
+  } catch {
+    return createGuestDeviceId();
+  }
+}
+
 function clampCameraZoom(value) {
   return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
 }
@@ -156,6 +235,105 @@ function updateZoomUi() {
     return;
   }
   zoomLevel.textContent = `Zoom ${state.camera.zoom.toFixed(2)}x`;
+}
+
+function updateGemUi() {
+  if (!gemCount) {
+    return;
+  }
+  gemCount.textContent = `Gems: ${Math.max(0, Math.floor(Number(state.gems) || 0))}`;
+}
+
+function updateDebugUi() {
+  debugOverlay?.classList.toggle("hidden", !state.debugEnabled);
+  if (debugGridToggle) {
+    debugGridToggle.checked = !!state.debugGridEnabled;
+  }
+}
+
+function updateDebugInfo() {
+  if (!state.debugEnabled || !debugInfo) {
+    return;
+  }
+
+  const worldName = state.world?.name || "-";
+  const worldW = Number(state.world?.width || 0);
+  const worldH = Number(state.world?.height || 0);
+  const playerTileX = Math.floor(state.me.x);
+  const playerTileY = Math.floor(state.me.y);
+  const mouseWorldX = state.camera.x + state.mouse.x / Math.max(0.0001, state.camera.zoom);
+  const mouseWorldY = state.camera.y + state.mouse.y / Math.max(0.0001, state.camera.zoom);
+  const pingText = Number.isFinite(state.debugPingMs) ? `${Math.round(state.debugPingMs)}ms` : "--";
+
+  debugInfo.textContent = [
+    `world: ${worldName} (${worldW}x${worldH})`,
+    `players: ${state.players.size}  gems: ${Math.floor(Number(state.gems) || 0)}`,
+    `pos: ${state.me.x.toFixed(3)}, ${state.me.y.toFixed(3)}  tile: ${playerTileX}, ${playerTileY}`,
+    `vel: ${state.velocity.x.toFixed(3)}, ${state.velocity.y.toFixed(3)}  onGround: ${state.onGround}`,
+    `camera: ${state.camera.x.toFixed(2)}, ${state.camera.y.toFixed(2)}  zoom: ${state.camera.zoom.toFixed(2)}x`,
+    `mouse(world): ${mouseWorldX.toFixed(2)}, ${mouseWorldY.toFixed(2)}`,
+    `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}`,
+    `drops: ${state.gemDrops.size}  damageTiles: ${state.tileDamage.size}`,
+  ].join("\n");
+}
+
+function stopPingTimer() {
+  if (state.pingTimerId) {
+    clearInterval(state.pingTimerId);
+    state.pingTimerId = null;
+  }
+}
+
+function sendDebugPing() {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  sendWs({
+    type: "ping",
+    clientSentAt: performance.now(),
+  });
+}
+
+function startPingTimer() {
+  stopPingTimer();
+  sendDebugPing();
+  state.pingTimerId = setInterval(sendDebugPing, DEBUG_PING_INTERVAL_MS);
+}
+
+function drawDebugGrid() {
+  if (!state.world || !state.debugEnabled || !state.debugGridEnabled) {
+    return;
+  }
+
+  const zoom = Math.max(0.0001, state.camera.zoom);
+  const worldTileSize = TILE_SIZE;
+  const leftTile = Math.max(0, Math.floor(state.camera.x / worldTileSize));
+  const topTile = Math.max(0, Math.floor(state.camera.y / worldTileSize));
+  const rightTile = Math.min(state.world.width, Math.ceil((state.camera.x + canvas.width / zoom) / worldTileSize) + 1);
+  const bottomTile = Math.min(state.world.height, Math.ceil((state.camera.y + canvas.height / zoom) / worldTileSize) + 1);
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
+  ctx.lineWidth = 1;
+
+  for (let tileX = leftTile; tileX <= rightTile; tileX += 1) {
+    const screenX = Math.round((tileX * worldTileSize - state.camera.x) * zoom) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(screenX, 0);
+    ctx.lineTo(screenX, canvas.height);
+    ctx.stroke();
+  }
+
+  for (let tileY = topTile; tileY <= bottomTile; tileY += 1) {
+    const screenY = Math.round((tileY * worldTileSize - state.camera.y) * zoom) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, screenY);
+    ctx.lineTo(canvas.width, screenY);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 function setCameraZoom(nextZoom) {
@@ -177,17 +355,20 @@ function isTexture47Block(block) {
   return typeof block?.ATLAS_ID === "string";
 }
 
-function getForegroundTileIdAt(tileX, tileY) {
+function getTileIdAtLayer(tileX, tileY, layer = "foreground") {
   if (!state.world || tileX < 0 || tileY < 0 || tileX >= state.world.width || tileY >= state.world.height) {
     return 0;
   }
 
   const index = tileY * state.world.width + tileX;
+  if (layer === "background") {
+    return Number(state.world.background?.[index] || 0);
+  }
   return Number(state.world.foreground?.[index] || 0);
 }
 
-function sameTexture47Group(tileX, tileY, atlasId) {
-  const neighborId = getForegroundTileIdAt(tileX, tileY);
+function sameTexture47Group(tileX, tileY, atlasId, layer = "foreground") {
+  const neighborId = getTileIdAtLayer(tileX, tileY, layer);
   if (neighborId === 0) {
     return false;
   }
@@ -196,16 +377,16 @@ function sameTexture47Group(tileX, tileY, atlasId) {
   return !!neighborBlock && typeof neighborBlock.ATLAS_ID === "string" && neighborBlock.ATLAS_ID === atlasId;
 }
 
-function getTexture47Mask(tileX, tileY, atlasId) {
-  const north = sameTexture47Group(tileX, tileY - 1, atlasId);
-  const east = sameTexture47Group(tileX + 1, tileY, atlasId);
-  const south = sameTexture47Group(tileX, tileY + 1, atlasId);
-  const west = sameTexture47Group(tileX - 1, tileY, atlasId);
+function getTexture47Mask(tileX, tileY, atlasId, layer = "foreground") {
+  const north = sameTexture47Group(tileX, tileY - 1, atlasId, layer);
+  const east = sameTexture47Group(tileX + 1, tileY, atlasId, layer);
+  const south = sameTexture47Group(tileX, tileY + 1, atlasId, layer);
+  const west = sameTexture47Group(tileX - 1, tileY, atlasId, layer);
 
-  const northEast = north && east && sameTexture47Group(tileX + 1, tileY - 1, atlasId);
-  const southEast = south && east && sameTexture47Group(tileX + 1, tileY + 1, atlasId);
-  const southWest = south && west && sameTexture47Group(tileX - 1, tileY + 1, atlasId);
-  const northWest = north && west && sameTexture47Group(tileX - 1, tileY - 1, atlasId);
+  const northEast = north && east && sameTexture47Group(tileX + 1, tileY - 1, atlasId, layer);
+  const southEast = south && east && sameTexture47Group(tileX + 1, tileY + 1, atlasId, layer);
+  const southWest = south && west && sameTexture47Group(tileX - 1, tileY + 1, atlasId, layer);
+  const northWest = north && west && sameTexture47Group(tileX - 1, tileY - 1, atlasId, layer);
 
   let mask = 0;
   if (north) mask |= 2;
@@ -220,7 +401,7 @@ function getTexture47Mask(tileX, tileY, atlasId) {
   return mask;
 }
 
-function drawConnected47TileToContext(targetContext, block, drawX, drawY) {
+function drawConnected47TileToContext(targetContext, block, drawX, drawY, layer = "foreground") {
   if (!state.world || !isTexture47Block(block)) {
     return false;
   }
@@ -232,7 +413,7 @@ function drawConnected47TileToContext(targetContext, block, drawX, drawY) {
 
   const tileX = Math.floor(drawX / TILE_SIZE);
   const tileY = Math.floor(drawY / TILE_SIZE);
-  const mask = getTexture47Mask(tileX, tileY, block.ATLAS_ID);
+  const mask = getTexture47Mask(tileX, tileY, block.ATLAS_ID, layer);
   const variants = texture47.maskVariants.get(mask) || texture47.maskVariants.get(255) || [texture47.fallbackIndex];
   const hash = Math.abs((tileX * 73856093) ^ (tileY * 19349663));
   const variantIndex = variants[hash % variants.length];
@@ -324,6 +505,18 @@ function getChatDrawerHiddenOffset() {
   return -(drawerHeight - CHAT_DRAWER_HANDLE_PEEK);
 }
 
+function updateDebugOverlayPosition() {
+  if (!debugOverlay) {
+    return;
+  }
+
+  const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
+  const visibleDrawerHeight = Math.max(0, state.chatDrawerHeight + state.chatDrawerOffsetY);
+  const drawerPushDown = Math.max(0, visibleDrawerHeight - CHAT_DRAWER_HANDLE_PEEK);
+  const debugTop = topbarHeight + 10 + drawerPushDown;
+  debugOverlay.style.top = `${Math.round(debugTop)}px`;
+}
+
 function applyChatDrawerPosition(nextOffsetY, immediate = false) {
   const drawerHeight = getChatDrawerMaxHeight();
   const hiddenOffset = getChatDrawerHiddenOffset();
@@ -339,6 +532,8 @@ function applyChatDrawerPosition(nextOffsetY, immediate = false) {
     chatDrawer.style.height = `${drawerHeight}px`;
     chatDrawer.style.transform = `translateY(${state.chatDrawerOffsetY}px)`;
   }
+
+  updateDebugOverlayPosition();
 }
 
 function setChatLogOpen(open) {
@@ -386,6 +581,96 @@ function setPlayerChatBubble(playerId, messageText) {
   player.chatUntil = performance.now() + CHAT_BUBBLE_LIFETIME_MS;
 }
 
+function normalizeGemDrop(entry) {
+  if (!entry) {
+    return null;
+  }
+
+  const id = String(entry.id || "").trim();
+  const x = Number(entry.x);
+  const y = Number(entry.y);
+  const value = Number(entry.value);
+
+  if (!id || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  return {
+    id,
+    x,
+    y,
+    value: Math.floor(value),
+  };
+}
+
+function hashStringToUnit(value) {
+  let hash = 2166136261;
+  const text = String(value || "");
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  // Convert to a stable 0..1 range.
+  return (hash >>> 0) / 4294967295;
+}
+
+function getGemBobParams(dropId) {
+  const unitA = hashStringToUnit(`${dropId}:a`);
+  const unitB = hashStringToUnit(`${dropId}:b`);
+  const unitC = hashStringToUnit(`${dropId}:c`);
+  return {
+    bobPhase: unitA * Math.PI * 2,
+    bobSpeed: GEM_BOB_BASE_SPEED + unitB * GEM_BOB_SPEED_VARIANCE,
+    bobAmplitude: GEM_BOB_BASE_AMPLITUDE_PX + unitC * GEM_BOB_AMPLITUDE_VARIANCE_PX,
+  };
+}
+
+function applyGemDropSnapshot(drops) {
+  state.gemDrops.clear();
+  for (const entry of drops || []) {
+    const normalized = normalizeGemDrop(entry);
+    if (!normalized) {
+      continue;
+    }
+    const bob = getGemBobParams(normalized.id);
+    state.gemDrops.set(normalized.id, {
+      ...normalized,
+      ...bob,
+    });
+  }
+}
+
+function upsertGemDrop(entry) {
+  const normalized = normalizeGemDrop(entry);
+  if (!normalized) {
+    return;
+  }
+
+  const existing = state.gemDrops.get(normalized.id);
+  if (existing) {
+    state.gemDrops.set(normalized.id, {
+      ...existing,
+      ...normalized,
+    });
+    return;
+  }
+
+  const bob = getGemBobParams(normalized.id);
+  state.gemDrops.set(normalized.id, {
+    ...normalized,
+    ...bob,
+  });
+}
+
+function removeGemDropById(dropId) {
+  const normalizedId = String(dropId || "").trim();
+  if (!normalizedId) {
+    return;
+  }
+  state.gemDrops.delete(normalizedId);
+}
+
 function updateRemotePlayersInterpolation(deltaSeconds) {
   if (!state.selfId) {
     return;
@@ -418,13 +703,13 @@ function updateRemotePlayersInterpolation(deltaSeconds) {
   }
 }
 
-function drawTileToContext(targetContext, tileId, drawX, drawY) {
+function drawTileToContext(targetContext, tileId, drawX, drawY, layer = "foreground") {
   const block = state.blockDefs.get(tileId);
   if (!block) {
     return;
   }
 
-  if (drawConnected47TileToContext(targetContext, block, drawX, drawY)) {
+  if (drawConnected47TileToContext(targetContext, block, drawX, drawY, layer)) {
     return;
   }
 
@@ -488,10 +773,10 @@ function updateWorldRenderTile(tileX, tileY) {
 
   state.worldRender.context.clearRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
   if (backgroundTile !== 0) {
-    drawTileToContext(state.worldRender.context, backgroundTile, drawX, drawY);
+    drawTileToContext(state.worldRender.context, backgroundTile, drawX, drawY, "background");
   }
   if (foregroundTile !== 0) {
-    drawTileToContext(state.worldRender.context, foregroundTile, drawX, drawY);
+    drawTileToContext(state.worldRender.context, foregroundTile, drawX, drawY, "foreground");
   }
 }
 
@@ -716,6 +1001,7 @@ function resizeCanvas() {
   canvas.height = Math.max(1, window.innerHeight - topbarHeight);
   // Resizing resets canvas context state, so restore pixel-art rendering.
   ctx.imageSmoothingEnabled = false;
+  updateDebugOverlayPosition();
 }
 
 window.addEventListener("resize", resizeCanvas);
@@ -752,6 +1038,7 @@ async function loadBlockDefinitions() {
   state.blockDefs.clear();
   state.atlases.clear();
   state.texture47.clear();
+  state.crackAtlas = null;
 
   for (const atlas of data.atlases || []) {
     const image = await loadImage(atlas.SRC);
@@ -763,6 +1050,19 @@ async function loadBlockDefinitions() {
 
   for (const block of data.blocks || []) {
     state.blockDefs.set(block.ID, block);
+  }
+
+  try {
+    const crackImage = await loadImage(CRACK_ATLAS_SRC);
+    state.crackAtlas = {
+      image: crackImage,
+      columns: CRACK_ATLAS_COLUMNS,
+      rows: CRACK_ATLAS_ROWS,
+      frameWidth: Math.floor(crackImage.width / CRACK_ATLAS_COLUMNS),
+      frameHeight: Math.floor(crackImage.height / CRACK_ATLAS_ROWS),
+    };
+  } catch {
+    state.crackAtlas = null;
   }
 
   const texture47AtlasIds = new Set(
@@ -920,9 +1220,10 @@ async function authGuest() {
   loginError.textContent = "";
 
   try {
+    const deviceId = getGuestDeviceId();
     const data = await requestJson("/api/auth/guest", {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify({ deviceId }),
     });
 
     state.token = data.token;
@@ -937,6 +1238,23 @@ async function authGuest() {
   } catch (error) {
     loginError.textContent = error.message;
   }
+}
+
+async function refreshGuestSessionIfNeeded() {
+  if (!state.token || !isGuestUser(state.user)) {
+    return;
+  }
+
+  const deviceId = getGuestDeviceId();
+  const data = await requestJson("/api/auth/guest", {
+    method: "POST",
+    body: JSON.stringify({ deviceId }),
+  });
+
+  state.token = data.token;
+  state.user = data.user;
+  welcomeText.textContent = `Logged in as ${state.user.username}`;
+  saveAuthSession();
 }
 
 async function loadWorldList() {
@@ -999,11 +1317,14 @@ function connectSocket() {
   state.ws.addEventListener("open", () => {
     state.connected = true;
     gameStatus.textContent = "Connected";
+    startPingTimer();
   });
 
   state.ws.addEventListener("close", () => {
     state.connected = false;
     gameStatus.textContent = "Disconnected";
+    stopPingTimer();
+    state.debugPingMs = null;
   });
 
   state.ws.addEventListener("message", (event) => {
@@ -1011,6 +1332,14 @@ function connectSocket() {
 
     if (msg.type === "connected") {
       state.selfId = msg.id;
+      return;
+    }
+
+    if (msg.type === "pong") {
+      const sentAt = Number(msg.clientSentAt);
+      if (Number.isFinite(sentAt)) {
+        state.debugPingMs = Math.max(0, performance.now() - sentAt);
+      }
       return;
     }
 
@@ -1029,7 +1358,14 @@ function connectSocket() {
         state.world.background = new Array(state.world.foreground.length).fill(0);
       }
       state.selfId = msg.selfId;
+      state.gems = Number(msg.gems || 0);
+      updateGemUi();
       state.players.clear();
+      applyGemDropSnapshot(msg.world.gemDrops || []);
+      state.tileDamage.clear();
+      for (const damageState of msg.world.tileDamage || []) {
+        setTileDamage(damageState);
+      }
       rebuildWorldRenderCache();
 
       for (const player of msg.world.players) {
@@ -1141,7 +1477,35 @@ function connectSocket() {
       const index = msg.y * state.world.width + msg.x;
       state.world.foreground[index] = Number(msg.foreground ?? msg.tile ?? 0);
       state.world.background[index] = Number(msg.background ?? 0);
+      clearTileDamageAt(msg.x, msg.y);
       updateWorldRenderTileArea(msg.x, msg.y);
+      return;
+    }
+
+    if (msg.type === "tile_damage_update") {
+      setTileDamage(msg);
+      return;
+    }
+
+    if (msg.type === "tile_damage_clear") {
+      clearTileDamageAt(Number(msg.x), Number(msg.y), msg.layer ? String(msg.layer) : null);
+      return;
+    }
+
+    if (msg.type === "gem_drop_spawn") {
+      upsertGemDrop(msg.drop);
+      return;
+    }
+
+    if (msg.type === "gem_drop_remove") {
+      removeGemDropById(msg.id);
+      return;
+    }
+
+    if (msg.type === "gem_count") {
+      state.gems = Number(msg.gems || 0);
+      updateGemUi();
+      return;
     }
   });
 
@@ -1234,6 +1598,10 @@ function leaveWorld() {
   renderChatLog();
   state.world = null;
   state.worldRender = null;
+  state.gems = 0;
+  updateGemUi();
+  state.gemDrops.clear();
+  state.tileDamage.clear();
   state.players.clear();
   state.velocity.x = 0;
   state.velocity.y = 0;
@@ -1363,6 +1731,17 @@ document.addEventListener("keyup", (event) => {
 
 chatToggleBtn?.addEventListener("click", () => {
   setChatLogOpen(!state.chatLogOpen);
+});
+
+debugToggleBtn?.addEventListener("click", () => {
+  state.debugEnabled = !state.debugEnabled;
+  updateDebugUi();
+  updateDebugInfo();
+});
+
+debugGridToggle?.addEventListener("change", () => {
+  state.debugGridEnabled = !!debugGridToggle.checked;
+  updateDebugInfo();
 });
 
 chatDrawerHandle?.addEventListener("pointerdown", (event) => {
@@ -1604,6 +1983,175 @@ function drawWorld() {
   );
 }
 
+function getTileDamageKey(x, y, layer) {
+  return `${layer}:${x}:${y}`;
+}
+
+function normalizeDamageLayer(layer) {
+  return layer === "background" ? "background" : "foreground";
+}
+
+function setTileDamage(entry) {
+  if (!entry) {
+    return;
+  }
+
+  const x = Number(entry.x);
+  const y = Number(entry.y);
+  const hits = Number(entry.hits);
+  const maxHits = Number(entry.maxHits);
+  const layer = normalizeDamageLayer(entry.layer);
+
+  if (!Number.isInteger(x) || !Number.isInteger(y)) {
+    return;
+  }
+
+  if (!Number.isFinite(hits) || !Number.isFinite(maxHits) || hits <= 0 || maxHits <= 1) {
+    state.tileDamage.delete(getTileDamageKey(x, y, layer));
+    return;
+  }
+
+  state.tileDamage.set(getTileDamageKey(x, y, layer), {
+    x,
+    y,
+    layer,
+    hits,
+    maxHits,
+  });
+}
+
+function clearTileDamageAt(x, y, layer = null) {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) {
+    return;
+  }
+
+  if (layer) {
+    state.tileDamage.delete(getTileDamageKey(x, y, normalizeDamageLayer(layer)));
+    return;
+  }
+
+  state.tileDamage.delete(getTileDamageKey(x, y, "foreground"));
+  state.tileDamage.delete(getTileDamageKey(x, y, "background"));
+}
+
+function drawDamageOverlays() {
+  if (!state.world || state.tileDamage.size === 0 || !state.crackAtlas?.image) {
+    return;
+  }
+
+  const frameWidth = Math.max(1, Number(state.crackAtlas.frameWidth) || 1);
+  const frameHeight = Math.max(1, Number(state.crackAtlas.frameHeight) || 1);
+  const frameCount = Math.max(1, Number(state.crackAtlas.columns) || 1);
+
+  for (const damage of state.tileDamage.values()) {
+    const progress = Math.max(0, Math.min(1, damage.hits / damage.maxHits));
+    if (progress <= 0) {
+      continue;
+    }
+
+    const screenX = (damage.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
+    const screenY = (damage.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const size = TILE_SIZE * state.camera.zoom;
+
+    if (
+      screenX + size < -4 ||
+      screenY + size < -4 ||
+      screenX > canvas.width + 4 ||
+      screenY > canvas.height + 4
+    ) {
+      continue;
+    }
+
+    const frameIndex = Math.max(0, Math.min(frameCount - 1, Math.ceil(progress * frameCount) - 1));
+    const sourceX = frameIndex * frameWidth;
+    const sourceY = 0;
+
+    ctx.globalAlpha = 0.35 + progress * 0.65;
+    ctx.drawImage(
+      state.crackAtlas.image,
+      sourceX,
+      sourceY,
+      frameWidth,
+      frameHeight,
+      screenX,
+      screenY,
+      size,
+      size,
+    );
+    ctx.globalAlpha = 1;
+  }
+}
+
+function getGemFrameForValue(value) {
+  const v = Math.max(1, Math.floor(Number(value) || 1));
+  if (v >= 100) return GEM_VALUE_TO_FRAME[100];
+  if (v >= 50) return GEM_VALUE_TO_FRAME[50];
+  if (v >= 10) return GEM_VALUE_TO_FRAME[10];
+  if (v >= 5) return GEM_VALUE_TO_FRAME[5];
+  return GEM_VALUE_TO_FRAME[1];
+}
+
+function getGemDrawSizeForValue(value, zoom) {
+  const v = Math.max(1, Math.floor(Number(value) || 1));
+  let baseSize = 12;
+  if (v >= 100) {
+    baseSize = 16;
+  } else if (v >= 50) {
+    baseSize = 15;
+  } else if (v >= 10) {
+    baseSize = 14;
+  } else if (v >= 5) {
+    baseSize = 13;
+  }
+
+  return Math.max(8, baseSize * zoom);
+}
+
+function drawGemDrops() {
+  if (!state.world || state.gemDrops.size === 0) {
+    return;
+  }
+
+  const gemAtlas = state.atlases.get(GEM_ATLAS_ID);
+  const image = gemAtlas?.image;
+  if (!image) {
+    return;
+  }
+
+  for (const drop of state.gemDrops.values()) {
+    const frame = getGemFrameForValue(drop.value);
+    const screenX = (drop.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
+    const screenY = (drop.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const bobOffset = Math.sin(performance.now() * (drop.bobSpeed || GEM_BOB_BASE_SPEED) + (drop.bobPhase || 0))
+      * (drop.bobAmplitude || GEM_BOB_BASE_AMPLITUDE_PX)
+      * state.camera.zoom;
+    const drawSize = getGemDrawSizeForValue(drop.value, state.camera.zoom);
+    const drawX = screenX - drawSize / 2;
+    const drawY = screenY - drawSize / 2 + bobOffset;
+
+    if (
+      drawX + drawSize < -8 ||
+      drawY + drawSize < -8 ||
+      drawX > canvas.width + 8 ||
+      drawY > canvas.height + 8
+    ) {
+      continue;
+    }
+
+    ctx.drawImage(
+      image,
+      frame * GEM_TILE_SIZE,
+      0,
+      GEM_TILE_SIZE,
+      GEM_TILE_SIZE,
+      drawX,
+      drawY,
+      drawSize,
+      drawSize,
+    );
+  }
+}
+
 function drawPlayers() {
   for (const [, player] of state.players) {
     const drawX = Number.isFinite(player.renderX) ? player.renderX : player.x;
@@ -1657,7 +2205,16 @@ zoomResetBtn?.addEventListener("click", () => {
 });
 
 function loop() {
+  const now = performance.now();
+  if (state.debugLastFrameAt > 0) {
+    const deltaMs = Math.max(1, now - state.debugLastFrameAt);
+    const instantFps = 1000 / deltaMs;
+    state.debugFps = state.debugFps <= 0 ? instantFps : (state.debugFps * 0.9 + instantFps * 0.1);
+  }
+  state.debugLastFrameAt = now;
+
   update();
+  updateDebugInfo();
 
   if (screens.game.classList.contains("active")) {
     ctx.imageSmoothingEnabled = false;
@@ -1669,6 +2226,9 @@ function loop() {
       ctx.fillText("Loading world...", 30, 50);
     } else {
       drawWorld();
+      drawDebugGrid();
+      drawGemDrops();
+      drawDamageOverlays();
       drawPlayers();
     }
   }
@@ -1686,6 +2246,7 @@ function loop() {
 
   if (loadAuthSession()) {
     try {
+      await refreshGuestSessionIfNeeded();
       await loadWorldList();
       showScreen("world");
     } catch {
@@ -1702,3 +2263,5 @@ function loop() {
 })();
 
 updateZoomUi();
+updateGemUi();
+updateDebugUi();

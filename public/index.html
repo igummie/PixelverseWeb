@@ -225,6 +225,57 @@
         color: #e5e7eb;
       }
 
+      .debugOverlay {
+        position: absolute;
+        top: calc(var(--hud-height) + 10px);
+        left: 10px;
+        z-index: 18;
+        min-width: 220px;
+        max-width: min(380px, calc(100vw - 20px));
+        background: rgba(15, 23, 42, 0.86);
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 8px 10px;
+        box-sizing: border-box;
+        backdrop-filter: blur(2px);
+      }
+
+      .debugOverlay.hidden {
+        display: none;
+      }
+
+      .debugHead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+
+      .debugGridToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        user-select: none;
+      }
+
+      .debugGridToggle input {
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        padding: 0;
+      }
+
+      .debugInfo {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
       #chatInput {
         width: 100%;
         margin: 8px 12px;
@@ -299,6 +350,7 @@
       <div id="gameHud">
         <div class="gameTopbar">
           <div id="gameStatus">Connecting...</div>
+          <div id="gemCount" style="font-size: 12px; opacity: 0.95; min-width: 88px">Gems: 0</div>
           <label for="blockSelect">Block:</label>
           <select id="blockSelect"></select>
           <div id="blockTypeInfo" style="font-size: 12px; opacity: 0.8"></div>
@@ -307,9 +359,20 @@
           <button id="zoomInBtn" type="button">+</button>
           <button id="zoomResetBtn" type="button">1x</button>
           <button id="chatToggleBtn" type="button">Chat</button>
+          <button id="debugToggleBtn" type="button">Debug</button>
           <div class="spacer">LMB: place | RMB: break | WASD/Arrows: move | Enter: chat | ESC: leave</div>
           <button id="leaveWorldBtn">Leave World</button>
         </div>
+        </div>
+        <div id="debugOverlay" class="debugOverlay hidden">
+          <div class="debugHead">
+            <strong>Debug</strong>
+            <label class="debugGridToggle" for="debugGridToggle">
+              <input id="debugGridToggle" type="checkbox" />
+              Grid
+            </label>
+          </div>
+          <pre id="debugInfo" class="debugInfo"></pre>
         </div>
         <div id="chatOverlayRegion" class="chatOverlayRegion">
           <div id="chatDrawer" class="chatDrawer">

@@ -6,6 +6,12 @@
       "NAME": "BASIC_ATLAS",
       "SRC": "/assets/atlases/basic_atlas.svg",
       "TILE_SIZE": 16
+    },
+    {
+      "ATLAS_ID": "gems",
+      "NAME": "GEMS_ATLAS",
+      "SRC": "/assets/atlases/gems_atlas.svg",
+      "TILE_SIZE": 16
     }
   ],
   "blocks": [
@@ -15,6 +21,10 @@
       "BLOCK_TYPE": "BACKGROUND",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "TOUGHNESS": 0,
+      "GEM_CHANCE": 0.0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
       "PLACEABLE": false
     },
     {
@@ -23,6 +33,10 @@
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": "dirt",
       "ATLAS_TEXTURE": { "x": 16, "y": 0, "w": 16, "h": 16 },
+      "TOUGHNESS": 2,
+      "GEM_CHANCE": 0.2,
+      "GEM_AMOUNT": 1,
+      "GEM_AMOUNT_VAR": 1,
       "PLACEABLE": true
     },
     {
@@ -31,6 +45,10 @@
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 32, "y": 0, "w": 16, "h": 16 },
+      "TOUGHNESS": 9999,
+      "GEM_CHANCE": 0.0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
       "PLACEABLE": true,
       "BREAKABLE": false
     },
@@ -40,6 +58,10 @@
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 48, "y": 0, "w": 16, "h": 16 },
+      "TOUGHNESS": 4,
+      "GEM_CHANCE": 0.45,
+      "GEM_AMOUNT": 5,
+      "GEM_AMOUNT_VAR": 3,
       "PLACEABLE": true
     },
     {
@@ -48,6 +70,10 @@
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": "sand",
       "ATLAS_TEXTURE": { "x": 64, "y": 0, "w": 16, "h": 16 },
+      "TOUGHNESS": 2,
+      "GEM_CHANCE": 0.15,
+      "GEM_AMOUNT": 1,
+      "GEM_AMOUNT_VAR": 1,
       "PLACEABLE": true
     },
     {
@@ -56,6 +82,10 @@
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 80, "y": 0, "w": 16, "h": 16 },
+      "TOUGHNESS": 3,
+      "GEM_CHANCE": 0.12,
+      "GEM_AMOUNT": 1,
+      "GEM_AMOUNT_VAR": 1,
       "PLACEABLE": true
     },
     {
@@ -64,6 +94,10 @@
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 96, "y": 0, "w": 16, "h": 16 },
+      "TOUGHNESS": 3,
+      "GEM_CHANCE": 0.12,
+      "GEM_AMOUNT": 1,
+      "GEM_AMOUNT_VAR": 1,
       "PLACEABLE": true
     },
     {
@@ -72,6 +106,10 @@
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 112, "y": 0, "w": 16, "h": 16 },
+      "TOUGHNESS": 3,
+      "GEM_CHANCE": 0.12,
+      "GEM_AMOUNT": 1,
+      "GEM_AMOUNT_VAR": 1,
       "PLACEABLE": true
     },
     {
@@ -80,14 +118,22 @@
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 0, "y": 16, "w": 16, "h": 16 },
+      "TOUGHNESS": 3,
+      "GEM_CHANCE": 0.12,
+      "GEM_AMOUNT": 1,
+      "GEM_AMOUNT_VAR": 1,
       "PLACEABLE": true
     },
     {
       "ID": 9,
-      "NAME": "WOOD_PLATFORM",
-      "BLOCK_TYPE": "PLATFORM",
-      "ATLAS_ID": 0,
+      "NAME": "CAVE_BACKGROUND",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "cave_background",
       "ATLAS_TEXTURE": { "x": 16, "y": 16, "w": 16, "h": 16 },
+      "TOUGHNESS": 2,
+      "GEM_CHANCE": 0.08,
+      "GEM_AMOUNT": 1,
+      "GEM_AMOUNT_VAR": 0,
       "PLACEABLE": true
     },
     {
@@ -96,54 +142,22 @@
       "BLOCK_TYPE": "PLATFORM",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 32, "y": 16, "w": 16, "h": 16 },
+      "TOUGHNESS": 5,
+      "GEM_CHANCE": 0.35,
+      "GEM_AMOUNT": 10,
+      "GEM_AMOUNT_VAR": 4,
       "PLACEABLE": true
     },
     {
       "ID": 11,
-      "NAME": "SKY_BG",
-      "BLOCK_TYPE": "BACKGROUND",
-      "ATLAS_ID": 0,
+      "NAME": "DEV_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "dev",
       "ATLAS_TEXTURE": { "x": 48, "y": 16, "w": 16, "h": 16 },
-      "PLACEABLE": true
-    },
-    {
-      "ID": 12,
-      "NAME": "BRICK_BG",
-      "BLOCK_TYPE": "BACKGROUND",
-      "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 64, "y": 16, "w": 16, "h": 16 },
-      "PLACEABLE": true
-    },
-    {
-      "ID": 13,
-      "NAME": "LEAF_DECOR",
-      "BLOCK_TYPE": "DECORATION",
-      "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 80, "y": 16, "w": 16, "h": 16 },
-      "PLACEABLE": true
-    },
-    {
-      "ID": 14,
-      "NAME": "LAMP",
-      "BLOCK_TYPE": "DECORATION",
-      "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 96, "y": 16, "w": 16, "h": 16 },
-      "PLACEABLE": true
-    },
-    {
-      "ID": 15,
-      "NAME": "WATER",
-      "BLOCK_TYPE": "LIQUID",
-      "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 112, "y": 16, "w": 16, "h": 16 },
-      "PLACEABLE": true
-    },
-    {
-      "ID": 16,
-      "NAME": "LAVA",
-      "BLOCK_TYPE": "LIQUID",
-      "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 0, "y": 32, "w": 16, "h": 16 },
+      "TOUGHNESS": 3,
+      "GEM_CHANCE": 0.5,
+      "GEM_AMOUNT": 50,
+      "GEM_AMOUNT_VAR": 15,
       "PLACEABLE": true
     },
     {
@@ -153,6 +167,10 @@
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": { "x": 16, "y": 32, "w": 16, "h": 16 },
       "PLACEABLE": false,
+      "TOUGHNESS": 9999,
+      "GEM_CHANCE": 0.0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
       "BREAKABLE": false
     }
   ]

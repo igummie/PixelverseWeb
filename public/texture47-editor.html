@@ -399,7 +399,7 @@
 
         <div class="row">
           <input id="columnsInput" type="number" min="1" value="8" placeholder="columns" />
-          <input id="rowsInput" type="number" min="1" value="7" placeholder="rows" />
+          <input id="rowsInput" type="number" min="1" value="6" placeholder="rows" />
         </div>
 
         <div id="atlasWrap" class="atlasWrap">
@@ -489,9 +489,9 @@
 
     <script type="module">
       const DEFAULT_TEXTURE47_VALID_MASKS = [
-        0, 2, 8, 10, 11, 16, 18, 22, 24, 26, 27, 30, 31, 64, 66, 72, 74, 75, 80, 82, 86, 88, 90,
-        91, 94, 95, 104, 106, 107, 120, 122, 123, 126, 127, 208, 210, 214, 216, 218, 219, 222, 223,
-        248, 250, 251, 254, 255,
+        255, 248, 31, 115, 206, 112, 200, 19, 14, 66, 64, 2, 0, 251, 254, 127, 223, 250, 95, 123,
+        222, 219, 126, 94, 91, 218, 122, 90, 24, 16, 8, 114, 83, 82, 202, 78, 74, 120, 216, 88, 27,
+        30, 26, 18, 10, 80, 72, 255,
       ];
       const ALL_MASK_CHOICES = Array.from({ length: 256 }, (_, index) => index);
 
@@ -556,7 +556,7 @@
       const state = {
         atlasId: "dirt",
         columns: 8,
-        rows: 7,
+        rows: 6,
         image: null,
         tileWidth: 32,
         tileHeight: 32,
@@ -609,9 +609,33 @@
           return ALL_MASK_CHOICES;
         }
 
-        const mappedMasks = Array.from(state.maskVariants.keys()).filter((mask) => isMaskInRange(mask));
-        const merged = new Set([...DEFAULT_TEXTURE47_VALID_MASKS, ...mappedMasks]);
-        return Array.from(merged).sort((a, b) => a - b);
+        const mappedMaskSet = new Set(
+          Array.from(state.maskVariants.keys())
+            .map((value) => Number(value))
+            .filter((mask) => isMaskInRange(mask) && getMaskVariants(mask).length > 0),
+        );
+
+        const orderedDefaults = [];
+        const seen = new Set();
+        for (const mask of DEFAULT_TEXTURE47_VALID_MASKS) {
+          if (!mappedMaskSet.has(mask) || seen.has(mask)) {
+            continue;
+          }
+          orderedDefaults.push(mask);
+          seen.add(mask);
+        }
+
+        const extraMapped = Array.from(mappedMaskSet)
+          .filter((mask) => !seen.has(mask))
+          .sort((a, b) => a - b);
+
+        const visible = [...orderedDefaults, ...extraMapped];
+        if (visible.length > 0) {
+          return visible;
+        }
+
+        // Fallback for brand new atlases: show base defaults until mappings are created.
+        return Array.from(new Set(DEFAULT_TEXTURE47_VALID_MASKS.filter((mask) => isMaskInRange(mask))));
       }
 
       function normalizeStatusMessage(message) {
@@ -1040,8 +1064,13 @@
 
       function renderMaskGrid() {
         maskGrid.innerHTML = "";
+        const visibleMasks = getVisibleMaskChoices();
 
-        for (const mask of getVisibleMaskChoices()) {
+        if (!visibleMasks.includes(state.selectedMask) && visibleMasks.length > 0) {
+          state.selectedMask = visibleMasks[0];
+        }
+
+        for (const mask of visibleMasks) {
           const card = document.createElement("div");
           card.className = "maskCard" + (mask === state.selectedMask ? " active" : "");
           card.dataset.mask = String(mask);
@@ -1489,7 +1518,7 @@
       async function loadAtlasAndConfig() {
         state.atlasId = atlasIdInput.value.trim() || "dirt";
         state.columns = parsePositiveInt(columnsInput.value, 8);
-        state.rows = parsePositiveInt(rowsInput.value, 7);
+        state.rows = parsePositiveInt(rowsInput.value, 6);
 
         columnsInput.value = String(state.columns);
         rowsInput.value = String(state.rows);
