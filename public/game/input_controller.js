@@ -7,6 +7,7 @@ export function createInputController({ state, screens, canvas, constants, actio
     setCameraZoom,
     sendWs,
     pauseMenu,
+    getSelectedSeedId,
   } = actions;
 
   function bindControls() {
@@ -107,6 +108,10 @@ export function createInputController({ state, screens, canvas, constants, actio
         return;
       }
 
+      if (event.button === 1) {
+        event.preventDefault();
+      }
+
       const worldMouseX = state.camera.x + state.mouse.x / state.camera.zoom;
       const worldMouseY = state.camera.y + state.mouse.y / state.camera.zoom;
       const tileX = Math.floor(worldMouseX / TILE_SIZE);
@@ -117,7 +122,19 @@ export function createInputController({ state, screens, canvas, constants, actio
       }
 
       const isRightClick = event.button === 2;
-      if (isRightClick) {
+      const isMiddleClick = event.button === 1;
+      if (isMiddleClick) {
+        const seedId = Number(getSelectedSeedId?.());
+        if (!Number.isFinite(seedId) || seedId < 0) {
+          return;
+        }
+        sendWs({
+          type: "plant_seed",
+          x: tileX,
+          y: tileY,
+          seedId: Math.floor(seedId),
+        });
+      } else if (isRightClick) {
         sendWs({
           type: "set_tile",
           action: "place",

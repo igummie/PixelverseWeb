@@ -31,3 +31,4 @@ data/db/*.sqlite3
 node_modules/
 npm-debug.log*
 public/build/game.bundle.js
+public/assets/atlases/seeds_atlas_gt.svg

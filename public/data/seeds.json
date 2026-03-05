@@ -6,9 +6,9 @@
       "GROWTIME": 60,
       "FRUIT_MIN": 3,
       "FRUIT_MAX": 5,
-      "SEED_ATLAS_ID": "seeds",
+      "SEED_ATLAS_ID": "seedsgt",
       "SEED_ATLAS_TEXTURE": {
-        "x": 0,
+        "x": 64,
         "y": 0,
         "w": 16,
         "h": 16
@@ -76,6 +76,12 @@
       "ATLAS_ID": "trees",
       "NAME": "TREES_ATLAS",
       "SRC": "/assets/atlases/trees_atlas.svg",
+      "TILE_SIZE": 16
+    },
+    {
+      "ATLAS_ID": "seedsgt",
+      "NAME": "SEEDS_ATLAS_gt",
+      "SRC": "/assets/atlases/seeds.png",
       "TILE_SIZE": 16
     }
   ]

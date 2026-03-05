@@ -290,6 +290,30 @@ def load_seeds_payload() -> dict[str, Any]:
     return output
 
 
+def get_seed_definition(seed_id: int) -> dict[str, Any] | None:
+    if seed_id < 0:
+        return None
+
+    payload = load_seeds_payload()
+    seeds = payload.get("seeds", []) if isinstance(payload, dict) else []
+    if not isinstance(seeds, list):
+        return None
+
+    for seed in seeds:
+        if not isinstance(seed, dict):
+            continue
+
+        try:
+            current_id = int(seed.get("SEED_ID", -1))
+        except Exception:
+            current_id = -1
+
+        if current_id == seed_id:
+            return seed
+
+    return None
+
+
 def is_breakable(tile_id: int) -> bool:
     if tile_id <= 0:
         return False
@@ -463,6 +487,46 @@ def ensure_world_seed_state(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return seed_drops
 
 
+def ensure_world_tree_state(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    planted_trees = world.setdefault("planted_trees", {})
+    if not isinstance(planted_trees, dict):
+        world["planted_trees"] = {}
+        planted_trees = world["planted_trees"]
+    return planted_trees
+
+
+def get_tree_key(x: int, y: int) -> str:
+    return f"{x}:{y}"
+
+
+def get_planted_tree_at(world: dict[str, Any], x: int, y: int) -> dict[str, Any] | None:
+    tree = ensure_world_tree_state(world).get(get_tree_key(x, y))
+    return tree if isinstance(tree, dict) else None
+
+
+def place_planted_tree(world: dict[str, Any], x: int, y: int, seed_id: int, planted_at_ms: int) -> dict[str, Any] | None:
+    if seed_id < 0:
+        return None
+
+    if get_seed_definition(seed_id) is None:
+        return None
+
+    tree = {
+        "id": secrets.token_hex(6),
+        "x": int(x),
+        "y": int(y),
+        "seed_id": int(seed_id),
+        "planted_at_ms": int(planted_at_ms),
+    }
+    ensure_world_tree_state(world)[get_tree_key(int(x), int(y))] = tree
+    return tree
+
+
+def remove_planted_tree_at(world: dict[str, Any], x: int, y: int) -> dict[str, Any] | None:
+    tree = ensure_world_tree_state(world).pop(get_tree_key(x, y), None)
+    return tree if isinstance(tree, dict) else None
+
+
 def serialize_gem_drops(world: dict[str, Any]) -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for drop in ensure_world_gem_state(world).values():
@@ -497,6 +561,28 @@ def serialize_seed_drops(world: dict[str, Any]) -> list[dict[str, Any]]:
                     "x": float(drop.get("x", 0.0)),
                     "y": float(drop.get("y", 0.0)),
                     "seedId": int(drop.get("seed_id", -1)),
+                }
+            )
+        except Exception:
+            continue
+
+    return payload
+
+
+def serialize_planted_trees(world: dict[str, Any]) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for tree in ensure_world_tree_state(world).values():
+        if not isinstance(tree, dict):
+            continue
+
+        try:
+            payload.append(
+                {
+                    "id": str(tree.get("id", "")),
+                    "x": int(tree.get("x", 0)),
+                    "y": int(tree.get("y", 0)),
+                    "seedId": int(tree.get("seed_id", -1)),
+                    "plantedAtMs": int(tree.get("planted_at_ms", 0)),
                 }
             )
         except Exception:
@@ -583,6 +669,48 @@ def parse_world_seed_drops(raw: Any, width: int, height: int) -> dict[str, dict[
             "y": y,
             "seed_id": seed_id,
             "created_at": time.monotonic(),
+        }
+
+    return parsed
+
+
+def parse_world_planted_trees(raw: Any, width: int, height: int) -> dict[str, dict[str, Any]]:
+    parsed: dict[str, dict[str, Any]] = {}
+    entries: list[Any]
+
+    if isinstance(raw, dict):
+        entries = list(raw.values())
+    elif isinstance(raw, list):
+        entries = raw
+    else:
+        return parsed
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+
+        try:
+            x = int(entry.get("x", -1))
+            y = int(entry.get("y", -1))
+            seed_id = int(entry.get("seedId", entry.get("seed_id", -1)))
+            planted_at_ms = int(entry.get("plantedAtMs", entry.get("planted_at_ms", 0)))
+        except Exception:
+            continue
+
+        if x < 0 or x >= width or y < 0 or y >= height or seed_id < 0:
+            continue
+
+        tree_id = str(entry.get("id") or secrets.token_hex(6)).strip()
+        if not tree_id:
+            tree_id = secrets.token_hex(6)
+
+        key = get_tree_key(x, y)
+        parsed[key] = {
+            "id": tree_id,
+            "x": x,
+            "y": y,
+            "seed_id": seed_id,
+            "planted_at_ms": max(0, planted_at_ms),
         }
 
     return parsed
@@ -928,6 +1056,7 @@ def create_world(name: str) -> dict[str, Any]:
         "tile_damage": {},
         "gem_drops": {},
         "seed_drops": {},
+        "planted_trees": {},
     }
 
     enforce_bedrock_under_door(world)
@@ -945,6 +1074,7 @@ def save_world(world: dict[str, Any]) -> None:
             "door": door,
             "gem_drops": serialize_gem_drops(world),
             "seed_drops": serialize_seed_drops(world),
+            "planted_trees": serialize_planted_trees(world),
         }
     )
 
@@ -1011,11 +1141,13 @@ def load_world(name: str) -> dict[str, Any]:
         background = [0 for _ in range(expected)]
         parsed_gem_drops: Any = []
         parsed_seed_drops: Any = []
+        parsed_planted_trees: Any = []
     else:
         raw_foreground = parsed_tiles.get("foreground", []) if isinstance(parsed_tiles, dict) else []
         raw_background = parsed_tiles.get("background", []) if isinstance(parsed_tiles, dict) else []
         parsed_gem_drops = parsed_tiles.get("gem_drops", []) if isinstance(parsed_tiles, dict) else []
         parsed_seed_drops = parsed_tiles.get("seed_drops", []) if isinstance(parsed_tiles, dict) else []
+        parsed_planted_trees = parsed_tiles.get("planted_trees", []) if isinstance(parsed_tiles, dict) else []
         if isinstance(parsed_tiles, dict):
             parsed_door = sanitize_door(parsed_tiles.get("door"), width, height)
 
@@ -1041,6 +1173,7 @@ def load_world(name: str) -> dict[str, Any]:
     resolved_door = db_door or parsed_door or default_door(width, height)
     gem_drops = parse_world_gem_drops(parsed_gem_drops, width, height)
     seed_drops = parse_world_seed_drops(parsed_seed_drops, width, height)
+    planted_trees = parse_world_planted_trees(parsed_planted_trees, width, height)
 
     return {
         "name": name,
@@ -1054,6 +1187,7 @@ def load_world(name: str) -> dict[str, Any]:
         "tile_damage": {},
         "gem_drops": gem_drops,
         "seed_drops": seed_drops,
+        "planted_trees": planted_trees,
     }
 
 
@@ -1408,6 +1542,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     websocket,
                     {
                         "type": "world_snapshot",
+                        "serverTimeMs": int(time.time() * 1000),
                         "world": {
                             "name": world["name"],
                             "width": world["width"],
@@ -1428,6 +1563,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "tileDamage": serialize_tile_damage(world),
                             "gemDrops": serialize_gem_drops(world),
                             "seedDrops": serialize_seed_drops(world),
+                            "plantedTrees": serialize_planted_trees(world),
                         },
                         "selfId": client_id,
                         "gems": int(world["players"][client_id].get("gems", 0)),
@@ -1568,6 +1704,20 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 updated = False
                 target_layer = "foreground"
                 if action == "break":
+                    removed_tree = remove_planted_tree_at(world, x, y)
+                    if removed_tree is not None:
+                        await schedule_world_save(world["name"])
+                        await broadcast_to_world(
+                            world,
+                            {
+                                "type": "tree_removed",
+                                "id": str(removed_tree.get("id", "")),
+                                "x": int(removed_tree.get("x", x)),
+                                "y": int(removed_tree.get("y", y)),
+                            },
+                        )
+                        continue
+
                     target_tile = 0
                     if world["foreground"][index] != 0:
                         target_layer = "foreground"
@@ -1647,6 +1797,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     if tile <= 0:
                         continue
 
+                    if get_planted_tree_at(world, x, y) is not None:
+                        continue
+
                     if tile not in BLOCKS_BY_ID:
                         continue
 
@@ -1722,6 +1875,72 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "background": world["background"][changed_index],
                         },
                     )
+                continue
+
+            if msg_type == "plant_seed":
+                try:
+                    x = int(msg.get("x"))
+                    y = int(msg.get("y"))
+                    seed_id = int(msg.get("seedId", msg.get("seed_id", -1)))
+                except Exception:
+                    continue
+
+                if x < 0 or x >= world["width"] or y < 0 or y >= world["height"]:
+                    continue
+
+                if seed_id < 0:
+                    continue
+
+                if get_seed_definition(seed_id) is None:
+                    continue
+
+                index = y * world["width"] + x
+                # Planting must happen in an empty foreground tile (background is allowed).
+                target_foreground = int(world["foreground"][index])
+                if target_foreground != 0:
+                    continue
+
+                # Planting requires a supporting solid foreground block directly below.
+                below_y = y + 1
+                if below_y >= world["height"]:
+                    continue
+
+                below_index = below_y * world["width"] + x
+                support_tile = int(world["foreground"][below_index])
+                if support_tile <= 0:
+                    continue
+
+                # Do not allow planting on/with door tiles as support.
+                door_block_id = int(RUNTIME_BLOCK_IDS.get("door", int(RUNTIME_BLOCK_IDS.get("air", 0))))
+                if support_tile == door_block_id:
+                    continue
+
+                # Background-type blocks are not valid support for planted trees.
+                if support_tile in BACKGROUND_BLOCK_IDS:
+                    continue
+
+                if get_planted_tree_at(world, x, y) is not None:
+                    continue
+
+                planted_tree = place_planted_tree(world, x, y, seed_id, int(time.time() * 1000))
+                if planted_tree is None:
+                    continue
+
+                await schedule_world_save(world["name"])
+                await broadcast_to_world(
+                    world,
+                    {
+                        "type": "tree_planted",
+                        "tree": {
+                            "id": str(planted_tree.get("id", "")),
+                            "x": int(planted_tree.get("x", x)),
+                            "y": int(planted_tree.get("y", y)),
+                            "seedId": int(planted_tree.get("seed_id", seed_id)),
+                            "plantedAtMs": int(planted_tree.get("planted_at_ms", 0)),
+                        },
+                        "serverTimeMs": int(time.time() * 1000),
+                    },
+                )
                 continue
 
             if msg_type == "chat_message":

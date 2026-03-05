@@ -82,6 +82,7 @@ const leaveWorldBtn = document.getElementById("leaveWorldBtn");
 const gameStatus = document.getElementById("gameStatus");
 const gemCount = document.getElementById("gemCount");
 const blockSelect = document.getElementById("blockSelect");
+const seedSelectHud = document.getElementById("seedSelectHud");
 const blockTypeInfo = document.getElementById("blockTypeInfo");
 const zoomOutBtn = document.getElementById("zoomOutBtn");
 const zoomInBtn = document.getElementById("zoomInBtn");
@@ -134,6 +135,7 @@ const state = {
   gems: 0,
   gemDrops: new Map(),
   seedDrops: new Map(),
+  plantedTrees: new Map(),
   players: new Map(),
   me: { x: 8, y: 8 },
   camera: { x: 0, y: 0, zoom: 1 },
@@ -144,8 +146,10 @@ const state = {
   seedDefs: new Map(),
   atlases: new Map(),
   seedDropSpriteCache: new Map(),
+  treeSpriteCache: new Map(),
   texture47: new Map(),
   selectedBlockId: 1,
+  selectedSeedId: -1,
   velocity: { x: 0, y: 0 },
   collider: { width: 0.72, height: 0.92 },
   onGround: false,
@@ -190,6 +194,9 @@ const state = {
   debugLastInfoAt: 0,
   pingTimerId: null,
   transientSystemBubbles: [],
+  serverTimeOffsetMs: 0,
+  treeHintAnchor: null,
+  treeHintTreeId: "",
 };
 
 const hud = createHudController({
@@ -278,6 +285,9 @@ const chatBubbles = createChatBubblesController({
     LEAVE_TEXT_FADE_MS,
   },
 });
+
+const TREE_HINT_FADE_OUT_MS = 280;
+const TREE_HINT_HOLD_MS = LEAVE_TEXT_FADE_MS + 180;
 
 function clampCameraZoom(value) {
   return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
@@ -369,6 +379,7 @@ const inputController = createInputController({
     sendWs,
     pauseMenu,
     getChatInputValue: () => chatInput?.value || "",
+    getSelectedSeedId: () => state.selectedSeedId,
   },
 });
 
@@ -704,6 +715,70 @@ function removeSeedDropById(dropId) {
     return;
   }
   state.seedDrops.delete(normalizedId);
+}
+
+function normalizePlantedTree(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const id = String(entry.id || "").trim();
+  const x = Number(entry.x);
+  const y = Number(entry.y);
+  const seedId = Number(entry.seedId ?? entry.seed_id);
+  const plantedAtMs = Number(entry.plantedAtMs ?? entry.planted_at_ms ?? 0);
+  if (!id || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(seedId) || seedId < 0) {
+    return null;
+  }
+
+  return {
+    id,
+    x: Math.floor(x),
+    y: Math.floor(y),
+    seedId: Math.floor(seedId),
+    plantedAtMs: Math.max(0, Math.floor(plantedAtMs)),
+  };
+}
+
+function getTreeMapKey(x, y) {
+  return `${Math.floor(Number(x) || 0)}:${Math.floor(Number(y) || 0)}`;
+}
+
+function applyPlantedTreeSnapshot(trees) {
+  state.plantedTrees.clear();
+  for (const entry of trees || []) {
+    const normalized = normalizePlantedTree(entry);
+    if (!normalized) {
+      continue;
+    }
+    state.plantedTrees.set(getTreeMapKey(normalized.x, normalized.y), normalized);
+  }
+}
+
+function upsertPlantedTree(entry) {
+  const normalized = normalizePlantedTree(entry);
+  if (!normalized) {
+    return;
+  }
+  state.plantedTrees.set(getTreeMapKey(normalized.x, normalized.y), normalized);
+}
+
+function removePlantedTree(entry) {
+  if (!entry || typeof entry !== "object") {
+    return;
+  }
+
+  const x = Number(entry.x);
+  const y = Number(entry.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return;
+  }
+
+  state.plantedTrees.delete(getTreeMapKey(x, y));
+}
+
+function getServerNowMs() {
+  return Date.now() + (Number(state.serverTimeOffsetMs) || 0);
 }
 
 function updateRemotePlayersInterpolation(deltaSeconds) {
@@ -1092,6 +1167,7 @@ async function loadBlockDefinitions(onAssetProgress = null) {
   state.seedDefs.clear();
   state.atlases.clear();
   state.seedDropSpriteCache.clear();
+  state.treeSpriteCache.clear();
   state.texture47.clear();
   state.crackAtlas = null;
 
@@ -1150,6 +1226,26 @@ async function loadBlockDefinitions(onAssetProgress = null) {
       continue;
     }
     state.seedDefs.set(Math.floor(seedId), seed);
+  }
+
+  if (seedSelectHud) {
+    seedSelectHud.innerHTML = "";
+    const sortedSeeds = Array.from(state.seedDefs.values()).sort((a, b) => Number(a.SEED_ID || 0) - Number(b.SEED_ID || 0));
+    for (const seed of sortedSeeds) {
+      const option = document.createElement("option");
+      const seedId = Math.floor(Number(seed.SEED_ID) || 0);
+      option.value = String(seedId);
+      option.textContent = `${seedId} - ${String(seed.NAME || `SEED_${seedId}`)}`;
+      seedSelectHud.appendChild(option);
+    }
+
+    if (sortedSeeds.length > 0) {
+      const firstSeedId = Math.floor(Number(sortedSeeds[0].SEED_ID) || 0);
+      state.selectedSeedId = firstSeedId;
+      seedSelectHud.value = String(firstSeedId);
+    } else {
+      state.selectedSeedId = -1;
+    }
   }
 
   try {
@@ -1351,6 +1447,219 @@ function getSeedDropSprite(seedId) {
   const sprite = buildTintedSeedSprite(image, texture, seed.SEED_TINT);
   state.seedDropSpriteCache.set(cacheKey, sprite);
   return sprite;
+}
+
+function getSeedTreeStage(seed, serverNowMs, plantedAtMs) {
+  if (!seed || typeof seed !== "object") {
+    return null;
+  }
+
+  const stages = Array.isArray(seed.TREE?.STAGES)
+    ? seed.TREE.STAGES.filter((stage) => stage && typeof stage === "object").slice()
+    : [];
+  if (stages.length === 0) {
+    return null;
+  }
+
+  stages.sort((a, b) => Number(a?.GROWTH_PERCENT ?? 0) - Number(b?.GROWTH_PERCENT ?? 0));
+
+  const growSeconds = Math.max(1, Number(seed.GROWTIME) || 1);
+  const elapsedMs = Math.max(0, Number(serverNowMs) - Number(plantedAtMs || 0));
+  const progressPct = Math.max(0, Math.min(100, (elapsedMs / (growSeconds * 1000)) * 100));
+
+  let active = stages[0];
+  for (const stage of stages) {
+    const threshold = Number(stage?.GROWTH_PERCENT ?? stage?.growth_percent ?? 0);
+    if (progressPct >= threshold) {
+      active = stage;
+    }
+  }
+
+  return active;
+}
+
+function formatGrowthTimeRemaining(msRemaining) {
+  const totalSeconds = Math.max(0, Math.ceil(msRemaining / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getNearbyTreeForHint() {
+  if (!state.world || !state.selfId || state.plantedTrees.size === 0) {
+    return null;
+  }
+
+  const me = state.players.get(state.selfId);
+  if (!me) {
+    return null;
+  }
+
+  const playerCenterX = Number(me.x) + 0.36;
+  const playerCenterY = Number(me.y) + 0.46;
+  if (!Number.isFinite(playerCenterX) || !Number.isFinite(playerCenterY)) {
+    return null;
+  }
+
+  let nearest = null;
+  let nearestDistSq = Infinity;
+  for (const tree of state.plantedTrees.values()) {
+    const dx = (Number(tree.x) + 0.5) - playerCenterX;
+    const dy = (Number(tree.y) + 0.5) - playerCenterY;
+    const distSq = dx * dx + dy * dy;
+    if (distSq > 2.25) {
+      continue;
+    }
+
+    if (distSq < nearestDistSq) {
+      nearest = tree;
+      nearestDistSq = distSq;
+    }
+  }
+
+  return nearest;
+}
+
+function maybeShowTreeGrowthHint(nowMs) {
+  const tree = getNearbyTreeForHint();
+  if (!tree) {
+    if (state.treeHintAnchor && Array.isArray(state.treeHintAnchor.bubbles) && state.treeHintAnchor.bubbles.length > 0) {
+      const bubble = state.treeHintAnchor.bubbles[0];
+      bubble.until = Math.min(Number(bubble.until) || nowMs, nowMs + TREE_HINT_FADE_OUT_MS);
+    }
+    state.treeHintAnchor = null;
+    state.treeHintTreeId = "";
+    return;
+  }
+
+  const seed = state.seedDefs.get(tree.seedId);
+  if (!seed) {
+    return;
+  }
+
+  const growSeconds = Math.max(1, Number(seed.GROWTIME) || 1);
+  const totalMs = growSeconds * 1000;
+  const elapsedMs = Math.max(0, getServerNowMs() - Number(tree.plantedAtMs || 0));
+  const remainingMs = Math.max(0, totalMs - elapsedMs);
+  const activeStage = getSeedTreeStage(seed, getServerNowMs(), tree.plantedAtMs);
+  const stageNumber = Math.max(1, Number(activeStage?.STAGE ?? 1) || 1);
+
+  const label = remainingMs <= 0
+    ? `Stage ${stageNumber} | Tree ready`
+    : `Stage ${stageNumber} | ${formatGrowthTimeRemaining(remainingMs)}`;
+
+  const anchorX = Number(tree.x) + 0.5;
+  const anchorY = Number(tree.y) - 0.1;
+  const holdMs = TREE_HINT_HOLD_MS;
+  const nextTreeId = String(tree.id || "");
+
+  let anchor = state.treeHintAnchor;
+
+  if (anchor && state.treeHintTreeId && state.treeHintTreeId !== nextTreeId) {
+    if (Array.isArray(anchor.bubbles) && anchor.bubbles.length > 0) {
+      const oldBubble = anchor.bubbles[0];
+      oldBubble.until = Math.min(Number(oldBubble.until) || nowMs, nowMs + TREE_HINT_FADE_OUT_MS);
+    }
+    anchor = null;
+    state.treeHintAnchor = null;
+  }
+
+  if (!anchor || !Array.isArray(anchor.bubbles)) {
+    anchor = {
+      x: anchorX,
+      y: anchorY,
+      bubbles: [
+        {
+          text: label,
+          startedAt: nowMs,
+          until: nowMs + holdMs,
+          fadeWindowMs: TREE_HINT_FADE_OUT_MS,
+        },
+      ],
+    };
+    state.treeHintAnchor = anchor;
+    state.treeHintTreeId = nextTreeId;
+    state.transientSystemBubbles.push(anchor);
+    return;
+  }
+
+  anchor.x = anchorX;
+  anchor.y = anchorY;
+
+  if (!anchor.bubbles[0]) {
+    anchor.bubbles[0] = {
+      text: label,
+      startedAt: nowMs,
+      until: nowMs + holdMs,
+    };
+    return;
+  }
+
+  anchor.bubbles[0].text = label;
+  anchor.bubbles[0].until = nowMs + holdMs;
+  anchor.bubbles[0].fadeWindowMs = TREE_HINT_FADE_OUT_MS;
+  state.treeHintTreeId = nextTreeId;
+}
+
+function getTreeSprite(seed, stage) {
+  const atlasId = stage?.ATLAS_ID;
+  const texture = stage?.ATLAS_TEXTURE;
+  const atlas = state.atlases.get(atlasId);
+  const image = atlas?.image;
+  if (!image || !texture || typeof texture !== "object") {
+    return null;
+  }
+
+  const tint = String(seed?.TREE?.TINT || "");
+  const cacheKey = JSON.stringify({ atlasId, texture, tint });
+  const cached = state.treeSpriteCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const sprite = buildTintedSeedSprite(image, texture, tint);
+  state.treeSpriteCache.set(cacheKey, sprite);
+  return sprite;
+}
+
+function drawPlantedTrees() {
+  if (!state.world || state.plantedTrees.size === 0) {
+    return;
+  }
+
+  const serverNowMs = getServerNowMs();
+  for (const tree of state.plantedTrees.values()) {
+    const seed = state.seedDefs.get(tree.seedId);
+    if (!seed) {
+      continue;
+    }
+
+    const stage = getSeedTreeStage(seed, serverNowMs, tree.plantedAtMs);
+    if (!stage) {
+      continue;
+    }
+
+    const sprite = getTreeSprite(seed, stage);
+    if (!sprite) {
+      continue;
+    }
+
+    const screenX = (tree.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
+    const screenY = (tree.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const drawWidth = TILE_SIZE * state.camera.zoom;
+    const drawHeight = TILE_SIZE * state.camera.zoom;
+
+    if (
+      screenX + drawWidth < -8 ||
+      screenY + drawHeight < -8 ||
+      screenX > canvas.width + 8 ||
+      screenY > canvas.height + 8
+    ) {
+      continue;
+    }
+
+    ctx.drawImage(sprite, screenX, screenY, drawWidth, drawHeight);
+  }
 }
 
 function beginLoadingForUser(username) {
@@ -1575,6 +1884,7 @@ function connectSocket() {
 
     if (msg.type === "world_snapshot") {
       state.world = msg.world;
+      state.serverTimeOffsetMs = Number(msg.serverTimeMs || Date.now()) - Date.now();
       if (!Array.isArray(state.world.foreground)) {
         state.world.foreground = Array.isArray(state.world.tiles) ? state.world.tiles : [];
       }
@@ -1587,6 +1897,7 @@ function connectSocket() {
       state.players.clear();
       applyGemDropSnapshot(msg.world.gemDrops || []);
       applySeedDropSnapshot(msg.world.seedDrops || []);
+      applyPlantedTreeSnapshot(msg.world.plantedTrees || []);
       state.tileDamage.clear();
       for (const damageState of msg.world.tileDamage || []) {
         setTileDamage(damageState);
@@ -1781,6 +2092,17 @@ function connectSocket() {
       removeSeedDropById(msg.id);
       return;
     }
+
+    if (msg.type === "tree_planted") {
+      state.serverTimeOffsetMs = Number(msg.serverTimeMs || Date.now()) - Date.now();
+      upsertPlantedTree(msg.tree);
+      return;
+    }
+
+    if (msg.type === "tree_removed") {
+      removePlantedTree(msg);
+      return;
+    }
   });
 
   return new Promise((resolve, reject) => {
@@ -1897,6 +2219,9 @@ function leaveWorld() {
   updateGemUi();
   state.gemDrops.clear();
   state.seedDrops.clear();
+  state.plantedTrees.clear();
+  state.treeHintAnchor = null;
+  state.treeHintTreeId = "";
   state.tileDamage.clear();
   state.players.clear();
   state.velocity.x = 0;
@@ -1946,6 +2271,11 @@ blockSelect.addEventListener("change", () => {
     const block = state.blockDefs.get(nextBlockId);
     blockTypeInfo.textContent = block?.BLOCK_TYPE || "UNKNOWN";
   }
+});
+
+seedSelectHud?.addEventListener("change", () => {
+  const nextSeedId = Number(seedSelectHud.value);
+  state.selectedSeedId = Number.isFinite(nextSeedId) ? Math.floor(nextSeedId) : -1;
 });
 
 passwordInput.addEventListener("keydown", (event) => {
@@ -2038,6 +2368,7 @@ function update() {
   }
 
   updateRemotePlayersInterpolation(deltaSeconds);
+  maybeShowTreeGrowthHint(now);
 
   if (now - state.lastMoveSentAt > 33) {
     sendWs({ type: "player_move", x: state.me.x, y: state.me.y });
@@ -2430,6 +2761,7 @@ function loop() {
     } else {
       drawWorld();
       drawDebugGrid();
+      drawPlantedTrees();
       drawGemDrops();
       drawSeedDrops();
       drawDamageOverlays();

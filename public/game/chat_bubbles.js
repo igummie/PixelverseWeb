@@ -128,8 +128,9 @@ export function createChatBubblesController({ state, ctx, canvas, settings }) {
       }
 
       const textHeight = lines.length * fontSize + Math.max(0, lines.length - 1) * lineGap;
+      const entryFadeWindowMs = Math.max(60, Number(entry.fadeWindowMs) || fadeWindowMs);
       const remainingMs = Math.max(0, entry.until - now);
-      const bubbleAlpha = Math.max(0, Math.min(1, remainingMs / fadeWindowMs));
+      const bubbleAlpha = Math.max(0, Math.min(1, remainingMs / entryFadeWindowMs));
       prepared.push({ lines, textHeight, measuredMaxWidth, bubbleAlpha });
     }
 
