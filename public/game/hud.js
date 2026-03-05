@@ -5,6 +5,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     debugOverlay,
     debugInfo,
     debugGridToggle,
+    debugHitboxesToggle,
     gameTopbar,
     chatDrawer,
     chatInputPanel,
@@ -40,6 +41,9 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     if (debugGridToggle) {
       debugGridToggle.checked = !!state.debugGridEnabled;
     }
+    if (debugHitboxesToggle) {
+      debugHitboxesToggle.checked = !!state.debugHitboxesEnabled;
+    }
   }
 
   function updateDebugInfo(force = false) {
@@ -74,7 +78,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
       `vel: ${state.velocity.x.toFixed(3)}, ${state.velocity.y.toFixed(3)}  onGround: ${state.onGround}`,
       `camera: ${state.camera.x.toFixed(2)}, ${state.camera.y.toFixed(2)}  zoom: ${state.camera.zoom.toFixed(2)}x`,
       `mouse(tile): ${hoverTileText}`,
-      `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}`,
+      `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}  hitboxes: ${state.debugHitboxesEnabled ? "on" : "off"}`,
       `net sim: ${Math.round(state.netSimPingMs || 0)}ms +/-${Math.round(state.netSimJitterMs || 0)}ms  loss ${Math.round(state.netSimLossPercent || 0)}%`,
       `drops: ${state.gemDrops.size}  damageTiles: ${state.tileDamage.size}`,
     ].join("\n");

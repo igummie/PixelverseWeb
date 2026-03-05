@@ -103,6 +103,7 @@ const chatInput = document.getElementById("chatInput");
 const debugOverlay = document.getElementById("debugOverlay");
 const debugInfo = document.getElementById("debugInfo");
 const debugGridToggle = document.getElementById("debugGridToggle");
+const debugHitboxesToggle = document.getElementById("debugHitboxesToggle");
 const debugPingToolsToggle = document.getElementById("debugPingToolsToggle");
 const debugNetSimPanel = document.getElementById("debugNetSimPanel");
 const debugSimPingInput = document.getElementById("debugSimPingInput");
@@ -172,6 +173,7 @@ const state = {
   noclipEnabled: false,
   debugEnabled: false,
   debugGridEnabled: false,
+  debugHitboxesEnabled: false,
   debugFps: 0,
   debugPingMs: null,
   netSimPingMs: 0,
@@ -196,6 +198,7 @@ const hud = createHudController({
     debugOverlay,
     debugInfo,
     debugGridToggle,
+    debugHitboxesToggle,
     gameTopbar,
     chatDrawer,
     chatInputPanel,
@@ -231,6 +234,7 @@ const chatDebug = createChatDebugController({
     loadingChatDrawer,
     chatInput,
     debugGridToggle,
+    debugHitboxesToggle,
     debugPingToolsToggle,
     debugNetSimPanel,
     debugSimPingInput,
@@ -2105,6 +2109,67 @@ function drawPlayers() {
   }
 }
 
+function drawDebugHitboxes() {
+  if (!state.world || !state.debugEnabled || !state.debugHitboxesEnabled) {
+    return;
+  }
+
+  const zoom = Math.max(0.0001, state.camera.zoom);
+  const cameraX = state.camera.x;
+  const cameraY = state.camera.y;
+
+  const toScreen = (worldX, worldY) => ({
+    x: (worldX * TILE_SIZE - cameraX) * zoom,
+    y: (worldY * TILE_SIZE - cameraY) * zoom,
+  });
+
+  const viewLeft = Math.max(0, Math.floor(cameraX / TILE_SIZE));
+  const viewTop = Math.max(0, Math.floor(cameraY / TILE_SIZE));
+  const viewRight = Math.min(state.world.width - 1, Math.ceil((cameraX + canvas.width / zoom) / TILE_SIZE));
+  const viewBottom = Math.min(state.world.height - 1, Math.ceil((cameraY + canvas.height / zoom) / TILE_SIZE));
+
+  ctx.save();
+  ctx.lineWidth = Math.max(1, Math.round(zoom));
+
+  // Foreground tile collision bounds in view.
+  ctx.strokeStyle = "rgba(248, 113, 113, 0.5)";
+  for (let tileY = viewTop; tileY <= viewBottom; tileY += 1) {
+    for (let tileX = viewLeft; tileX <= viewRight; tileX += 1) {
+      const tileId = getTileIdAtLayer(tileX, tileY, "foreground");
+      if (tileId <= 0) {
+        continue;
+      }
+
+      const pos = toScreen(tileX, tileY);
+      const size = TILE_SIZE * zoom;
+      ctx.strokeRect(pos.x, pos.y, size, size);
+    }
+  }
+
+  // Player bounds (self uses collider; others use 1x1 tile actor box).
+  for (const [, player] of state.players) {
+    const playerX = Number.isFinite(player.renderX) ? player.renderX : player.x;
+    const playerY = Number.isFinite(player.renderY) ? player.renderY : player.y;
+    const isSelf = player.id === state.selfId;
+    const boxW = isSelf ? state.collider.width : 1;
+    const boxH = isSelf ? state.collider.height : 1;
+    const pos = toScreen(playerX, playerY);
+    ctx.strokeStyle = isSelf ? "rgba(34, 197, 94, 0.95)" : "rgba(96, 165, 250, 0.9)";
+    ctx.strokeRect(pos.x, pos.y, boxW * TILE_SIZE * zoom, boxH * TILE_SIZE * zoom);
+  }
+
+  // Gem pickup boxes centered on drop point.
+  ctx.strokeStyle = "rgba(250, 204, 21, 0.95)";
+  for (const drop of state.gemDrops.values()) {
+    const half = 0.16;
+    const pos = toScreen(drop.x - half, drop.y - half);
+    const size = half * 2 * TILE_SIZE * zoom;
+    ctx.strokeRect(pos.x, pos.y, size, size);
+  }
+
+  ctx.restore();
+}
+
 function drawTransientWorldTexts() {
   if (state.transientWorldTexts.length === 0) {
     return;
@@ -2184,6 +2249,7 @@ function loop() {
       drawGemDrops();
       drawDamageOverlays();
       drawPlayers();
+      drawDebugHitboxes();
       drawTransientWorldTexts();
     }
   }

@@ -13,6 +13,7 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     loadingChatDrawer,
     chatInput,
     debugGridToggle,
+    debugHitboxesToggle,
     debugPingToolsToggle,
     debugNetSimPanel,
     debugSimPingInput,
@@ -221,6 +222,11 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
 
     debugGridToggle?.addEventListener("change", () => {
       state.debugGridEnabled = !!debugGridToggle.checked;
+      updateDebugInfo(true);
+    });
+
+    debugHitboxesToggle?.addEventListener("change", () => {
+      state.debugHitboxesEnabled = !!debugHitboxesToggle.checked;
       updateDebugInfo(true);
     });
 
