@@ -12,6 +12,7 @@ SESSION_JS = PUBLIC / "game" / "session.js"
 GEMS_JS = PUBLIC / "game" / "gems.js"
 HUD_JS = PUBLIC / "game" / "hud.js"
 CHAT_DEBUG_JS = PUBLIC / "game" / "chat_debug.js"
+PAUSE_MENU_JS = PUBLIC / "game" / "pause_menu.js"
 OUT_JS = PUBLIC / "build" / "game.bundle.js"
 
 
@@ -45,6 +46,11 @@ def strip_imports(source: str) -> str:
         "",
         source,
     )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/pause_menu\.js\";\s*",
+        "",
+        source,
+    )
     return source
 
 
@@ -54,6 +60,7 @@ def main() -> None:
     gems = strip_exports(GEMS_JS.read_text(encoding="utf-8")).strip()
     hud = strip_exports(HUD_JS.read_text(encoding="utf-8")).strip()
     chat_debug = strip_exports(CHAT_DEBUG_JS.read_text(encoding="utf-8")).strip()
+    pause_menu = strip_exports(PAUSE_MENU_JS.read_text(encoding="utf-8")).strip()
     game = strip_imports(GAME_JS.read_text(encoding="utf-8")).strip()
 
     output = "\n\n".join(
@@ -64,6 +71,7 @@ def main() -> None:
             gems,
             hud,
             chat_debug,
+            pause_menu,
             game,
             "",
         ]

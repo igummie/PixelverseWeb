@@ -18,6 +18,7 @@ import jwt
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from modules.chat_commands import process_chat_command
+from modules.command_runtime import apply_command_result
 from modules.worldgen import generate_world_layers
 from pydantic import BaseModel, Field
 
@@ -1611,170 +1612,20 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 )
 
                 if command_result is not None:
-                    sender_message = str(command_result.get("sender_message", "")).strip()
-                    if sender_message:
-                        await ws_send(
-                            websocket,
-                            {
-                                "type": "system_message",
-                                "message": sender_message,
-                            },
-                        )
-
-                    state_update = command_result.get("state_update")
-                    if isinstance(state_update, dict):
-                        await ws_send(
-                            websocket,
-                            {
-                                "type": "command_state",
-                                "flyEnabled": bool(state_update.get("flyEnabled", False)),
-                                "noclipEnabled": bool(state_update.get("noclipEnabled", False)),
-                            },
-                        )
-
-                    direct_messages = command_result.get("direct_messages") or []
-                    for direct_message in direct_messages:
-                        if not isinstance(direct_message, dict):
-                            continue
-
-                        target_id = str(direct_message.get("target_id", ""))
-                        message = str(direct_message.get("message", "")).strip()
-                        if not target_id or not message:
-                            continue
-
-                        target_player = world["players"].get(target_id)
-                        if not target_player:
-                            continue
-
-                        target_socket = target_player.get("ws")
-                        if target_socket is None:
-                            continue
-
-                        await ws_send(
-                            target_socket,
-                            {
-                                "type": "system_message",
-                                "message": message,
-                            },
-                        )
-
-                    teleports = command_result.get("teleports") or []
-                    for teleport in teleports:
-                        if not isinstance(teleport, dict):
-                            continue
-
-                        teleport_player_id = str(teleport.get("id", ""))
-                        teleport_player = world["players"].get(teleport_player_id)
-                        if not teleport_player:
-                            continue
-
-                        try:
-                            teleport_x = float(teleport.get("x", teleport_player.get("x", 0)))
-                            teleport_y = float(teleport.get("y", teleport_player.get("y", 0)))
-                        except Exception:
-                            continue
-
-                        teleport_player["x"] = teleport_x
-                        teleport_player["y"] = teleport_y
-
-                        await broadcast_to_world(
-                            world,
-                            {
-                                "type": "player_moved",
-                                "id": teleport_player_id,
-                                "x": teleport_x,
-                                "y": teleport_y,
-                                "teleport": True,
-                            },
-                        )
-
-                    door_move = command_result.get("door_move")
-                    if isinstance(door_move, dict):
-                        width = int(world["width"])
-                        height = int(world["height"])
-                        try:
-                            next_door_x = int(door_move.get("x", 0))
-                            next_door_y = int(door_move.get("y", 0))
-                        except Exception:
-                            next_door_x = 0
-                            next_door_y = 0
-
-                        next_door_x = max(0, min(width - 1, next_door_x))
-                        next_door_y = max(0, min(height - 1, next_door_y))
-
-                        previous_door = sanitize_door(world.get("door"), width, height)
-                        world["door"] = {"x": next_door_x, "y": next_door_y}
-                        current_door = sanitize_door(world.get("door"), width, height)
-
-                        changed_tiles: set[tuple[int, int]] = set()
-                        for door_pos in (previous_door, current_door):
-                            changed_tiles.add((door_pos["x"], door_pos["y"]))
-                            floor_y = door_pos["y"] + 1
-                            if 0 <= floor_y < height:
-                                changed_tiles.add((door_pos["x"], floor_y))
-
-                        enforce_bedrock_under_door(world, previous_door=previous_door)
-
-                        for changed_x, changed_y in sorted(changed_tiles):
-                            for cleared in clear_tile_damage(world, changed_x, changed_y, None):
-                                await broadcast_to_world(
-                                    world,
-                                    {
-                                        "type": "tile_damage_clear",
-                                        "x": int(cleared["x"]),
-                                        "y": int(cleared["y"]),
-                                        "layer": str(cleared["layer"]),
-                                    },
-                                )
-
-                        await schedule_world_save(world["name"])
-
-                        for changed_x, changed_y in sorted(changed_tiles):
-                            changed_index = changed_y * width + changed_x
-                            await broadcast_to_world(
-                                world,
-                                {
-                                    "type": "tile_updated",
-                                    "x": changed_x,
-                                    "y": changed_y,
-                                    "tile": world["foreground"][changed_index],
-                                    "foreground": world["foreground"][changed_index],
-                                    "background": world["background"][changed_index],
-                                },
-                            )
-
-                        spawn_x, spawn_y = get_spawn_from_door(world)
-                        for target_player_id, target_player in world["players"].items():
-                            if target_player_id == client_id:
-                                continue
-
-                            target_player["x"] = spawn_x
-                            target_player["y"] = spawn_y
-                            await broadcast_to_world(
-                                world,
-                                {
-                                    "type": "player_moved",
-                                    "id": target_player_id,
-                                    "x": spawn_x,
-                                    "y": spawn_y,
-                                    "teleport": True,
-                                },
-                            )
-
-                        caller_player = world["players"].get(client_id)
-                        if caller_player is not None and command_sender_original is not None:
-                            caller_player["x"] = command_sender_original[0]
-                            caller_player["y"] = command_sender_original[1]
-                            await broadcast_to_world(
-                                world,
-                                {
-                                    "type": "player_moved",
-                                    "id": client_id,
-                                    "x": command_sender_original[0],
-                                    "y": command_sender_original[1],
-                                    "teleport": True,
-                                },
-                            )
+                    await apply_command_result(
+                        command_result=command_result,
+                        websocket=websocket,
+                        world=world,
+                        client_id=client_id,
+                        command_sender_original=command_sender_original,
+                        ws_send=ws_send,
+                        broadcast_to_world=broadcast_to_world,
+                        clear_tile_damage=clear_tile_damage,
+                        schedule_world_save=schedule_world_save,
+                        sanitize_door=sanitize_door,
+                        enforce_bedrock_under_door=enforce_bedrock_under_door,
+                        get_spawn_from_door=get_spawn_from_door,
+                    )
 
                     continue
 
