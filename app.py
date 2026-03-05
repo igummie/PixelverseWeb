@@ -705,7 +705,7 @@ def enforce_bedrock_under_door(world: dict[str, Any], previous_door: dict[str, i
                         changed = True
 
                     if int(foreground[old_index]) == BEDROCK_BLOCK_ID:
-                        foreground[old_index] = DIRT_BLOCK_ID
+                        foreground[old_index] = AIR_BLOCK_ID
                         changed = True
 
     floor_y = door["y"] + 1
@@ -1422,6 +1422,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 index = y * world["width"] + x
                 action = str(msg.get("action", "place")).lower()
+                changed_tiles: set[tuple[int, int]] = set()
 
                 updated = False
                 target_layer = "foreground"
@@ -1496,39 +1497,72 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             world["background"][index] = tile
                             target_layer = "background"
                             updated = True
+                            changed_tiles.add((x, y))
                     else:
                         if world["foreground"][index] == 0:
-                            world["foreground"][index] = tile
+                            if tile == DOOR_BLOCK_ID:
+                                previous_door = sanitize_door(world.get("door"), world["width"], world["height"])
+
+                                candidate_positions: set[tuple[int, int]] = {
+                                    (x, y),
+                                    (x, y + 1),
+                                    (int(previous_door["x"]), int(previous_door["y"])),
+                                    (int(previous_door["x"]), int(previous_door["y"]) + 1),
+                                }
+
+                                before_foreground: dict[tuple[int, int], int] = {}
+                                for cx, cy in candidate_positions:
+                                    if 0 <= cx < world["width"] and 0 <= cy < world["height"]:
+                                        before_foreground[(cx, cy)] = int(world["foreground"][cy * world["width"] + cx])
+
+                                world["door"] = sanitize_door({"x": x, "y": y}, world["width"], world["height"])
+                                enforce_bedrock_under_door(world, previous_door=previous_door)
+
+                                for (cx, cy), old_value in before_foreground.items():
+                                    new_value = int(world["foreground"][cy * world["width"] + cx])
+                                    if new_value != old_value:
+                                        changed_tiles.add((cx, cy))
+
+                                updated = len(changed_tiles) > 0
+                            else:
+                                world["foreground"][index] = tile
+                                changed_tiles.add((x, y))
+                                updated = True
                             target_layer = "foreground"
-                            updated = True
 
                 if not updated:
                     continue
 
-                for cleared in clear_tile_damage(world, x, y, None):
-                    await broadcast_to_world(
-                        world,
-                        {
-                            "type": "tile_damage_clear",
-                            "x": int(cleared["x"]),
-                            "y": int(cleared["y"]),
-                            "layer": str(cleared["layer"]),
-                        },
-                    )
+                if not changed_tiles:
+                    changed_tiles.add((x, y))
+
+                for changed_x, changed_y in sorted(changed_tiles):
+                    for cleared in clear_tile_damage(world, changed_x, changed_y, None):
+                        await broadcast_to_world(
+                            world,
+                            {
+                                "type": "tile_damage_clear",
+                                "x": int(cleared["x"]),
+                                "y": int(cleared["y"]),
+                                "layer": str(cleared["layer"]),
+                            },
+                        )
 
                 await schedule_world_save(world["name"])
 
-                await broadcast_to_world(
-                    world,
-                    {
-                        "type": "tile_updated",
-                        "x": x,
-                        "y": y,
-                        "tile": world["foreground"][index],
-                        "foreground": world["foreground"][index],
-                        "background": world["background"][index],
-                    },
-                )
+                for changed_x, changed_y in sorted(changed_tiles):
+                    changed_index = changed_y * world["width"] + changed_x
+                    await broadcast_to_world(
+                        world,
+                        {
+                            "type": "tile_updated",
+                            "x": changed_x,
+                            "y": changed_y,
+                            "tile": world["foreground"][changed_index],
+                            "foreground": world["foreground"][changed_index],
+                            "background": world["background"][changed_index],
+                        },
+                    )
                 continue
 
             if msg_type == "chat_message":
@@ -1541,6 +1575,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 player = world["players"].get(client_id)
                 username = client.get("username") or (player.get("username") if player else "player")
+                command_sender_original: tuple[float, float] | None = None
+                if player:
+                    try:
+                        command_sender_original = (float(player.get("x", 0.0)), float(player.get("y", 0.0)))
+                    except Exception:
+                        command_sender_original = None
 
                 command_result = process_chat_command(
                     raw_message=message_text,
@@ -1626,6 +1666,94 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 "teleport": True,
                             },
                         )
+
+                    door_move = command_result.get("door_move")
+                    if isinstance(door_move, dict):
+                        width = int(world["width"])
+                        height = int(world["height"])
+                        try:
+                            next_door_x = int(door_move.get("x", 0))
+                            next_door_y = int(door_move.get("y", 0))
+                        except Exception:
+                            next_door_x = 0
+                            next_door_y = 0
+
+                        next_door_x = max(0, min(width - 1, next_door_x))
+                        next_door_y = max(0, min(height - 1, next_door_y))
+
+                        previous_door = sanitize_door(world.get("door"), width, height)
+                        world["door"] = {"x": next_door_x, "y": next_door_y}
+                        current_door = sanitize_door(world.get("door"), width, height)
+
+                        changed_tiles: set[tuple[int, int]] = set()
+                        for door_pos in (previous_door, current_door):
+                            changed_tiles.add((door_pos["x"], door_pos["y"]))
+                            floor_y = door_pos["y"] + 1
+                            if 0 <= floor_y < height:
+                                changed_tiles.add((door_pos["x"], floor_y))
+
+                        enforce_bedrock_under_door(world, previous_door=previous_door)
+
+                        for changed_x, changed_y in sorted(changed_tiles):
+                            for cleared in clear_tile_damage(world, changed_x, changed_y, None):
+                                await broadcast_to_world(
+                                    world,
+                                    {
+                                        "type": "tile_damage_clear",
+                                        "x": int(cleared["x"]),
+                                        "y": int(cleared["y"]),
+                                        "layer": str(cleared["layer"]),
+                                    },
+                                )
+
+                        await schedule_world_save(world["name"])
+
+                        for changed_x, changed_y in sorted(changed_tiles):
+                            changed_index = changed_y * width + changed_x
+                            await broadcast_to_world(
+                                world,
+                                {
+                                    "type": "tile_updated",
+                                    "x": changed_x,
+                                    "y": changed_y,
+                                    "tile": world["foreground"][changed_index],
+                                    "foreground": world["foreground"][changed_index],
+                                    "background": world["background"][changed_index],
+                                },
+                            )
+
+                        spawn_x, spawn_y = get_spawn_from_door(world)
+                        for target_player_id, target_player in world["players"].items():
+                            if target_player_id == client_id:
+                                continue
+
+                            target_player["x"] = spawn_x
+                            target_player["y"] = spawn_y
+                            await broadcast_to_world(
+                                world,
+                                {
+                                    "type": "player_moved",
+                                    "id": target_player_id,
+                                    "x": spawn_x,
+                                    "y": spawn_y,
+                                    "teleport": True,
+                                },
+                            )
+
+                        caller_player = world["players"].get(client_id)
+                        if caller_player is not None and command_sender_original is not None:
+                            caller_player["x"] = command_sender_original[0]
+                            caller_player["y"] = command_sender_original[1]
+                            await broadcast_to_world(
+                                world,
+                                {
+                                    "type": "player_moved",
+                                    "id": client_id,
+                                    "x": command_sender_original[0],
+                                    "y": command_sender_original[1],
+                                    "teleport": True,
+                                },
+                            )
 
                     continue
 

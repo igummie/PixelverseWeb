@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>"
+COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>"
 
 
 def _normalize_name(value: Any) -> str:
@@ -172,6 +172,42 @@ def process_chat_command(
             "direct_messages": [],
             "teleports": [{"id": client_id, "x": next_x, "y": next_y}],
             "state_update": None,
+        }
+
+    if command in {"door", "movedoor"}:
+        if len(args) != 2:
+            return {
+                "sender_message": "Usage: /door <x> <y>",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+
+        try:
+            next_door_x = int(args[0])
+            next_door_y = int(args[1])
+        except Exception:
+            return {
+                "sender_message": "Door coordinates must be integers. Usage: /door <x> <y>",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+
+        max_x = max(0, int(world["width"]) - 1)
+        max_y = max(0, int(world["height"]) - 1)
+        clamped_x = max(0, min(max_x, next_door_x))
+        clamped_y = max(0, min(max_y, next_door_y))
+
+        return {
+            "sender_message": f"Door moved to ({clamped_x}, {clamped_y}).",
+            "direct_messages": [],
+            "teleports": [],
+            "state_update": None,
+            "door_move": {
+                "x": clamped_x,
+                "y": clamped_y,
+            },
         }
 
     return {
