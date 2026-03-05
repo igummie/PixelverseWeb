@@ -92,6 +92,14 @@
         padding: 0;
         align-items: stretch;
         justify-content: flex-start;
+        position: relative;
+        --hud-height: 58px;
+      }
+
+      #gameHud {
+        width: 100%;
+        position: relative;
+        z-index: 6;
       }
 
       .gameTopbar {
@@ -126,6 +134,101 @@
         background: #0f172a;
         position: relative;
         z-index: 1;
+      }
+
+      .chatOverlayRegion {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: var(--hud-height);
+        bottom: 0;
+        overflow: hidden;
+        z-index: 12;
+        pointer-events: none;
+      }
+
+      .chatDrawer {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        z-index: 12;
+        height: 220px;
+        overflow: visible;
+        background: rgba(17, 24, 39, 0.96);
+        border-bottom: 1px solid #374151;
+        transition: transform 140ms ease, height 140ms ease;
+        transform: translateY(-220px);
+        pointer-events: auto;
+      }
+
+      .chatDrawer.dragging {
+        transition: none;
+      }
+
+      .chatDrawerHandle {
+        position: absolute;
+        left: 50%;
+        bottom: -16px;
+        transform: translateX(-50%);
+        z-index: 13;
+        width: 64px;
+        height: 16px;
+        border-radius: 0 0 10px 10px;
+        border: 1px solid #374151;
+        border-top: 0;
+        background: rgba(17, 24, 39, 0.96);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: ns-resize;
+        user-select: none;
+      }
+
+      .chatDrawerHandle::before {
+        content: "";
+        width: 28px;
+        height: 3px;
+        border-radius: 999px;
+        background: #64748b;
+      }
+
+      .chatLogPanel,
+      .chatInputPanel {
+        width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+
+      .chatInputPanel.hidden {
+        display: none;
+      }
+
+      .chatLog {
+        height: 210px;
+        overflow-y: auto;
+        padding: 8px 12px;
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .chatLine {
+        margin-bottom: 4px;
+        word-break: break-word;
+      }
+
+      .chatLine.system {
+        color: #93c5fd;
+      }
+
+      .chatLine.player {
+        color: #e5e7eb;
+      }
+
+      #chatInput {
+        width: 100%;
+        margin: 8px 12px;
+        box-sizing: border-box;
       }
 
       #leaveWorldBtn {
@@ -193,17 +296,31 @@
     </section>
 
     <section id="gameScreen" class="screen">
-      <div class="gameTopbar">
-        <div id="gameStatus">Connecting...</div>
-        <label for="blockSelect">Block:</label>
-        <select id="blockSelect"></select>
-        <div id="blockTypeInfo" style="font-size: 12px; opacity: 0.8"></div>
-        <button id="zoomOutBtn" type="button">-</button>
-        <div id="zoomLevel" style="font-size: 12px; opacity: 0.9; min-width: 66px; text-align: center">Zoom 1.00x</div>
-        <button id="zoomInBtn" type="button">+</button>
-        <button id="zoomResetBtn" type="button">1x</button>
-        <div class="spacer">LMB: place | RMB: break | WASD/Arrows: move | Mouse wheel: zoom | ESC: leave</div>
-        <button id="leaveWorldBtn">Leave World</button>
+      <div id="gameHud">
+        <div class="gameTopbar">
+          <div id="gameStatus">Connecting...</div>
+          <label for="blockSelect">Block:</label>
+          <select id="blockSelect"></select>
+          <div id="blockTypeInfo" style="font-size: 12px; opacity: 0.8"></div>
+          <button id="zoomOutBtn" type="button">-</button>
+          <div id="zoomLevel" style="font-size: 12px; opacity: 0.9; min-width: 66px; text-align: center">Zoom 1.00x</div>
+          <button id="zoomInBtn" type="button">+</button>
+          <button id="zoomResetBtn" type="button">1x</button>
+          <button id="chatToggleBtn" type="button">Chat</button>
+          <div class="spacer">LMB: place | RMB: break | WASD/Arrows: move | Enter: chat | ESC: leave</div>
+          <button id="leaveWorldBtn">Leave World</button>
+        </div>
+        </div>
+        <div id="chatOverlayRegion" class="chatOverlayRegion">
+          <div id="chatDrawer" class="chatDrawer">
+            <div id="chatDrawerHandle" class="chatDrawerHandle" title="Drag chat drawer"></div>
+            <div id="chatLogPanel" class="chatLogPanel">
+              <div id="chatLog" class="chatLog"></div>
+            </div>
+            <div id="chatInputPanel" class="chatInputPanel hidden">
+              <input id="chatInput" maxlength="160" placeholder="Type message and press Enter..." />
+          </div>
+        </div>
       </div>
       <canvas id="game"></canvas>
     </section>

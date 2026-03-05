@@ -30,6 +30,14 @@ const zoomOutBtn = document.getElementById("zoomOutBtn");
 const zoomInBtn = document.getElementById("zoomInBtn");
 const zoomResetBtn = document.getElementById("zoomResetBtn");
 const zoomLevel = document.getElementById("zoomLevel");
+const chatToggleBtn = document.getElementById("chatToggleBtn");
+const chatDrawerHandle = document.getElementById("chatDrawerHandle");
+const chatDrawer = document.getElementById("chatDrawer");
+const chatLogPanel = document.getElementById("chatLogPanel");
+const chatLog = document.getElementById("chatLog");
+const chatInputPanel = document.getElementById("chatInputPanel");
+const chatInput = document.getElementById("chatInput");
+const gameHud = document.getElementById("gameHud");
 const gameTopbar = document.querySelector(".gameTopbar");
 
 const canvas = document.getElementById("game");
@@ -47,6 +55,12 @@ const MAX_CAMERA_ZOOM = 3;
 const CAMERA_ZOOM_STEP = 0.1;
 const REMOTE_PLAYER_INTERP_SPEED = 14;
 const REMOTE_PLAYER_SNAP_DISTANCE = 2.5;
+const SELF_TELEPORT_SNAP_DISTANCE = 0.75;
+const CHAT_BUBBLE_LIFETIME_MS = 4500;
+const MAX_CHAT_LOG_LINES = 180;
+const CHAT_LOG_DRAWER_HEIGHT = 220;
+const CHAT_INPUT_PANEL_HEIGHT = 56;
+const CHAT_DRAWER_HANDLE_PEEK = 16;
 const AUTH_TOKEN_STORAGE_KEY = "pixelverse_auth_token";
 const AUTH_USER_STORAGE_KEY = "pixelverse_auth_user";
 const TEXTURE47_COLS = 8;
@@ -79,6 +93,16 @@ const state = {
   onGround: false,
   jumpQueued: false,
   worldRender: null,
+  chatLogLines: [],
+  chatLogOpen: false,
+  chatInputOpen: false,
+  chatDrawerHeight: CHAT_LOG_DRAWER_HEIGHT,
+  chatDrawerOffsetY: -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK),
+  chatDrawerDragging: false,
+  chatDrawerDragStartY: 0,
+  chatDrawerDragStartOffsetY: 0,
+  flyEnabled: false,
+  noclipEnabled: false,
 };
 
 function saveAuthSession() {
@@ -239,6 +263,127 @@ function initializeRemotePlayerTracking(player) {
   player.targetY = player.y;
   player.renderX = player.x;
   player.renderY = player.y;
+  if (!Number.isFinite(player.chatUntil)) {
+    player.chatUntil = 0;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function appendChatLine(kind, text, username = "") {
+  const line = {
+    kind,
+    text: String(text || "").trim(),
+    username: String(username || "").trim(),
+    createdAt: Date.now(),
+  };
+
+  if (!line.text) {
+    return;
+  }
+
+  state.chatLogLines.push(line);
+  if (state.chatLogLines.length > MAX_CHAT_LOG_LINES) {
+    state.chatLogLines.splice(0, state.chatLogLines.length - MAX_CHAT_LOG_LINES);
+  }
+
+  renderChatLog();
+}
+
+function renderChatLog() {
+  if (!chatLog) {
+    return;
+  }
+
+  chatLog.innerHTML = "";
+  for (const line of state.chatLogLines) {
+    const row = document.createElement("div");
+    row.className = `chatLine ${line.kind}`;
+    if (line.kind === "player") {
+      row.innerHTML = `<strong>${escapeHtml(line.username || "player")}</strong>: ${escapeHtml(line.text)}`;
+    } else {
+      row.textContent = line.text;
+    }
+    chatLog.appendChild(row);
+  }
+
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function getChatDrawerMaxHeight() {
+  return CHAT_LOG_DRAWER_HEIGHT + (state.chatInputOpen ? CHAT_INPUT_PANEL_HEIGHT : 0);
+}
+
+function getChatDrawerHiddenOffset() {
+  const drawerHeight = getChatDrawerMaxHeight();
+  return -(drawerHeight - CHAT_DRAWER_HANDLE_PEEK);
+}
+
+function applyChatDrawerPosition(nextOffsetY, immediate = false) {
+  const drawerHeight = getChatDrawerMaxHeight();
+  const hiddenOffset = getChatDrawerHiddenOffset();
+  state.chatDrawerHeight = drawerHeight;
+  state.chatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
+
+  if (chatDrawer) {
+    if (immediate) {
+      chatDrawer.classList.add("dragging");
+    } else {
+      chatDrawer.classList.remove("dragging");
+    }
+    chatDrawer.style.height = `${drawerHeight}px`;
+    chatDrawer.style.transform = `translateY(${state.chatDrawerOffsetY}px)`;
+  }
+}
+
+function setChatLogOpen(open) {
+  state.chatLogOpen = !!open;
+
+  if (!state.chatLogOpen) {
+    state.chatInputOpen = false;
+  }
+
+  chatInputPanel?.classList.toggle("hidden", !state.chatInputOpen);
+  const targetOffset = state.chatLogOpen ? 0 : getChatDrawerHiddenOffset();
+  applyChatDrawerPosition(targetOffset);
+}
+
+function setChatInputOpen(open) {
+  state.chatInputOpen = !!open;
+  chatInputPanel?.classList.toggle("hidden", !state.chatInputOpen);
+
+  if (state.chatInputOpen) {
+    state.chatLogOpen = true;
+  }
+
+  const targetOffset = state.chatLogOpen ? 0 : getChatDrawerHiddenOffset();
+  applyChatDrawerPosition(targetOffset);
+
+  if (state.chatInputOpen) {
+    chatInput?.focus();
+  } else if (chatInput) {
+    chatInput.value = "";
+  }
+}
+
+function setPlayerChatBubble(playerId, messageText) {
+  const player = state.players.get(playerId);
+  if (!player) {
+    return;
+  }
+
+  const text = String(messageText || "").trim();
+  if (!text) {
+    return;
+  }
+
+  player.chatText = text;
+  player.chatUntil = performance.now() + CHAT_BUBBLE_LIFETIME_MS;
 }
 
 function updateRemotePlayersInterpolation(deltaSeconds) {
@@ -566,6 +711,7 @@ function resizeCanvas() {
   }
 
   const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
+  screens.game.style.setProperty("--hud-height", `${topbarHeight}px`);
   canvas.width = window.innerWidth;
   canvas.height = Math.max(1, window.innerHeight - topbarHeight);
   // Resizing resets canvas context state, so restore pixel-art rendering.
@@ -900,6 +1046,12 @@ function connectSocket() {
         }
       }
 
+      state.chatLogLines = [];
+      renderChatLog();
+      appendChatLine("system", `Joined world ${msg.world.name}`);
+      state.flyEnabled = false;
+      state.noclipEnabled = false;
+
       gameStatus.textContent = `World: ${msg.world.name} | Players: ${state.players.size}`;
       showScreen("game");
       return;
@@ -913,18 +1065,23 @@ function connectSocket() {
       initializeRemotePlayerTracking(msg.player);
       state.players.set(msg.player.id, msg.player);
       gameStatus.textContent = `World: ${state.world.name} | Players: ${state.players.size}`;
+      appendChatLine("system", `${msg.player.username || "player"} joined`);
       return;
     }
 
     if (msg.type === "player_left") {
+      const leaving = state.players.get(msg.id);
       state.players.delete(msg.id);
       gameStatus.textContent = `World: ${state.world.name} | Players: ${state.players.size}`;
+      appendChatLine("system", `${leaving?.username || "player"} left`);
       return;
     }
 
     if (msg.type === "player_moved") {
       const existing = state.players.get(msg.id);
       if (existing) {
+        const prevX = existing.x;
+        const prevY = existing.y;
         if (!Number.isFinite(existing.renderX) || !Number.isFinite(existing.renderY)) {
           initializeRemotePlayerTracking(existing);
         }
@@ -934,10 +1091,49 @@ function connectSocket() {
         existing.targetY = msg.y;
 
         if (msg.id === state.selfId) {
+          state.me.x = msg.x;
+          state.me.y = msg.y;
+          const deltaX = msg.x - prevX;
+          const deltaY = msg.y - prevY;
+          const movedDistance = Math.hypot(deltaX, deltaY);
+
+          // Preserve normal gravity/jump unless this looks like a teleport snap.
+          if (movedDistance >= SELF_TELEPORT_SNAP_DISTANCE) {
+            state.velocity.x = 0;
+            state.velocity.y = 0;
+            state.onGround = false;
+            state.jumpQueued = false;
+          }
           existing.renderX = msg.x;
           existing.renderY = msg.y;
         }
       }
+      return;
+    }
+
+    if (msg.type === "chat_message") {
+      const username = String(msg.username || "player");
+      const messageText = String(msg.message || "").trim();
+      if (!messageText) {
+        return;
+      }
+
+      appendChatLine("player", messageText, username);
+      setPlayerChatBubble(String(msg.id || ""), messageText);
+      return;
+    }
+
+    if (msg.type === "system_message") {
+      const messageText = String(msg.message || "").trim();
+      if (messageText) {
+        appendChatLine("system", messageText);
+      }
+      return;
+    }
+
+    if (msg.type === "command_state") {
+      state.flyEnabled = !!msg.flyEnabled;
+      state.noclipEnabled = !!msg.noclipEnabled;
       return;
     }
 
@@ -1032,6 +1228,10 @@ async function enterWorld(targetWorldName = null) {
 
 function leaveWorld() {
   sendWs({ type: "leave_world" });
+  setChatInputOpen(false);
+  setChatLogOpen(false);
+  state.chatLogLines = [];
+  renderChatLog();
   state.world = null;
   state.worldRender = null;
   state.players.clear();
@@ -1039,6 +1239,8 @@ function leaveWorld() {
   state.velocity.y = 0;
   state.onGround = false;
   state.jumpQueued = false;
+  state.flyEnabled = false;
+  state.noclipEnabled = false;
   showScreen("world");
   loadWorldList();
 }
@@ -1093,7 +1295,33 @@ worldInput.addEventListener("keydown", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && screens.game.classList.contains("active")) {
+    if (state.chatInputOpen) {
+      event.preventDefault();
+      setChatInputOpen(false);
+      return;
+    }
+
     leaveWorld();
+    return;
+  }
+
+  if (screens.game.classList.contains("active") && event.key === "Enter") {
+    event.preventDefault();
+
+    if (state.chatInputOpen) {
+      const nextMessage = String(chatInput?.value || "").trim();
+      if (nextMessage.length > 0) {
+        sendWs({ type: "chat_message", message: nextMessage });
+      }
+      setChatInputOpen(false);
+    } else {
+      setChatLogOpen(true);
+      setChatInputOpen(true);
+    }
+    return;
+  }
+
+  if (state.chatInputOpen) {
     return;
   }
 
@@ -1118,7 +1346,7 @@ document.addEventListener("keydown", (event) => {
   }
 
   const key = event.key.toLowerCase();
-  if (!event.repeat && (key === " " || key === "w" || key === "arrowup")) {
+  if (!event.repeat && (key === " " || (!state.flyEnabled && (key === "w" || key === "arrowup")))) {
     event.preventDefault();
     state.jumpQueued = true;
   }
@@ -1127,7 +1355,68 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keyup", (event) => {
+  if (state.chatInputOpen && event.key.toLowerCase() !== "escape") {
+    return;
+  }
   state.keys.delete(event.key.toLowerCase());
+});
+
+chatToggleBtn?.addEventListener("click", () => {
+  setChatLogOpen(!state.chatLogOpen);
+});
+
+chatDrawerHandle?.addEventListener("pointerdown", (event) => {
+  if (!screens.game.classList.contains("active")) {
+    return;
+  }
+
+  event.preventDefault();
+  state.chatDrawerDragging = true;
+  state.chatDrawerDragStartY = event.clientY;
+  state.chatDrawerDragStartOffsetY = state.chatDrawerOffsetY;
+  chatDrawerHandle.setPointerCapture?.(event.pointerId);
+  chatDrawer?.classList.add("dragging");
+});
+
+chatDrawerHandle?.addEventListener("pointermove", (event) => {
+  if (!state.chatDrawerDragging) {
+    return;
+  }
+
+  event.preventDefault();
+  const deltaY = event.clientY - state.chatDrawerDragStartY;
+  applyChatDrawerPosition(state.chatDrawerDragStartOffsetY + deltaY, true);
+});
+
+const endChatDrawerDrag = (event) => {
+  if (!state.chatDrawerDragging) {
+    return;
+  }
+
+  state.chatDrawerDragging = false;
+  chatDrawer?.classList.remove("dragging");
+  chatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
+
+  const drawerHeight = getChatDrawerMaxHeight();
+  const hiddenOffset = -(drawerHeight - CHAT_DRAWER_HANDLE_PEEK);
+  const openThreshold = (hiddenOffset + 0) * 0.5;
+  if (state.chatDrawerOffsetY > openThreshold) {
+    setChatLogOpen(true);
+  } else {
+    setChatLogOpen(false);
+  }
+};
+
+chatDrawerHandle?.addEventListener("pointerup", endChatDrawerDrag);
+chatDrawerHandle?.addEventListener("pointercancel", endChatDrawerDrag);
+
+applyChatDrawerPosition(state.chatDrawerOffsetY);
+
+chatInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setChatInputOpen(false);
+  }
 });
 
 canvas.addEventListener("mousemove", (event) => {
@@ -1196,26 +1485,54 @@ function update() {
   if (state.keys.has("a") || state.keys.has("arrowleft")) moveX -= 1;
   if (state.keys.has("d") || state.keys.has("arrowright")) moveX += 1;
 
-  state.velocity.x = moveX * HORIZONTAL_SPEED;
+  if (state.flyEnabled) {
+    let moveY = 0;
+    if (state.keys.has("w") || state.keys.has("arrowup") || state.keys.has(" ")) moveY -= 1;
+    if (state.keys.has("s") || state.keys.has("arrowdown")) moveY += 1;
 
-  if (state.jumpQueued && state.onGround) {
-    state.velocity.y = -JUMP_SPEED;
+    state.velocity.x = moveX * HORIZONTAL_SPEED;
+    state.velocity.y = moveY * HORIZONTAL_SPEED;
     state.onGround = false;
+    state.jumpQueued = false;
+
+    const oldX = state.me.x;
+    const oldY = state.me.y;
+    const proposedX = oldX + state.velocity.x * deltaSeconds;
+    const proposedY = oldY + state.velocity.y * deltaSeconds;
+
+    if (state.noclipEnabled) {
+      const maxX = Math.max(0, state.world.width - state.collider.width);
+      const maxY = Math.max(0, state.world.height - state.collider.height);
+      state.me.x = Math.max(0, Math.min(maxX, proposedX));
+      state.me.y = Math.max(0, Math.min(maxY, proposedY));
+    } else {
+      state.me.x = resolveHorizontal(state.world, oldX, oldY, proposedX);
+      const vertical = resolveVertical(state.world, state.me.x, oldY, proposedY, state.velocity.y);
+      state.me.y = vertical.y;
+      state.velocity.y = vertical.vy;
+    }
+  } else {
+    state.velocity.x = moveX * HORIZONTAL_SPEED;
+
+    if (state.jumpQueued && state.onGround) {
+      state.velocity.y = -JUMP_SPEED;
+      state.onGround = false;
+    }
+    state.jumpQueued = false;
+
+    state.velocity.y = Math.min(MAX_FALL_SPEED, state.velocity.y + GRAVITY * deltaSeconds);
+
+    const oldX = state.me.x;
+    const oldY = state.me.y;
+    const proposedX = oldX + state.velocity.x * deltaSeconds;
+    state.me.x = resolveHorizontal(state.world, oldX, oldY, proposedX);
+
+    const proposedY = oldY + state.velocity.y * deltaSeconds;
+    const vertical = resolveVertical(state.world, state.me.x, oldY, proposedY, state.velocity.y);
+    state.me.y = vertical.y;
+    state.velocity.y = vertical.vy;
+    state.onGround = vertical.onGround;
   }
-  state.jumpQueued = false;
-
-  state.velocity.y = Math.min(MAX_FALL_SPEED, state.velocity.y + GRAVITY * deltaSeconds);
-
-  const oldX = state.me.x;
-  const oldY = state.me.y;
-  const proposedX = oldX + state.velocity.x * deltaSeconds;
-  state.me.x = resolveHorizontal(state.world, oldX, oldY, proposedX);
-
-  const proposedY = oldY + state.velocity.y * deltaSeconds;
-  const vertical = resolveVertical(state.world, state.me.x, oldY, proposedY, state.velocity.y);
-  state.me.y = vertical.y;
-  state.velocity.y = vertical.vy;
-  state.onGround = vertical.onGround;
 
   const me = state.players.get(state.selfId);
   if (me) {
@@ -1302,6 +1619,28 @@ function drawPlayers() {
     ctx.fillStyle = "#f9fafb";
     ctx.font = `${Math.max(10, Math.floor(12 * state.camera.zoom))}px system-ui`;
     ctx.fillText(player.username ?? "player", screenX - 4 * state.camera.zoom, screenY - 6 * state.camera.zoom);
+
+    if (player.chatText && Number.isFinite(player.chatUntil) && performance.now() < player.chatUntil) {
+      const bubbleText = String(player.chatText);
+      const fontSize = Math.max(10, Math.floor(12 * state.camera.zoom));
+      const paddingX = Math.max(4, Math.floor(6 * state.camera.zoom));
+      const paddingY = Math.max(2, Math.floor(4 * state.camera.zoom));
+      const bubbleY = screenY - Math.max(32, Math.floor(40 * state.camera.zoom));
+
+      ctx.font = `${fontSize}px system-ui`;
+      const textWidth = Math.ceil(ctx.measureText(bubbleText).width);
+      const bubbleW = textWidth + paddingX * 2;
+      const bubbleH = fontSize + paddingY * 2;
+      const bubbleX = screenX + (playerSize - bubbleW) / 2;
+
+      ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+      ctx.fillRect(bubbleX, bubbleY, bubbleW, bubbleH);
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.6)";
+      ctx.strokeRect(bubbleX + 0.5, bubbleY + 0.5, bubbleW - 1, bubbleH - 1);
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillText(bubbleText, bubbleX + paddingX, bubbleY + paddingY + fontSize - 1);
+    }
   }
 }
 

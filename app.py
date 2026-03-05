@@ -16,6 +16,7 @@ from typing import Any
 import jwt
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
+from modules.chat_commands import process_chat_command
 from modules.worldgen import generate_world_layers
 from pydantic import BaseModel, Field
 
@@ -697,6 +698,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     "username": client["username"],
                     "x": spawn_x,
                     "y": spawn_y,
+                    "fly_enabled": False,
+                    "noclip_enabled": False,
                     "ws": websocket,
                 }
 
@@ -833,6 +836,115 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         "background": world["background"][index],
                     },
                 )
+                continue
+
+            if msg_type == "chat_message":
+                message_text = str(msg.get("message", "")).strip()
+                if not message_text:
+                    continue
+
+                if len(message_text) > 160:
+                    message_text = message_text[:160]
+
+                player = world["players"].get(client_id)
+                username = client.get("username") or (player.get("username") if player else "player")
+
+                command_result = process_chat_command(
+                    raw_message=message_text,
+                    client_id=client_id,
+                    client_username=str(username),
+                    world=world,
+                )
+
+                if command_result is not None:
+                    sender_message = str(command_result.get("sender_message", "")).strip()
+                    if sender_message:
+                        await ws_send(
+                            websocket,
+                            {
+                                "type": "system_message",
+                                "message": sender_message,
+                            },
+                        )
+
+                    state_update = command_result.get("state_update")
+                    if isinstance(state_update, dict):
+                        await ws_send(
+                            websocket,
+                            {
+                                "type": "command_state",
+                                "flyEnabled": bool(state_update.get("flyEnabled", False)),
+                                "noclipEnabled": bool(state_update.get("noclipEnabled", False)),
+                            },
+                        )
+
+                    direct_messages = command_result.get("direct_messages") or []
+                    for direct_message in direct_messages:
+                        if not isinstance(direct_message, dict):
+                            continue
+
+                        target_id = str(direct_message.get("target_id", ""))
+                        message = str(direct_message.get("message", "")).strip()
+                        if not target_id or not message:
+                            continue
+
+                        target_player = world["players"].get(target_id)
+                        if not target_player:
+                            continue
+
+                        target_socket = target_player.get("ws")
+                        if target_socket is None:
+                            continue
+
+                        await ws_send(
+                            target_socket,
+                            {
+                                "type": "system_message",
+                                "message": message,
+                            },
+                        )
+
+                    teleports = command_result.get("teleports") or []
+                    for teleport in teleports:
+                        if not isinstance(teleport, dict):
+                            continue
+
+                        teleport_player_id = str(teleport.get("id", ""))
+                        teleport_player = world["players"].get(teleport_player_id)
+                        if not teleport_player:
+                            continue
+
+                        try:
+                            teleport_x = float(teleport.get("x", teleport_player.get("x", 0)))
+                            teleport_y = float(teleport.get("y", teleport_player.get("y", 0)))
+                        except Exception:
+                            continue
+
+                        teleport_player["x"] = teleport_x
+                        teleport_player["y"] = teleport_y
+
+                        await broadcast_to_world(
+                            world,
+                            {
+                                "type": "player_moved",
+                                "id": teleport_player_id,
+                                "x": teleport_x,
+                                "y": teleport_y,
+                            },
+                        )
+
+                    continue
+
+                await broadcast_to_world(
+                    world,
+                    {
+                        "type": "chat_message",
+                        "id": client_id,
+                        "username": username,
+                        "message": message_text,
+                    },
+                )
+                continue
 
     except WebSocketDisconnect:
         pass
