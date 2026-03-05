@@ -6,9 +6,9 @@
       "GROWTIME": 60,
       "FRUIT_MIN": 3,
       "FRUIT_MAX": 5,
-      "SEED_ATLAS_ID": "seedsgt",
+      "SEED_ATLAS_ID": "seed",
       "SEED_ATLAS_TEXTURE": {
-        "x": 64,
+        "x": 16,
         "y": 0,
         "w": 16,
         "h": 16
@@ -79,8 +79,8 @@
       "TILE_SIZE": 16
     },
     {
-      "ATLAS_ID": "seedsgt",
-      "NAME": "SEEDS_ATLAS_gt",
+      "ATLAS_ID": "seed",
+      "NAME": "SEED_ATLAS",
       "SRC": "/assets/atlases/seeds.png",
       "TILE_SIZE": 16
     }

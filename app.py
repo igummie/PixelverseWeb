@@ -1534,6 +1534,22 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     client["guest_profile_id"] = None
                 client["world_name"] = world["name"]
                 spawn_x, spawn_y = get_spawn_from_door(world)
+
+                reconnect_x = msg.get("reconnectX")
+                reconnect_y = msg.get("reconnectY")
+                reconnect_x_value = None
+                reconnect_y_value = None
+                try:
+                    reconnect_x_value = float(reconnect_x)
+                    reconnect_y_value = float(reconnect_y)
+                except Exception:
+                    reconnect_x_value = None
+                    reconnect_y_value = None
+
+                if reconnect_x_value is not None and reconnect_y_value is not None:
+                    spawn_x = max(0.0, min(float(world["width"] - 1), reconnect_x_value))
+                    spawn_y = max(0.0, min(float(world["height"] - 1), reconnect_y_value))
+
                 persisted_gems = 0
                 if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
                     persisted_gems = await asyncio.to_thread(get_user_gems, int(client["user_id"]))

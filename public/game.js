@@ -125,6 +125,9 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
+const RECONNECT_INTERVAL_MS = 5000;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
 const state = {
   token: null,
   user: null,
@@ -197,6 +200,11 @@ const state = {
   serverTimeOffsetMs: 0,
   treeHintAnchor: null,
   treeHintTreeId: "",
+  reconnect: {
+    active: false,
+    attempt: 0,
+    timerId: null,
+  },
 };
 
 const hud = createHudController({
@@ -339,6 +347,123 @@ function startPingTimer() {
 
 function drawDebugGrid() {
   chatDebug.drawDebugGrid();
+}
+
+function clearReconnectTimer() {
+  if (state.reconnect.timerId) {
+    clearTimeout(state.reconnect.timerId);
+    state.reconnect.timerId = null;
+  }
+}
+
+function resetReconnectState() {
+  clearReconnectTimer();
+  state.reconnect.active = false;
+  state.reconnect.attempt = 0;
+}
+
+async function repullGameBundle() {
+  try {
+    await fetch(`/build/game.bundle.js?t=${Date.now()}`, { cache: "no-store" });
+  } catch {
+    // Ignore bundle prefetch failures during reconnect.
+  }
+}
+
+function clearActiveWorldRuntimeState() {
+  setChatInputOpen(false);
+  setChatLogOpen(false);
+  setWorldChatLogOpen(false);
+  pauseMenu.setPauseMenuOpen(false);
+  state.world = null;
+  state.worldRender = null;
+  state.gems = 0;
+  updateGemUi();
+  state.gemDrops.clear();
+  state.seedDrops.clear();
+  state.plantedTrees.clear();
+  state.treeHintAnchor = null;
+  state.treeHintTreeId = "";
+  state.tileDamage.clear();
+  state.players.clear();
+  state.velocity.x = 0;
+  state.velocity.y = 0;
+  state.onGround = false;
+  state.jumpQueued = false;
+  state.flyEnabled = false;
+  state.noclipEnabled = false;
+}
+
+function returnToWorldSelectAfterReconnectFailure() {
+  clearActiveWorldRuntimeState();
+  worldError.textContent = "Reconnect timed out. Please join a world again.";
+  showScreen("world");
+  loadWorldList();
+}
+
+async function performReconnectAttempt() {
+  if (!state.reconnect.active || !state.token) {
+    return false;
+  }
+
+  await repullGameBundle();
+
+  try {
+    await connectSocket();
+  } catch {
+    return false;
+  }
+
+  // Connection is back; stay on world select and let user choose a world manually.
+  clearActiveWorldRuntimeState();
+  resetReconnectState();
+  worldError.textContent = "Connection restored. Select a world to join.";
+  appendChatLine("system", "Connection restored. Select a world to join.");
+  showScreen("world");
+  loadWorldList();
+  return true;
+}
+
+function scheduleReconnectAttempt() {
+  clearReconnectTimer();
+
+  if (!state.reconnect.active) {
+    return;
+  }
+
+  if (state.reconnect.attempt >= MAX_RECONNECT_ATTEMPTS) {
+    appendChatLine("system", "Reconnect timed out. Returning to world select.");
+    resetReconnectState();
+    returnToWorldSelectAfterReconnectFailure();
+    return;
+  }
+
+  state.reconnect.timerId = setTimeout(async () => {
+    if (!state.reconnect.active) {
+      return;
+    }
+
+    state.reconnect.attempt += 1;
+    appendChatLine("system", `Attempting to reconnect (${state.reconnect.attempt}/${MAX_RECONNECT_ATTEMPTS})...`);
+    worldError.textContent = `Lost connection. Reconnecting (${state.reconnect.attempt}/${MAX_RECONNECT_ATTEMPTS})...`;
+    const connected = await performReconnectAttempt();
+    if (!connected && state.reconnect.active) {
+      scheduleReconnectAttempt();
+    }
+  }, RECONNECT_INTERVAL_MS);
+}
+
+function beginReconnectFlow() {
+  if (state.reconnect.active || !state.world || !state.token) {
+    return;
+  }
+
+  state.reconnect.active = true;
+  state.reconnect.attempt = 0;
+  setChatInputOpen(false);
+  setWorldChatLogOpen(true);
+  appendChatLine("system", "Lost connection. Attempting to reconnect...");
+  scheduleReconnectAttempt();
 }
 
 const pauseMenu = createPauseMenuController({
@@ -1833,6 +1958,7 @@ function connectSocket() {
   state.ws.addEventListener("open", () => {
     state.connected = true;
     gameStatus.textContent = "Connected";
+    clearReconnectTimer();
     startPingTimer();
   });
 
@@ -1841,6 +1967,9 @@ function connectSocket() {
     gameStatus.textContent = "Disconnected";
     stopPingTimer();
     state.debugPingMs = null;
+    if (state.world && state.token) {
+      beginReconnectFlow();
+    }
   });
 
   state.ws.addEventListener("message", (event) => {
@@ -2166,6 +2295,7 @@ function sendWs(payload) {
 }
 
 async function enterWorld(targetWorldName = null) {
+  resetReconnectState();
   worldError.textContent = "";
 
   const isEventObject = typeof targetWorldName === "object" && targetWorldName !== null;
@@ -2204,32 +2334,14 @@ async function enterWorld(targetWorldName = null) {
 }
 
 function leaveWorld() {
+  resetReconnectState();
   const leavingWorldName = state.world?.name;
-  pauseMenu.setPauseMenuOpen(false);
 
   sendWs({ type: "leave_world" });
-  setChatInputOpen(false);
-  setChatLogOpen(false);
   if (leavingWorldName) {
     appendChatLine("system", `You left world ${leavingWorldName}`);
   }
-  state.world = null;
-  state.worldRender = null;
-  state.gems = 0;
-  updateGemUi();
-  state.gemDrops.clear();
-  state.seedDrops.clear();
-  state.plantedTrees.clear();
-  state.treeHintAnchor = null;
-  state.treeHintTreeId = "";
-  state.tileDamage.clear();
-  state.players.clear();
-  state.velocity.x = 0;
-  state.velocity.y = 0;
-  state.onGround = false;
-  state.jumpQueued = false;
-  state.flyEnabled = false;
-  state.noclipEnabled = false;
+  clearActiveWorldRuntimeState();
   showScreen("world");
   loadWorldList();
 }
