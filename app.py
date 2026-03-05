@@ -748,6 +748,19 @@ def spawn_seed_drop(world: dict[str, Any], tile_x: int, tile_y: int, seed_id: in
         return None
 
     seed_drops = ensure_world_seed_state(world)
+
+    # Do not stack multiple floating seed drops in the same tile.
+    for existing in seed_drops.values():
+        if not isinstance(existing, dict):
+            continue
+        try:
+            existing_tile_x = int(float(existing.get("x", -1)))
+            existing_tile_y = int(float(existing.get("y", -1)))
+        except Exception:
+            continue
+        if existing_tile_x == int(tile_x) and existing_tile_y == int(tile_y):
+            return None
+
     drop_id = secrets.token_hex(6)
     offset_x = random.uniform(-GEM_DROP_SPAWN_RADIUS, GEM_DROP_SPAWN_RADIUS)
     offset_y = random.uniform(-GEM_DROP_SPAWN_RADIUS, GEM_DROP_SPAWN_RADIUS)
