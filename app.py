@@ -167,6 +167,19 @@ def normalize_atlas_texture_rect(value: Any) -> dict[str, int] | None:
 
 def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
     compacted: dict[str, Any] = {}
+    key_order = [
+        "ID",
+        "NAME",
+        "BLOCK_TYPE",
+        "ATLAS_ID",
+        "ATLAS_TEXTURE",
+        "TOUGHNESS",
+        "GEM_CHANCE",
+        "GEM_AMOUNT",
+        "GEM_AMOUNT_VAR",
+        "PLACEABLE",
+        "BREAKABLE",
+    ]
 
     atlas_id_value = block.get("ATLAS_ID")
     normalized_atlas_id = normalize_atlas_id_value(atlas_id_value)
@@ -175,6 +188,7 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
 
     uses_texture47 = isinstance(atlas_id_value, str) and bool(str(atlas_id_value).strip())
 
+    normalized_values: dict[str, Any] = {}
     for key, value in block.items():
         next_value = value
         if key == "ATLAS_ID":
@@ -189,7 +203,14 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
         if isinstance(next_value, bool) and next_value is False and key != "BREAKABLE":
             continue
 
-        compacted[key] = next_value
+        normalized_values[key] = next_value
+
+    for key in key_order:
+        if key in normalized_values:
+            compacted[key] = normalized_values.pop(key)
+
+    for key in sorted(normalized_values.keys()):
+        compacted[key] = normalized_values[key]
 
     return compacted
 

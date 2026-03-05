@@ -85,6 +85,7 @@
         <div class="row">
           <button id="copyBtn" type="button">Copy JSON</button>
           <button id="saveBtn" type="button">Save To blocks.json</button>
+          <button id="cleanJsonBtn" type="button">Clean JSON</button>
           <button id="reloadBtn" type="button">Reload Data</button>
         </div>
 
@@ -213,6 +214,7 @@
       const jsonOutput = document.getElementById("jsonOutput");
       const copyBtn = document.getElementById("copyBtn");
       const saveBtn = document.getElementById("saveBtn");
+      const cleanJsonBtn = document.getElementById("cleanJsonBtn");
       const reloadBtn = document.getElementById("reloadBtn");
       const status = document.getElementById("status");
       const blockList = document.getElementById("blockList");
@@ -1627,6 +1629,51 @@
         }
       }
 
+      async function cleanBlocksJson() {
+        const blocks = state.blocks
+          .map((block) => getEffectiveBlock(block.ID) || deepClone(block))
+          .filter((block) => block && typeof block === "object")
+          .sort((a, b) => Number(a.ID) - Number(b.ID));
+
+        if (blocks.length === 0) {
+          setStatus("No blocks found to clean", true);
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/tools/blocks/save-data", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            cache: "no-store",
+            body: JSON.stringify({ blocks }),
+          });
+
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch {
+          }
+
+          if (!response.ok) {
+            if (response.status === 404) {
+              setStatus("Clean JSON API not available on current server. Restart backend to enable latest block editor routes.", true);
+              return;
+            }
+            setStatus(payload?.detail || "Clean JSON failed", true);
+            return;
+          }
+
+          state.pendingByBlockId.clear();
+          state.pendingBlockDataById.clear();
+          await loadEditorData();
+          setStatus("blocks.json cleaned and saved");
+        } catch {
+          setStatus("Could not reach server to clean JSON", true);
+        }
+      }
+
       loadBtn.addEventListener("click", async () => {
         state.selectedAtlasKey = atlasSelect.value;
         await loadAtlasImage();
@@ -1895,6 +1942,10 @@
 
       saveBtn.addEventListener("click", async () => {
         await savePendingUpdates();
+      });
+
+      cleanJsonBtn.addEventListener("click", async () => {
+        await cleanBlocksJson();
       });
 
       reloadBtn.addEventListener("click", async () => {
