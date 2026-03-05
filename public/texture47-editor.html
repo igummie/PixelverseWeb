@@ -305,6 +305,12 @@
         return String(message);
       }
 
+      function getInitialAtlasIdFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const atlasId = String(params.get("atlasId") || "").trim();
+        return atlasId;
+      }
+
       function setStatus(message, isError = false) {
         status.textContent = normalizeStatusMessage(message);
         status.classList.toggle("error", isError);
@@ -1744,6 +1750,13 @@
       renderAll();
       refreshPresetOptions();
       loadAtlasOptions();
+
+      const initialAtlasId = getInitialAtlasIdFromQuery();
+      if (initialAtlasId) {
+        atlasIdInput.value = initialAtlasId;
+        state.atlasId = initialAtlasId;
+      }
+
       loadAtlasAndConfig();
 
       window.addEventListener("resize", () => {

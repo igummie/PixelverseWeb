@@ -105,6 +105,23 @@ body {
   overflow-y: auto;
 }
 
+.editTexture47Btn {
+  display: inline-block;
+  width: fit-content;
+  text-decoration: none;
+  color: #bfdbfe;
+  border: 1px solid #2563eb;
+  background: #1e3a8a;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.editTexture47Btn[hidden] {
+  display: none;
+}
+
 .blockFieldRow {
   display: grid;
   grid-template-columns: 140px 1fr;

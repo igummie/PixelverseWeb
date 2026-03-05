@@ -61,6 +61,7 @@
 
         <div class="fieldStack">
           <label>Selected Block Fields</label>
+          <a id="editTexture47Btn" class="editTexture47Btn" href="/texture47-editor.html" hidden>Edit texture in Texture47 editor</a>
           <div id="blockFieldEditor" class="blockFieldEditor"></div>
         </div>
 
@@ -115,6 +116,7 @@
       const blockSelect = document.getElementById("blockSelect");
       const assignBtn = document.getElementById("assignBtn");
       const blockFieldEditor = document.getElementById("blockFieldEditor");
+      const editTexture47Btn = document.getElementById("editTexture47Btn");
       const applyFieldEditorBtn = document.getElementById("applyFieldEditorBtn");
       const resetFieldEditorBtn = document.getElementById("resetFieldEditorBtn");
       const blockDataEditor = document.getElementById("blockDataEditor");
@@ -260,6 +262,33 @@
         }
       }
 
+      function isTexture47Assigned(block) {
+        return typeof block?.ATLAS_ID === "string" && block.ATLAS_ID.trim().length > 0;
+      }
+
+      function updateTexture47Button(block) {
+        if (!editTexture47Btn) {
+          return;
+        }
+
+        if (!isTexture47Assigned(block)) {
+          editTexture47Btn.hidden = true;
+          editTexture47Btn.href = "/texture47-editor.html";
+          return;
+        }
+
+        const atlasId = String(block.ATLAS_ID).trim();
+        const blockId = Number(block.ID);
+        const params = new URLSearchParams();
+        params.set("atlasId", atlasId);
+        if (Number.isInteger(blockId)) {
+          params.set("blockId", String(blockId));
+        }
+
+        editTexture47Btn.href = `/texture47-editor.html?${params.toString()}`;
+        editTexture47Btn.hidden = false;
+      }
+
       function getEffectiveBlock(blockId) {
         const source = state.blockById.get(Number(blockId));
         if (!source || typeof source !== "object") {
@@ -325,11 +354,13 @@
         if (!block) {
           blockDataEditor.value = "";
           blockFieldEditor.innerHTML = "";
+          updateTexture47Button(null);
           return;
         }
 
         blockDataEditor.value = JSON.stringify(block, null, 2);
         renderBlockFieldEditor(block);
+        updateTexture47Button(block);
       }
 
       function renderBlockFieldEditor(block) {
