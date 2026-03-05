@@ -30,3 +30,4 @@ data/db/*.sqlite3
 # Optional legacy node artifacts
 node_modules/
 npm-debug.log*
+public/build/game.bundle.js
