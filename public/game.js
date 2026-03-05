@@ -45,6 +45,8 @@ const EPSILON = 0.0001;
 const MIN_CAMERA_ZOOM = 0.5;
 const MAX_CAMERA_ZOOM = 3;
 const CAMERA_ZOOM_STEP = 0.1;
+const REMOTE_PLAYER_INTERP_SPEED = 14;
+const REMOTE_PLAYER_SNAP_DISTANCE = 2.5;
 const AUTH_TOKEN_STORAGE_KEY = "pixelverse_auth_token";
 const AUTH_USER_STORAGE_KEY = "pixelverse_auth_user";
 const TEXTURE47_COLS = 8;
@@ -230,6 +232,45 @@ function drawConnected47TileToContext(targetContext, block, drawX, drawY) {
   );
 
   return true;
+}
+
+function initializeRemotePlayerTracking(player) {
+  player.targetX = player.x;
+  player.targetY = player.y;
+  player.renderX = player.x;
+  player.renderY = player.y;
+}
+
+function updateRemotePlayersInterpolation(deltaSeconds) {
+  if (!state.selfId) {
+    return;
+  }
+
+  const alpha = 1 - Math.exp(-REMOTE_PLAYER_INTERP_SPEED * deltaSeconds);
+  for (const [playerId, player] of state.players) {
+    if (playerId === state.selfId) {
+      continue;
+    }
+
+    if (!Number.isFinite(player.renderX) || !Number.isFinite(player.renderY)) {
+      initializeRemotePlayerTracking(player);
+    }
+
+    const targetX = Number.isFinite(player.targetX) ? player.targetX : player.x;
+    const targetY = Number.isFinite(player.targetY) ? player.targetY : player.y;
+    const dx = targetX - player.renderX;
+    const dy = targetY - player.renderY;
+
+    // Teleports or very stale jumps should snap to avoid rubber-band trails.
+    if (Math.abs(dx) > REMOTE_PLAYER_SNAP_DISTANCE || Math.abs(dy) > REMOTE_PLAYER_SNAP_DISTANCE) {
+      player.renderX = targetX;
+      player.renderY = targetY;
+      continue;
+    }
+
+    player.renderX += dx * alpha;
+    player.renderY += dy * alpha;
+  }
 }
 
 function drawTileToContext(targetContext, tileId, drawX, drawY) {
@@ -846,6 +887,7 @@ function connectSocket() {
       rebuildWorldRenderCache();
 
       for (const player of msg.world.players) {
+        initializeRemotePlayerTracking(player);
         state.players.set(player.id, player);
         if (player.id === state.selfId) {
           state.me.x = player.x;
@@ -868,6 +910,7 @@ function connectSocket() {
     }
 
     if (msg.type === "player_joined") {
+      initializeRemotePlayerTracking(msg.player);
       state.players.set(msg.player.id, msg.player);
       gameStatus.textContent = `World: ${state.world.name} | Players: ${state.players.size}`;
       return;
@@ -882,8 +925,18 @@ function connectSocket() {
     if (msg.type === "player_moved") {
       const existing = state.players.get(msg.id);
       if (existing) {
+        if (!Number.isFinite(existing.renderX) || !Number.isFinite(existing.renderY)) {
+          initializeRemotePlayerTracking(existing);
+        }
         existing.x = msg.x;
         existing.y = msg.y;
+        existing.targetX = msg.x;
+        existing.targetY = msg.y;
+
+        if (msg.id === state.selfId) {
+          existing.renderX = msg.x;
+          existing.renderY = msg.y;
+        }
       }
       return;
     }
@@ -1168,7 +1221,13 @@ function update() {
   if (me) {
     me.x = state.me.x;
     me.y = state.me.y;
+    me.targetX = state.me.x;
+    me.targetY = state.me.y;
+    me.renderX = state.me.x;
+    me.renderY = state.me.y;
   }
+
+  updateRemotePlayersInterpolation(deltaSeconds);
 
   if (now - state.lastMoveSentAt > 50) {
     sendWs({ type: "player_move", x: state.me.x, y: state.me.y });
@@ -1230,8 +1289,10 @@ function drawWorld() {
 
 function drawPlayers() {
   for (const [, player] of state.players) {
-    const screenX = (player.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
-    const screenY = (player.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const drawX = Number.isFinite(player.renderX) ? player.renderX : player.x;
+    const drawY = Number.isFinite(player.renderY) ? player.renderY : player.y;
+    const screenX = (drawX * TILE_SIZE - state.camera.x) * state.camera.zoom;
+    const screenY = (drawY * TILE_SIZE - state.camera.y) * state.camera.zoom;
     const playerSize = TILE_SIZE * state.camera.zoom;
     const inset = Math.max(2, 6 * state.camera.zoom);
 

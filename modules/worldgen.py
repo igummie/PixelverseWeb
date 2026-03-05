@@ -53,6 +53,10 @@ def generate_world_layers(
                 continue
 
             depth = y - surface_y
+            if depth <= 0:
+                foreground[index] = DIRT_BLOCK_ID
+                continue
+
             depth_ratio = depth / max(1, (bedrock_start_y - surface_y))
             stone_chance = stone_chance_base + (depth_ratio * stone_chance_depth_bonus)
 
