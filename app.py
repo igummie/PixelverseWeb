@@ -17,6 +17,11 @@ from typing import Any
 import jwt
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
+from modules.block_registry import (
+    DEFAULT_RUNTIME_BLOCK_ROLES,
+    load_block_definitions as load_block_definitions_from_path,
+    load_blocks_payload as load_blocks_payload_from_path,
+)
 from modules.chat_commands import process_chat_command
 from modules.command_runtime import apply_command_result
 from modules.editor_tools import load_texture47_configs, register_editor_routes
@@ -30,10 +35,6 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_SECONDS = 7 * 24 * 60 * 60
 WORLD_WIDTH = 120
 WORLD_HEIGHT = 70
-AIR_BLOCK_ID = 0
-BEDROCK_BLOCK_ID = 2
-DIRT_BLOCK_ID = 1
-DOOR_BLOCK_ID = 17
 DAMAGE_REGEN_MIN_SECONDS = 5.0
 DAMAGE_REGEN_MAX_SECONDS = 7.0
 PLAYER_PICKUP_RADIUS = 0.72
@@ -245,38 +246,16 @@ def parse_token(token: str | None) -> dict[str, Any] | None:
         return None
 
 
-def load_block_definitions() -> tuple[set[int], dict[int, dict[str, Any]]]:
-    try:
-        with BLOCKS_PATH.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except Exception:
-        return set(), {}
-
-    background_ids: set[int] = set()
-    blocks_by_id: dict[int, dict[str, Any]] = {}
-
-    for block in payload.get("blocks", []):
-        try:
-            block_id = int(block.get("ID", 0))
-        except Exception:
-            continue
-
-        if block_id < 0:
-            continue
-
-        blocks_by_id[block_id] = block
-        if str(block.get("BLOCK_TYPE", "")).upper() == "BACKGROUND":
-            background_ids.add(block_id)
-
-    return background_ids, blocks_by_id
+def load_block_definitions() -> tuple[set[int], dict[int, dict[str, Any]], dict[str, int]]:
+    return load_block_definitions_from_path(BLOCKS_PATH, required_roles=DEFAULT_RUNTIME_BLOCK_ROLES)
 
 
-BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID = load_block_definitions()
+BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID, RUNTIME_BLOCK_IDS = load_block_definitions()
 BLOCKS_MTIME_NS = 0
 
 
 def refresh_block_definitions_if_changed(force: bool = False) -> None:
-    global BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID, BLOCKS_MTIME_NS
+    global BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID, RUNTIME_BLOCK_IDS, BLOCKS_MTIME_NS
 
     try:
         current_mtime_ns = BLOCKS_PATH.stat().st_mtime_ns
@@ -284,26 +263,12 @@ def refresh_block_definitions_if_changed(force: bool = False) -> None:
         current_mtime_ns = 0
 
     if force or current_mtime_ns != BLOCKS_MTIME_NS:
-        BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID = load_block_definitions()
+        BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID, RUNTIME_BLOCK_IDS = load_block_definitions()
         BLOCKS_MTIME_NS = current_mtime_ns
 
 
 def load_blocks_payload() -> dict[str, Any]:
-    try:
-        with BLOCKS_PATH.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except Exception:
-        return {"atlases": [], "blocks": []}
-
-    if not isinstance(payload, dict):
-        return {"atlases": [], "blocks": []}
-
-    atlases = payload.get("atlases", [])
-    blocks = payload.get("blocks", [])
-    return {
-        "atlases": atlases if isinstance(atlases, list) else [],
-        "blocks": blocks if isinstance(blocks, list) else [],
-    }
+    return load_blocks_payload_from_path(BLOCKS_PATH)
 
 
 def is_breakable(tile_id: int) -> bool:
@@ -648,11 +613,17 @@ def sanitize_door(door: Any, width: int, height: int) -> dict[str, int]:
 def get_spawn_from_door(world: dict[str, Any]) -> tuple[float, float]:
     door = sanitize_door(world.get("door"), world["width"], world["height"])
     spawn_x = float(door["x"] + 0.14)
-    spawn_y = float(max(0, door["y"] - 0.92))
+    # Collider height is 0.92 in the client. Spawning at door_y + (1 - 0.92)
+    # places the player visually on the door tile while standing on the support block below.
+    spawn_y = float(max(0, door["y"] + 0.08))
     return spawn_x, spawn_y
 
 
 def enforce_bedrock_under_door(world: dict[str, Any], previous_door: dict[str, int] | None = None) -> bool:
+    air_block_id = int(RUNTIME_BLOCK_IDS.get("air", 0))
+    door_block_id = int(RUNTIME_BLOCK_IDS.get("door", air_block_id))
+    bedrock_block_id = int(RUNTIME_BLOCK_IDS.get("bedrock", air_block_id))
+
     width = int(world["width"])
     height = int(world["height"])
     door = sanitize_door(world.get("door"), width, height)
@@ -669,12 +640,12 @@ def enforce_bedrock_under_door(world: dict[str, Any], previous_door: dict[str, i
                 foreground = world.get("foreground")
                 if isinstance(foreground, list) and old_index < len(foreground):
                     old_door_index = old_door["y"] * width + old_door["x"]
-                    if old_door_index < len(foreground) and int(foreground[old_door_index]) == DOOR_BLOCK_ID:
-                        foreground[old_door_index] = AIR_BLOCK_ID
+                    if old_door_index < len(foreground) and int(foreground[old_door_index]) == door_block_id:
+                        foreground[old_door_index] = air_block_id
                         changed = True
 
-                    if int(foreground[old_index]) == BEDROCK_BLOCK_ID:
-                        foreground[old_index] = AIR_BLOCK_ID
+                    if int(foreground[old_index]) == bedrock_block_id:
+                        foreground[old_index] = air_block_id
                         changed = True
 
     floor_y = door["y"] + 1
@@ -687,19 +658,24 @@ def enforce_bedrock_under_door(world: dict[str, Any], previous_door: dict[str, i
         return changed
 
     door_index = door["y"] * width + door["x"]
-    if door_index < len(foreground) and int(foreground[door_index]) != DOOR_BLOCK_ID:
-        foreground[door_index] = DOOR_BLOCK_ID
+    if door_index < len(foreground) and int(foreground[door_index]) != door_block_id:
+        foreground[door_index] = door_block_id
         changed = True
 
-    if int(foreground[index]) == BEDROCK_BLOCK_ID:
+    if int(foreground[index]) == bedrock_block_id:
         return changed
 
-    foreground[index] = BEDROCK_BLOCK_ID
+    foreground[index] = bedrock_block_id
     return True
 
 
 def create_world(name: str) -> dict[str, Any]:
-    generated = generate_world_layers(WORLD_WIDTH, WORLD_HEIGHT, name)
+    generated = generate_world_layers(
+        WORLD_WIDTH,
+        WORLD_HEIGHT,
+        name,
+        block_ids=RUNTIME_BLOCK_IDS,
+    )
     door = sanitize_door(generated.get("door"), generated["width"], generated["height"])
     world = {
         "name": name,
@@ -1390,7 +1366,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             changed_tiles.add((x, y))
                     else:
                         if world["foreground"][index] == 0:
-                            if tile == DOOR_BLOCK_ID:
+                            door_block_id = int(RUNTIME_BLOCK_IDS.get("door", int(RUNTIME_BLOCK_IDS.get("air", 0))))
+                            if tile == door_block_id:
                                 previous_door = sanitize_door(world.get("door"), world["width"], world["height"])
 
                                 candidate_positions: set[tuple[int, int]] = {

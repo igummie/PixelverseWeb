@@ -3,13 +3,6 @@ from __future__ import annotations
 import random
 from typing import Any
 
-AIR_BLOCK_ID = 0
-DIRT_BLOCK_ID = 1
-BEDROCK_BLOCK_ID = 2
-STONE_BLOCK_ID = 3
-CAVE_BACKGROUND_BLOCK_ID = 9
-DOOR_BLOCK_ID = 17
-
 DEFAULT_WORLDGEN_CONFIG: dict[str, float | int] = {
     "surface_ratio": 0.58,
     "surface_min_margin": 6,
@@ -25,10 +18,29 @@ def generate_world_layers(
     height: int,
     seed_name: str,
     config: dict[str, float | int] | None = None,
+    block_ids: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     cfg = dict(DEFAULT_WORLDGEN_CONFIG)
     if config:
         cfg.update(config)
+
+    resolved_block_ids: dict[str, int] = {}
+    if isinstance(block_ids, dict):
+        for key, value in block_ids.items():
+            normalized_key = str(key or "").strip().lower()
+            try:
+                numeric = int(value)
+            except Exception:
+                continue
+            if numeric >= 0:
+                resolved_block_ids[normalized_key] = numeric
+
+    air_block_id = int(resolved_block_ids.get("air", 0))
+    dirt_block_id = int(resolved_block_ids.get("dirt", air_block_id))
+    bedrock_block_id = int(resolved_block_ids.get("bedrock", dirt_block_id))
+    stone_block_id = int(resolved_block_ids.get("stone", dirt_block_id))
+    cave_background_block_id = int(resolved_block_ids.get("cave_background", air_block_id))
+    door_block_id = int(resolved_block_ids.get("door", air_block_id))
 
     foreground = [0 for _ in range(width * height)]
     background = [0 for _ in range(width * height)]
@@ -50,25 +62,25 @@ def generate_world_layers(
             index = y * width + x
 
             if y >= bedrock_start_y:
-                foreground[index] = BEDROCK_BLOCK_ID
-                background[index] = CAVE_BACKGROUND_BLOCK_ID
+                foreground[index] = bedrock_block_id
+                background[index] = cave_background_block_id
                 continue
 
             depth = y - surface_y
             if depth <= 0:
-                foreground[index] = DIRT_BLOCK_ID
-                background[index] = CAVE_BACKGROUND_BLOCK_ID
+                foreground[index] = dirt_block_id
+                background[index] = cave_background_block_id
                 continue
 
             depth_ratio = depth / max(1, (bedrock_start_y - surface_y))
             stone_chance = stone_chance_base + (depth_ratio * stone_chance_depth_bonus)
 
             if rng.random() < stone_chance:
-                foreground[index] = STONE_BLOCK_ID
+                foreground[index] = stone_block_id
             else:
-                foreground[index] = DIRT_BLOCK_ID
+                foreground[index] = dirt_block_id
 
-            background[index] = CAVE_BACKGROUND_BLOCK_ID
+            background[index] = cave_background_block_id
 
     min_door_x = max(0, door_margin)
     max_door_x = min(width - 1, width - door_margin - 1)
@@ -79,16 +91,16 @@ def generate_world_layers(
     door_y = max(1, surface_y - 1)
 
     door_index = door_y * width + door_x
-    foreground[door_index] = DOOR_BLOCK_ID
-    background[door_index] = CAVE_BACKGROUND_BLOCK_ID
+    foreground[door_index] = door_block_id
+    background[door_index] = cave_background_block_id
 
     if door_y - 1 >= 0:
         headroom_index = (door_y - 1) * width + door_x
-        foreground[headroom_index] = AIR_BLOCK_ID
+        foreground[headroom_index] = air_block_id
 
     floor_index = (door_y + 1) * width + door_x
     if floor_index < len(foreground):
-        foreground[floor_index] = BEDROCK_BLOCK_ID
+        foreground[floor_index] = bedrock_block_id
 
     return {
         "width": width,
