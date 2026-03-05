@@ -44,9 +44,9 @@
     },
     {
       "ID": 4,
-      "NAME": "RED_BLOCK",
+      "NAME": "SAND",
       "BLOCK_TYPE": "SOLID",
-      "ATLAS_ID": 0,
+      "ATLAS_ID": "sand",
       "ATLAS_TEXTURE": { "x": 64, "y": 0, "w": 16, "h": 16 },
       "PLACEABLE": true
     },

@@ -198,7 +198,11 @@
         <label for="blockSelect">Block:</label>
         <select id="blockSelect"></select>
         <div id="blockTypeInfo" style="font-size: 12px; opacity: 0.8"></div>
-        <div class="spacer">LMB: place | RMB: break | WASD/Arrows: move | ESC: leave</div>
+        <button id="zoomOutBtn" type="button">-</button>
+        <div id="zoomLevel" style="font-size: 12px; opacity: 0.9; min-width: 66px; text-align: center">Zoom 1.00x</div>
+        <button id="zoomInBtn" type="button">+</button>
+        <button id="zoomResetBtn" type="button">1x</button>
+        <div class="spacer">LMB: place | RMB: break | WASD/Arrows: move | Mouse wheel: zoom | ESC: leave</div>
         <button id="leaveWorldBtn">Leave World</button>
       </div>
       <canvas id="game"></canvas>

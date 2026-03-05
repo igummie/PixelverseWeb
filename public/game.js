@@ -26,6 +26,10 @@ const leaveWorldBtn = document.getElementById("leaveWorldBtn");
 const gameStatus = document.getElementById("gameStatus");
 const blockSelect = document.getElementById("blockSelect");
 const blockTypeInfo = document.getElementById("blockTypeInfo");
+const zoomOutBtn = document.getElementById("zoomOutBtn");
+const zoomInBtn = document.getElementById("zoomInBtn");
+const zoomResetBtn = document.getElementById("zoomResetBtn");
+const zoomLevel = document.getElementById("zoomLevel");
 const gameTopbar = document.querySelector(".gameTopbar");
 
 const canvas = document.getElementById("game");
@@ -38,6 +42,9 @@ const GRAVITY = 28;
 const JUMP_SPEED = 11;
 const MAX_FALL_SPEED = 24;
 const EPSILON = 0.0001;
+const MIN_CAMERA_ZOOM = 0.5;
+const MAX_CAMERA_ZOOM = 3;
+const CAMERA_ZOOM_STEP = 0.1;
 const AUTH_TOKEN_STORAGE_KEY = "pixelverse_auth_token";
 const AUTH_USER_STORAGE_KEY = "pixelverse_auth_user";
 const TEXTURE47_COLS = 8;
@@ -57,7 +64,7 @@ const state = {
   world: null,
   players: new Map(),
   me: { x: 8, y: 8 },
-  camera: { x: 0, y: 0 },
+  camera: { x: 0, y: 0, zoom: 1 },
   keys: new Set(),
   mouse: { x: 0, y: 0 },
   lastMoveSentAt: 0,
@@ -112,6 +119,32 @@ function loadAuthSession() {
   } catch {
     return false;
   }
+}
+
+function clampCameraZoom(value) {
+  return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
+}
+
+function updateZoomUi() {
+  if (!zoomLevel) {
+    return;
+  }
+  zoomLevel.textContent = `Zoom ${state.camera.zoom.toFixed(2)}x`;
+}
+
+function setCameraZoom(nextZoom) {
+  const clamped = clampCameraZoom(nextZoom);
+  if (Math.abs(clamped - state.camera.zoom) < 0.0001) {
+    return;
+  }
+
+  state.camera.zoom = clamped;
+  updateZoomUi();
+}
+
+function adjustCameraZoom(delta) {
+  const target = Math.round((state.camera.zoom + delta) * 100) / 100;
+  setCameraZoom(target);
 }
 
 function isTexture47Block(block) {
@@ -494,6 +527,8 @@ function resizeCanvas() {
   const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
   canvas.width = window.innerWidth;
   canvas.height = Math.max(1, window.innerHeight - topbarHeight);
+  // Resizing resets canvas context state, so restore pixel-art rendering.
+  ctx.imageSmoothingEnabled = false;
 }
 
 window.addEventListener("resize", resizeCanvas);
@@ -1009,6 +1044,26 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (screens.game.classList.contains("active")) {
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      adjustCameraZoom(CAMERA_ZOOM_STEP);
+      return;
+    }
+
+    if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      adjustCameraZoom(-CAMERA_ZOOM_STEP);
+      return;
+    }
+
+    if (event.key === "0") {
+      event.preventDefault();
+      setCameraZoom(1);
+      return;
+    }
+  }
+
   const key = event.key.toLowerCase();
   if (!event.repeat && (key === " " || key === "w" || key === "arrowup")) {
     event.preventDefault();
@@ -1037,8 +1092,10 @@ canvas.addEventListener("mousedown", (event) => {
     return;
   }
 
-  const tileX = Math.floor((state.mouse.x + state.camera.x) / TILE_SIZE);
-  const tileY = Math.floor((state.mouse.y + state.camera.y) / TILE_SIZE);
+  const worldMouseX = state.camera.x + state.mouse.x / state.camera.zoom;
+  const worldMouseY = state.camera.y + state.mouse.y / state.camera.zoom;
+  const tileX = Math.floor(worldMouseX / TILE_SIZE);
+  const tileY = Math.floor(worldMouseY / TILE_SIZE);
 
   if (tileX < 0 || tileX >= state.world.width || tileY < 0 || tileY >= state.world.height) {
     return;
@@ -1062,6 +1119,16 @@ canvas.addEventListener("mousedown", (event) => {
     });
   }
 });
+
+canvas.addEventListener("wheel", (event) => {
+  if (!screens.game.classList.contains("active")) {
+    return;
+  }
+
+  event.preventDefault();
+  const direction = event.deltaY > 0 ? -1 : 1;
+  adjustCameraZoom(direction * CAMERA_ZOOM_STEP);
+}, { passive: false });
 
 function update() {
   if (!state.world || !state.selfId) {
@@ -1108,11 +1175,15 @@ function update() {
     state.lastMoveSentAt = now;
   }
 
-  state.camera.x = state.me.x * TILE_SIZE - canvas.width / 2;
-  state.camera.y = state.me.y * TILE_SIZE - canvas.height / 2;
+  const viewportWorldW = canvas.width / state.camera.zoom;
+  const viewportWorldH = canvas.height / state.camera.zoom;
+  state.camera.x = state.me.x * TILE_SIZE - viewportWorldW / 2;
+  state.camera.y = state.me.y * TILE_SIZE - viewportWorldH / 2;
 
-  state.camera.x = Math.max(0, Math.min(state.camera.x, state.world.width * TILE_SIZE - canvas.width));
-  state.camera.y = Math.max(0, Math.min(state.camera.y, state.world.height * TILE_SIZE - canvas.height));
+  const maxCameraX = Math.max(0, state.world.width * TILE_SIZE - viewportWorldW);
+  const maxCameraY = Math.max(0, state.world.height * TILE_SIZE - viewportWorldH);
+  state.camera.x = Math.max(0, Math.min(state.camera.x, maxCameraX));
+  state.camera.y = Math.max(0, Math.min(state.camera.y, maxCameraY));
 }
 
 function drawWorld() {
@@ -1128,12 +1199,17 @@ function drawWorld() {
     return;
   }
 
-  const sourceX = Math.max(0, Math.floor(state.camera.x));
-  const sourceY = Math.max(0, Math.floor(state.camera.y));
+  const cameraX = Math.max(0, state.camera.x);
+  const cameraY = Math.max(0, state.camera.y);
+  const sourceX = Math.floor(cameraX);
+  const sourceY = Math.floor(cameraY);
+  const fracX = cameraX - sourceX;
+  const fracY = cameraY - sourceY;
   const maxSourceW = state.worldRender.canvas.width - sourceX;
   const maxSourceH = state.worldRender.canvas.height - sourceY;
-  const sourceW = Math.max(0, Math.min(canvas.width, maxSourceW));
-  const sourceH = Math.max(0, Math.min(canvas.height, maxSourceH));
+  // Pull a small extra margin so fractional camera offsets never expose gaps.
+  const sourceW = Math.max(0, Math.min(Math.ceil(canvas.width / state.camera.zoom) + 2, maxSourceW));
+  const sourceH = Math.max(0, Math.min(Math.ceil(canvas.height / state.camera.zoom) + 2, maxSourceH));
 
   if (sourceW <= 0 || sourceH <= 0) {
     return;
@@ -1145,31 +1221,46 @@ function drawWorld() {
     sourceY,
     sourceW,
     sourceH,
-    0,
-    0,
-    sourceW,
-    sourceH,
+    -fracX * state.camera.zoom,
+    -fracY * state.camera.zoom,
+    sourceW * state.camera.zoom,
+    sourceH * state.camera.zoom,
   );
 }
 
 function drawPlayers() {
   for (const [, player] of state.players) {
-    const screenX = player.x * TILE_SIZE - state.camera.x;
-    const screenY = player.y * TILE_SIZE - state.camera.y;
+    const screenX = (player.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
+    const screenY = (player.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const playerSize = TILE_SIZE * state.camera.zoom;
+    const inset = Math.max(2, 6 * state.camera.zoom);
 
     ctx.fillStyle = player.id === state.selfId ? "#22c55e" : "#3b82f6";
-    ctx.fillRect(screenX + 6, screenY + 6, TILE_SIZE - 12, TILE_SIZE - 12);
+    ctx.fillRect(screenX + inset, screenY + inset, playerSize - inset * 2, playerSize - inset * 2);
 
     ctx.fillStyle = "#f9fafb";
-    ctx.font = "12px system-ui";
-    ctx.fillText(player.username ?? "player", screenX - 4, screenY - 6);
+    ctx.font = `${Math.max(10, Math.floor(12 * state.camera.zoom))}px system-ui`;
+    ctx.fillText(player.username ?? "player", screenX - 4 * state.camera.zoom, screenY - 6 * state.camera.zoom);
   }
 }
+
+zoomOutBtn?.addEventListener("click", () => {
+  adjustCameraZoom(-CAMERA_ZOOM_STEP);
+});
+
+zoomInBtn?.addEventListener("click", () => {
+  adjustCameraZoom(CAMERA_ZOOM_STEP);
+});
+
+zoomResetBtn?.addEventListener("click", () => {
+  setCameraZoom(1);
+});
 
 function loop() {
   update();
 
   if (screens.game.classList.contains("active")) {
+    ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (!state.world) {
@@ -1209,3 +1300,5 @@ function loop() {
 
   requestAnimationFrame(loop);
 })();
+
+updateZoomUi();
