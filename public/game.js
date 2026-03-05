@@ -106,6 +106,7 @@ const debugGridToggle = document.getElementById("debugGridToggle");
 const debugHitboxesToggle = document.getElementById("debugHitboxesToggle");
 const debugPingToolsToggle = document.getElementById("debugPingToolsToggle");
 const debugNetSimPanel = document.getElementById("debugNetSimPanel");
+const debugNetSimStats = document.getElementById("debugNetSimStats");
 const debugSimPingInput = document.getElementById("debugSimPingInput");
 const debugSimJitterInput = document.getElementById("debugSimJitterInput");
 const debugSimLossInput = document.getElementById("debugSimLossInput");
@@ -179,7 +180,7 @@ const state = {
   netSimPingMs: 0,
   netSimJitterMs: 0,
   netSimLossPercent: 0,
-  debugPingToolsVisible: true,
+  debugPingToolsVisible: false,
   pauseMenuOpen: false,
   debugLastFrameAt: 0,
   debugLastInfoAt: 0,
@@ -237,6 +238,7 @@ const chatDebug = createChatDebugController({
     debugHitboxesToggle,
     debugPingToolsToggle,
     debugNetSimPanel,
+    debugNetSimStats,
     debugSimPingInput,
     debugSimJitterInput,
     debugSimLossInput,
@@ -2067,16 +2069,18 @@ function drawGemDrops() {
 
 function drawPlayers() {
   const now = performance.now();
+  const playerBoxW = Math.max(0.2, Number(state.collider?.width) || 0.72);
+  const playerBoxH = Math.max(0.2, Number(state.collider?.height) || 0.92);
   for (const [, player] of state.players) {
     const drawX = Number.isFinite(player.renderX) ? player.renderX : player.x;
     const drawY = Number.isFinite(player.renderY) ? player.renderY : player.y;
     const screenX = (drawX * TILE_SIZE - state.camera.x) * state.camera.zoom;
     const screenY = (drawY * TILE_SIZE - state.camera.y) * state.camera.zoom;
-    const playerSize = TILE_SIZE * state.camera.zoom;
-    const inset = Math.max(2, 6 * state.camera.zoom);
+    const playerDrawW = playerBoxW * TILE_SIZE * state.camera.zoom;
+    const playerDrawH = playerBoxH * TILE_SIZE * state.camera.zoom;
 
     ctx.fillStyle = player.id === state.selfId ? "#22c55e" : "#3b82f6";
-    ctx.fillRect(screenX + inset, screenY + inset, playerSize - inset * 2, playerSize - inset * 2);
+    ctx.fillRect(screenX, screenY, playerDrawW, playerDrawH);
 
     ctx.fillStyle = "#f9fafb";
     ctx.font = `${Math.max(10, Math.floor(12 * state.camera.zoom))}px system-ui`;
@@ -2096,7 +2100,7 @@ function drawPlayers() {
       const textWidth = Math.ceil(ctx.measureText(bubbleText).width);
       const bubbleW = textWidth + paddingX * 2;
       const bubbleH = fontSize + paddingY * 2;
-      const bubbleX = screenX + (playerSize - bubbleW) / 2;
+      const bubbleX = screenX + (playerDrawW - bubbleW) / 2;
 
       ctx.fillStyle = `rgba(15, 23, 42, ${0.9 * bubbleAlpha})`;
       ctx.fillRect(bubbleX, bubbleY, bubbleW, bubbleH);
@@ -2131,13 +2135,29 @@ function drawDebugHitboxes() {
   ctx.save();
   ctx.lineWidth = Math.max(1, Math.round(zoom));
 
-  // Foreground tile collision bounds in view.
-  ctx.strokeStyle = "rgba(248, 113, 113, 0.5)";
+  // Tile bounds in view, color-coded by collision/type.
   for (let tileY = viewTop; tileY <= viewBottom; tileY += 1) {
     for (let tileX = viewLeft; tileX <= viewRight; tileX += 1) {
-      const tileId = getTileIdAtLayer(tileX, tileY, "foreground");
-      if (tileId <= 0) {
+      const foregroundId = getTileIdAtLayer(tileX, tileY, "foreground");
+      const backgroundId = getTileIdAtLayer(tileX, tileY, "background");
+      if (foregroundId <= 0 && backgroundId <= 0) {
         continue;
+      }
+
+      const collisionKind = getCollisionKindAt(state.world, tileX, tileY);
+      const block = foregroundId > 0 ? state.blockDefs.get(foregroundId) : null;
+      const blockName = String(block?.NAME || "").toLowerCase();
+
+      if (blockName.includes("door")) {
+        ctx.strokeStyle = "rgba(16, 185, 129, 0.95)";
+      } else if (collisionKind === "platform") {
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.95)";
+      } else if (collisionKind === "solid") {
+        ctx.strokeStyle = "rgba(248, 113, 113, 0.75)";
+      } else if (foregroundId > 0) {
+        ctx.strokeStyle = "rgba(168, 85, 247, 0.7)";
+      } else {
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.55)";
       }
 
       const pos = toScreen(tileX, tileY);
@@ -2146,13 +2166,13 @@ function drawDebugHitboxes() {
     }
   }
 
-  // Player bounds (self uses collider; others use 1x1 tile actor box).
+  // Player bounds.
   for (const [, player] of state.players) {
     const playerX = Number.isFinite(player.renderX) ? player.renderX : player.x;
     const playerY = Number.isFinite(player.renderY) ? player.renderY : player.y;
     const isSelf = player.id === state.selfId;
-    const boxW = isSelf ? state.collider.width : 1;
-    const boxH = isSelf ? state.collider.height : 1;
+    const boxW = state.collider.width;
+    const boxH = state.collider.height;
     const pos = toScreen(playerX, playerY);
     ctx.strokeStyle = isSelf ? "rgba(34, 197, 94, 0.95)" : "rgba(96, 165, 250, 0.9)";
     ctx.strokeRect(pos.x, pos.y, boxW * TILE_SIZE * zoom, boxH * TILE_SIZE * zoom);

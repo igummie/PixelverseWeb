@@ -102,7 +102,7 @@
           <div class="debugHead">
             <strong>Debug</strong>
             <label class="debugGridToggle" for="debugPingToolsToggle">
-              <input id="debugPingToolsToggle" type="checkbox" checked />
+              <input id="debugPingToolsToggle" type="checkbox" />
               Ping Tools
             </label>
             <label class="debugGridToggle" for="debugGridToggle">
@@ -127,6 +127,7 @@
               Loss %
               <input id="debugSimLossInput" type="number" min="0" max="50" step="1" value="0" />
             </label>
+            <div id="debugNetSimStats" class="debugNetStats"></div>
           </div>
           <pre id="debugInfo" class="debugInfo"></pre>
         </div>

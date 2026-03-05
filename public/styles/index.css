@@ -339,6 +339,13 @@
         border-radius: 6px;
       }
 
+      .debugNetStats {
+        grid-column: 1 / -1;
+        font-size: 11px;
+        opacity: 0.9;
+        padding: 3px 4px 0;
+      }
+
       #chatInput {
         width: 100%;
         margin: 8px 12px;

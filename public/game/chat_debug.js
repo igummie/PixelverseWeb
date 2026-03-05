@@ -16,6 +16,7 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     debugHitboxesToggle,
     debugPingToolsToggle,
     debugNetSimPanel,
+    debugNetSimStats,
     debugSimPingInput,
     debugSimJitterInput,
     debugSimLossInput,
@@ -82,6 +83,9 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     }
     if (debugSimLossInput) {
       debugSimLossInput.value = String(Math.round(state.netSimLossPercent));
+    }
+    if (debugNetSimStats) {
+      debugNetSimStats.textContent = `Net sim: ${Math.round(state.netSimPingMs)}ms +/-${Math.round(state.netSimJitterMs)}ms, loss ${Math.round(state.netSimLossPercent)}%`;
     }
 
     applyPingToolsVisibility();
