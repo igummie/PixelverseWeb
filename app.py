@@ -19,6 +19,7 @@ from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconne
 from fastapi.responses import FileResponse, JSONResponse, Response
 from modules.chat_commands import process_chat_command
 from modules.command_runtime import apply_command_result
+from modules.ws_player_actions import respawn_player_to_door
 from modules.worldgen import generate_world_layers
 from pydantic import BaseModel, Field
 
@@ -1358,24 +1359,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 continue
 
             if msg_type == "respawn":
-                player = world["players"].get(client_id)
-                if not player:
-                    continue
-
-                spawn_x, spawn_y = get_spawn_from_door(world)
-                player["x"] = spawn_x
-                player["y"] = spawn_y
-
-                await broadcast_to_world(
-                    world,
-                    {
-                        "type": "player_moved",
-                        "id": client_id,
-                        "x": spawn_x,
-                        "y": spawn_y,
-                        "teleport": True,
-                    },
+                did_respawn = await respawn_player_to_door(
+                    world=world,
+                    player_id=client_id,
+                    get_spawn_from_door=get_spawn_from_door,
+                    broadcast_to_world=broadcast_to_world,
                 )
+                if not did_respawn:
+                    continue
                 continue
 
             if msg_type == "player_move":

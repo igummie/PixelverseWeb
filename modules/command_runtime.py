@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from modules.ws_player_actions import teleport_player
+
 
 async def apply_command_result(
     *,
@@ -72,28 +74,22 @@ async def apply_command_result(
             continue
 
         teleport_player_id = str(teleport.get("id", ""))
-        teleport_player = world["players"].get(teleport_player_id)
-        if not teleport_player:
+        teleport_target = world["players"].get(teleport_player_id)
+        if not teleport_target:
             continue
 
         try:
-            teleport_x = float(teleport.get("x", teleport_player.get("x", 0)))
-            teleport_y = float(teleport.get("y", teleport_player.get("y", 0)))
+            teleport_x = float(teleport.get("x", teleport_target.get("x", 0)))
+            teleport_y = float(teleport.get("y", teleport_target.get("y", 0)))
         except Exception:
             continue
 
-        teleport_player["x"] = teleport_x
-        teleport_player["y"] = teleport_y
-
-        await broadcast_to_world(
-            world,
-            {
-                "type": "player_moved",
-                "id": teleport_player_id,
-                "x": teleport_x,
-                "y": teleport_y,
-                "teleport": True,
-            },
+        await teleport_player(
+            world=world,
+            player_id=teleport_player_id,
+            x=teleport_x,
+            y=teleport_y,
+            broadcast_to_world=broadcast_to_world,
         )
 
     door_move = command_result.get("door_move")
@@ -154,36 +150,26 @@ async def apply_command_result(
         )
 
     spawn_x, spawn_y = get_spawn_from_door(world)
-    for target_player_id, target_player in world["players"].items():
+    for target_player_id in world["players"].keys():
         if target_player_id == client_id:
             continue
 
-        target_player["x"] = spawn_x
-        target_player["y"] = spawn_y
-        await broadcast_to_world(
-            world,
-            {
-                "type": "player_moved",
-                "id": target_player_id,
-                "x": spawn_x,
-                "y": spawn_y,
-                "teleport": True,
-            },
+        await teleport_player(
+            world=world,
+            player_id=target_player_id,
+            x=spawn_x,
+            y=spawn_y,
+            broadcast_to_world=broadcast_to_world,
         )
 
     caller_player = world["players"].get(client_id)
     if caller_player is None or command_sender_original is None:
         return
 
-    caller_player["x"] = command_sender_original[0]
-    caller_player["y"] = command_sender_original[1]
-    await broadcast_to_world(
-        world,
-        {
-            "type": "player_moved",
-            "id": client_id,
-            "x": command_sender_original[0],
-            "y": command_sender_original[1],
-            "teleport": True,
-        },
+    await teleport_player(
+        world=world,
+        player_id=client_id,
+        x=command_sender_original[0],
+        y=command_sender_original[1],
+        broadcast_to_world=broadcast_to_world,
     )
