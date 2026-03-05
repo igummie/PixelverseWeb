@@ -14,6 +14,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
   } = elements;
 
   const {
+    TILE_SIZE,
     CHAT_DRAWER_HANDLE_PEEK,
     CHAT_INPUT_PANEL_HEIGHT,
     CHAT_LOG_DRAWER_HEIGHT,
@@ -59,6 +60,11 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     const playerTileY = Math.floor(state.me.y);
     const mouseWorldX = state.camera.x + state.mouse.x / Math.max(0.0001, state.camera.zoom);
     const mouseWorldY = state.camera.y + state.mouse.y / Math.max(0.0001, state.camera.zoom);
+    const hoveredTileX = Math.floor(mouseWorldX / TILE_SIZE);
+    const hoveredTileY = Math.floor(mouseWorldY / TILE_SIZE);
+    const hoverTileInBounds =
+      hoveredTileX >= 0 && hoveredTileX < worldW && hoveredTileY >= 0 && hoveredTileY < worldH;
+    const hoverTileText = hoverTileInBounds ? `${hoveredTileX}, ${hoveredTileY}` : "out";
     const pingText = Number.isFinite(state.debugPingMs) ? `${Math.round(state.debugPingMs)}ms` : "--";
 
     debugInfo.textContent = [
@@ -67,7 +73,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
       `pos: ${state.me.x.toFixed(3)}, ${state.me.y.toFixed(3)}  tile: ${playerTileX}, ${playerTileY}`,
       `vel: ${state.velocity.x.toFixed(3)}, ${state.velocity.y.toFixed(3)}  onGround: ${state.onGround}`,
       `camera: ${state.camera.x.toFixed(2)}, ${state.camera.y.toFixed(2)}  zoom: ${state.camera.zoom.toFixed(2)}x`,
-      `mouse(world): ${mouseWorldX.toFixed(2)}, ${mouseWorldY.toFixed(2)}`,
+      `mouse(tile): ${hoverTileText}`,
       `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}`,
       `net sim: ${Math.round(state.netSimPingMs || 0)}ms +/-${Math.round(state.netSimJitterMs || 0)}ms  loss ${Math.round(state.netSimLossPercent || 0)}%`,
       `drops: ${state.gemDrops.size}  damageTiles: ${state.tileDamage.size}`,

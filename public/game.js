@@ -195,6 +195,7 @@ const hud = createHudController({
     loadingChatDrawer,
   },
   settings: {
+    TILE_SIZE,
     CHAT_DRAWER_HANDLE_PEEK,
     CHAT_INPUT_PANEL_HEIGHT,
     CHAT_LOG_DRAWER_HEIGHT,
