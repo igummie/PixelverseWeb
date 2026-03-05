@@ -185,7 +185,7 @@ const state = {
   debugLastFrameAt: 0,
   debugLastInfoAt: 0,
   pingTimerId: null,
-  transientWorldTexts: [],
+  transientSystemBubbles: [],
 };
 
 const hud = createHudController({
@@ -467,11 +467,8 @@ function initializeRemotePlayerTracking(player) {
   player.netVx = 0;
   player.netVy = 0;
   player.lastNetUpdateAt = performance.now();
-  if (!Number.isFinite(player.chatUntil)) {
-    player.chatUntil = 0;
-  }
-  if (!Number.isFinite(player.chatStartedAt)) {
-    player.chatStartedAt = 0;
+  if (!Array.isArray(player.chatBubbles)) {
+    player.chatBubbles = [];
   }
 }
 
@@ -531,32 +528,52 @@ function setLoadingChatLogOpen(open) {
   hud.setLoadingChatLogOpen(open);
 }
 
+function pushBubbleToQueue(queue, text, lifetimeMs = CHAT_BUBBLE_LIFETIME_MS) {
+  if (!Array.isArray(queue)) {
+    return;
+  }
+
+  const trimmed = String(text || "").trim();
+  if (!trimmed) {
+    return;
+  }
+
+  const now = performance.now();
+  queue.push({
+    text: trimmed,
+    startedAt: now,
+    until: now + Math.max(300, Number(lifetimeMs) || CHAT_BUBBLE_LIFETIME_MS),
+  });
+
+  while (queue.length > 4) {
+    queue.shift();
+  }
+}
+
 function setPlayerChatBubble(playerId, messageText) {
   const player = state.players.get(playerId);
   if (!player) {
     return;
   }
 
-  const text = String(messageText || "").trim();
-  if (!text) {
-    return;
+  if (!Array.isArray(player.chatBubbles)) {
+    player.chatBubbles = [];
   }
 
-  const now = performance.now();
-  player.chatText = text;
-  player.chatStartedAt = now;
-  player.chatUntil = now + CHAT_BUBBLE_LIFETIME_MS;
+  pushBubbleToQueue(player.chatBubbles, messageText, CHAT_BUBBLE_LIFETIME_MS);
 }
 
-function addTransientWorldText(x, y, text, durationMs = LEAVE_TEXT_FADE_MS) {
-  const now = performance.now();
-  state.transientWorldTexts.push({
+function addTransientSystemBubble(x, y, text, durationMs = CHAT_BUBBLE_LIFETIME_MS) {
+  const anchor = {
     x: Number(x) || 0,
     y: Number(y) || 0,
-    text: String(text || "").trim(),
-    startedAt: now,
-    until: now + Math.max(300, Number(durationMs) || LEAVE_TEXT_FADE_MS),
-  });
+    bubbles: [],
+  };
+
+  pushBubbleToQueue(anchor.bubbles, text, durationMs);
+  if (anchor.bubbles.length > 0) {
+    state.transientSystemBubbles.push(anchor);
+  }
 }
 
 function normalizeGemDrop(entry) {
@@ -1462,7 +1479,9 @@ function connectSocket() {
       initializeRemotePlayerTracking(msg.player);
       state.players.set(msg.player.id, msg.player);
       gameStatus.textContent = `World: ${state.world.name} | Players: ${state.players.size}`;
-      appendChatLine("system", `${msg.player.username || "player"} joined`);
+      const joinedName = msg.player.username || "player";
+      appendChatLine("system", `${joinedName} joined`);
+      addTransientSystemBubble(msg.player.x, msg.player.y, `${joinedName} joined`);
       return;
     }
 
@@ -1478,7 +1497,7 @@ function connectSocket() {
 
       const anchorX = Number.isFinite(leaving.renderX) ? leaving.renderX : leaving.x;
       const anchorY = Number.isFinite(leaving.renderY) ? leaving.renderY : leaving.y;
-      addTransientWorldText(anchorX, anchorY, `${username} has left.`);
+      addTransientSystemBubble(anchorX, anchorY, `${username} has left.`);
 
       state.players.delete(msg.id);
       gameStatus.textContent = `World: ${state.world.name} | Players: ${state.players.size}`;
@@ -2085,31 +2104,19 @@ function drawPlayers() {
     ctx.fillStyle = "#f9fafb";
     ctx.font = `${Math.max(10, Math.floor(12 * state.camera.zoom))}px system-ui`;
     ctx.fillText(player.username ?? "player", screenX - 4 * state.camera.zoom, screenY - 6 * state.camera.zoom);
-
-    if (player.chatText && Number.isFinite(player.chatUntil) && now < player.chatUntil) {
-      const bubbleText = String(player.chatText);
-      const fontSize = Math.max(10, Math.floor(12 * state.camera.zoom));
-      const paddingX = Math.max(4, Math.floor(6 * state.camera.zoom));
-      const paddingY = Math.max(2, Math.floor(4 * state.camera.zoom));
-      const bubbleY = screenY - Math.max(32, Math.floor(40 * state.camera.zoom));
-
-      const remainingMs = Math.max(0, player.chatUntil - now);
-      const bubbleAlpha = Math.max(0, Math.min(1, remainingMs / CHAT_BUBBLE_FADE_MS));
-
-      ctx.font = `${fontSize}px system-ui`;
-      const textWidth = Math.ceil(ctx.measureText(bubbleText).width);
-      const bubbleW = textWidth + paddingX * 2;
-      const bubbleH = fontSize + paddingY * 2;
-      const bubbleX = screenX + (playerDrawW - bubbleW) / 2;
-
-      ctx.fillStyle = `rgba(15, 23, 42, ${0.9 * bubbleAlpha})`;
-      ctx.fillRect(bubbleX, bubbleY, bubbleW, bubbleH);
-      ctx.strokeStyle = `rgba(148, 163, 184, ${0.6 * bubbleAlpha})`;
-      ctx.strokeRect(bubbleX + 0.5, bubbleY + 0.5, bubbleW - 1, bubbleH - 1);
-
-      ctx.fillStyle = `rgba(248, 250, 252, ${bubbleAlpha})`;
-      ctx.fillText(bubbleText, bubbleX + paddingX, bubbleY + paddingY + fontSize - 1);
-    }
+    drawBubbleStack(
+      {
+        x: screenX,
+        y: screenY,
+        width: playerDrawW,
+      },
+      player.chatBubbles,
+      now,
+      {
+        riseOffsetPx: Math.max(32, Math.floor(40 * state.camera.zoom)),
+        fadeWindowMs: CHAT_BUBBLE_FADE_MS,
+      },
+    );
   }
 }
 
@@ -2190,45 +2197,103 @@ function drawDebugHitboxes() {
   ctx.restore();
 }
 
+function drawBubbleStack(anchor, queue, now, options = {}) {
+  if (!Array.isArray(queue) || queue.length === 0) {
+    return;
+  }
+
+  const fadeWindowMs = Math.max(60, Number(options.fadeWindowMs) || CHAT_BUBBLE_FADE_MS);
+  const riseOffsetPx = Math.max(8, Number(options.riseOffsetPx) || 32);
+  const fontSize = Math.max(10, Math.floor(12 * state.camera.zoom));
+  const paddingX = Math.max(4, Math.floor(6 * state.camera.zoom));
+  const paddingY = Math.max(2, Math.floor(4 * state.camera.zoom));
+  const gapY = Math.max(2, Math.floor(3 * state.camera.zoom));
+
+  const active = queue.filter((entry) => entry && Number.isFinite(entry.until) && now < entry.until);
+  queue.length = 0;
+  for (const entry of active) {
+    queue.push(entry);
+  }
+
+  if (queue.length === 0) {
+    return;
+  }
+
+  const prepared = [];
+  ctx.font = `${fontSize}px system-ui`;
+  for (const entry of queue) {
+    const text = String(entry.text || "").trim();
+    if (!text) {
+      continue;
+    }
+    const textWidth = Math.ceil(ctx.measureText(text).width);
+    const bubbleW = textWidth + paddingX * 2;
+    const bubbleH = fontSize + paddingY * 2;
+    const remainingMs = Math.max(0, entry.until - now);
+    const bubbleAlpha = Math.max(0, Math.min(1, remainingMs / fadeWindowMs));
+    prepared.push({ text, bubbleW, bubbleH, bubbleAlpha });
+  }
+
+  if (prepared.length === 0) {
+    return;
+  }
+
+  const totalHeight = prepared.reduce((sum, bubble, idx) => {
+    const gap = idx > 0 ? gapY : 0;
+    return sum + gap + bubble.bubbleH;
+  }, 0);
+
+  let cursorY = anchor.y - riseOffsetPx - totalHeight;
+  for (const bubble of prepared) {
+    const bubbleX = anchor.x + (anchor.width - bubble.bubbleW) / 2;
+
+    ctx.fillStyle = `rgba(15, 23, 42, ${0.9 * bubble.bubbleAlpha})`;
+    ctx.fillRect(bubbleX, cursorY, bubble.bubbleW, bubble.bubbleH);
+    ctx.strokeStyle = `rgba(148, 163, 184, ${0.6 * bubble.bubbleAlpha})`;
+    ctx.strokeRect(bubbleX + 0.5, cursorY + 0.5, bubble.bubbleW - 1, bubble.bubbleH - 1);
+
+    ctx.fillStyle = `rgba(248, 250, 252, ${bubble.bubbleAlpha})`;
+    ctx.fillText(bubble.text, bubbleX + paddingX, cursorY + paddingY + fontSize - 1);
+
+    cursorY += bubble.bubbleH + gapY;
+  }
+}
+
 function drawTransientWorldTexts() {
-  if (state.transientWorldTexts.length === 0) {
+  if (state.transientSystemBubbles.length === 0) {
     return;
   }
 
   const now = performance.now();
-  const nextTexts = [];
+  const nextAnchors = [];
 
-  for (const entry of state.transientWorldTexts) {
-    if (!entry || now >= entry.until) {
+  for (const entry of state.transientSystemBubbles) {
+    if (!entry) {
       continue;
     }
 
-    const remaining = Math.max(0, entry.until - now);
-    const alpha = Math.max(0, Math.min(1, remaining / LEAVE_TEXT_FADE_MS));
     const screenX = (entry.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
     const screenY = (entry.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
-    const fontSize = Math.max(10, Math.floor(12 * state.camera.zoom));
-    const paddingX = Math.max(4, Math.floor(6 * state.camera.zoom));
-    const paddingY = Math.max(2, Math.floor(4 * state.camera.zoom));
-    const bubbleY = screenY - Math.max(36, Math.floor(42 * state.camera.zoom));
+    drawBubbleStack(
+      {
+        x: screenX,
+        y: screenY,
+        width: 0,
+      },
+      entry.bubbles,
+      now,
+      {
+        riseOffsetPx: Math.max(36, Math.floor(42 * state.camera.zoom)),
+        fadeWindowMs: LEAVE_TEXT_FADE_MS,
+      },
+    );
 
-    ctx.font = `${fontSize}px system-ui`;
-    const textWidth = Math.ceil(ctx.measureText(entry.text).width);
-    const bubbleW = textWidth + paddingX * 2;
-    const bubbleH = fontSize + paddingY * 2;
-    const bubbleX = screenX - bubbleW / 2;
-
-    ctx.fillStyle = `rgba(15, 23, 42, ${0.9 * alpha})`;
-    ctx.fillRect(bubbleX, bubbleY, bubbleW, bubbleH);
-    ctx.strokeStyle = `rgba(148, 163, 184, ${0.6 * alpha})`;
-    ctx.strokeRect(bubbleX + 0.5, bubbleY + 0.5, bubbleW - 1, bubbleH - 1);
-
-    ctx.fillStyle = `rgba(248, 250, 252, ${alpha})`;
-    ctx.fillText(entry.text, bubbleX + paddingX, bubbleY + paddingY + fontSize - 1);
-    nextTexts.push(entry);
+    if (Array.isArray(entry.bubbles) && entry.bubbles.length > 0) {
+      nextAnchors.push(entry);
+    }
   }
 
-  state.transientWorldTexts = nextTexts;
+  state.transientSystemBubbles = nextAnchors;
 }
 
 zoomOutBtn?.addEventListener("click", () => {
