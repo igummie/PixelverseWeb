@@ -153,6 +153,14 @@
         align-items: center;
       }
 
+      .inlineToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
       .atlasControls input[type="range"] {
         flex: 1;
       }
@@ -239,6 +247,42 @@
       .tiny {
         font-size: 12px;
         opacity: 0.9;
+      }
+
+      .tileUsage {
+        font-size: 12px;
+        opacity: 0.95;
+        line-height: 1.4;
+        max-height: 84px;
+        overflow-y: auto;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #0f172a;
+        padding: 6px 8px;
+      }
+
+      .tileUsageHeader {
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+
+      .tileUsageList {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .tileUsageMaskBtn {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid #334155;
+        background: #111827;
+        color: #dbeafe;
+      }
+
+      .tileUsageMaskBtn:hover {
+        background: #1e293b;
       }
 
       .variantList {
@@ -370,7 +414,14 @@
         </div>
         <div class="tiny" id="zoomInfo">Atlas Zoom: 1x</div>
 
+        <div class="atlasControls">
+          <label class="inlineToggle" for="overlayOpacityRange">Overlay Opacity</label>
+          <input id="overlayOpacityRange" type="range" min="0" max="1" step="0.05" value="0.22" />
+          <div class="tiny" id="overlayOpacityInfo">22%</div>
+        </div>
+
         <div class="tiny" id="selectionInfo">Tile: 0 | Mask: 0</div>
+        <div class="tileUsage" id="tileUsageInfo">Tile usage: none</div>
 
         <div class="row">
           <button id="assignBtn">Set Primary Tile</button>
@@ -387,12 +438,17 @@
           <div class="tiny" style="margin-bottom: 6px">Paint Test Canvas (LMB draw, RMB erase)</div>
           <div class="row" style="margin-bottom: 8px">
             <button id="clearTestBtn" type="button">Clear Test</button>
+            <button id="testPickMaskBtn" type="button">Pick Mask: Off</button>
           </div>
           <div class="atlasControls" style="margin-bottom: 8px">
             <button id="testZoomOutBtn" type="button">-</button>
             <input id="testZoomRange" type="range" min="0.5" max="4" step="0.25" value="1" />
             <button id="testZoomInBtn" type="button">+</button>
             <button id="testZoomResetBtn" type="button">1x</button>
+            <label class="inlineToggle" for="testGridToggle">
+              <input id="testGridToggle" type="checkbox" checked />
+              Show Grid
+            </label>
           </div>
           <div class="tiny" id="testZoomInfo" style="margin-bottom: 8px">Test Zoom: 1.00x</div>
           <div id="testCanvasWrap" class="testCanvasWrap">
@@ -451,7 +507,10 @@
       const zoomResetBtn = document.getElementById("zoomResetBtn");
       const zoomRange = document.getElementById("zoomRange");
       const zoomInfo = document.getElementById("zoomInfo");
+      const overlayOpacityRange = document.getElementById("overlayOpacityRange");
+      const overlayOpacityInfo = document.getElementById("overlayOpacityInfo");
       const selectionInfo = document.getElementById("selectionInfo");
+      const tileUsageInfo = document.getElementById("tileUsageInfo");
       const maskGrid = document.getElementById("maskGrid");
       const assignBtn = document.getElementById("assignBtn");
       const addVariantBtn = document.getElementById("addVariantBtn");
@@ -474,11 +533,13 @@
       const testCanvasWrap = document.getElementById("testCanvasWrap");
       const testCanvas = document.getElementById("testCanvas");
       const clearTestBtn = document.getElementById("clearTestBtn");
+      const testPickMaskBtn = document.getElementById("testPickMaskBtn");
       const testZoomOutBtn = document.getElementById("testZoomOutBtn");
       const testZoomInBtn = document.getElementById("testZoomInBtn");
       const testZoomResetBtn = document.getElementById("testZoomResetBtn");
       const testZoomRange = document.getElementById("testZoomRange");
       const testZoomInfo = document.getElementById("testZoomInfo");
+      const testGridToggle = document.getElementById("testGridToggle");
 
       const atlasContext = atlasCanvas.getContext("2d");
       atlasContext.imageSmoothingEnabled = false;
@@ -503,6 +564,7 @@
         selectedMask: DEFAULT_TEXTURE47_VALID_MASKS[0],
         maskVariants: new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, [index]])),
         atlasZoom: 1,
+        overlayOpacity: 0.22,
         showVariantDetails: false,
         showAdvancedMasks: false,
         saveHandle: null,
@@ -516,11 +578,13 @@
         height: 10,
         tileSize: 32,
         zoom: 1,
+        showGrid: true,
         panX: 0,
         panY: 0,
         drawing: false,
         pointerMode: "draw",
         panning: false,
+        pickMaskMode: false,
         panStartX: 0,
         panStartY: 0,
         panOriginX: 0,
@@ -636,6 +700,17 @@
           atlasCanvas.style.width = `${state.image.width * state.atlasZoom}px`;
           atlasCanvas.style.height = `${state.image.height * state.atlasZoom}px`;
         }
+      }
+
+      function setOverlayOpacity(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return;
+        }
+
+        state.overlayOpacity = Math.min(1, Math.max(0, numeric));
+        overlayOpacityRange.value = String(state.overlayOpacity);
+        overlayOpacityInfo.textContent = `${Math.round(state.overlayOpacity * 100)}%`;
       }
 
       function setTestZoom(value) {
@@ -781,8 +856,10 @@
             .filter((value) => Number.isInteger(value) && value >= 0 && value < getTileCount()),
         );
 
-        atlasContext.fillStyle = "rgba(34, 197, 94, 0.22)";
-        atlasContext.strokeStyle = "rgba(34, 197, 94, 0.65)";
+        const fillAlpha = state.overlayOpacity;
+        const strokeAlpha = Math.min(1, Math.max(0.2, state.overlayOpacity + 0.35));
+        atlasContext.fillStyle = `rgba(34, 197, 94, ${fillAlpha})`;
+        atlasContext.strokeStyle = `rgba(34, 197, 94, ${strokeAlpha})`;
         atlasContext.lineWidth = 1;
         for (const tileIndex of assignedTileIndices) {
           const tileX = (tileIndex % state.columns) * state.tileWidth;
@@ -802,6 +879,80 @@
 
       function renderSelectionInfo() {
         selectionInfo.textContent = `Tile: ${state.selectedTileIndex} | Mask: ${state.selectedMask}`;
+      }
+
+      function jumpToMask(mask) {
+        if (!isMaskInRange(mask)) {
+          return;
+        }
+
+        const visibleMasks = getVisibleMaskChoices();
+        if (!visibleMasks.includes(mask)) {
+          state.showAdvancedMasks = true;
+          advancedMasksToggle.checked = true;
+        }
+
+        state.selectedMask = mask;
+        renderAll();
+
+        requestAnimationFrame(() => {
+          const maskCard = maskGrid.querySelector(`[data-mask="${mask}"]`);
+          if (maskCard) {
+            maskCard.scrollIntoView({ block: "nearest", inline: "nearest" });
+          }
+        });
+      }
+
+      function renderTileUsageInfo() {
+        tileUsageInfo.innerHTML = "";
+
+        const usage = [];
+
+        for (const [mask, variants] of state.maskVariants.entries()) {
+          if (!Array.isArray(variants)) {
+            continue;
+          }
+
+          variants.forEach((tileIndex, variantIndex) => {
+            if (tileIndex !== state.selectedTileIndex) {
+              return;
+            }
+
+            usage.push({
+              mask,
+              role: variantIndex === 0 ? "P" : `V${variantIndex}`,
+            });
+          });
+        }
+
+        usage.sort((a, b) => Number(a.mask) - Number(b.mask));
+
+        if (usage.length === 0) {
+          tileUsageInfo.textContent = `Tile ${state.selectedTileIndex} usage: none`;
+          return;
+        }
+
+        const header = document.createElement("div");
+        header.className = "tileUsageHeader";
+        header.textContent = `Tile ${state.selectedTileIndex} used by ${usage.length} mask entr${usage.length === 1 ? "y" : "ies"} (click to jump):`;
+
+        const list = document.createElement("div");
+        list.className = "tileUsageList";
+
+        usage.forEach((entry) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "tileUsageMaskBtn";
+          button.textContent = `Mask ${entry.mask} (${entry.role})`;
+          button.title = `Jump to mask ${entry.mask}`;
+          button.addEventListener("click", () => {
+            jumpToMask(entry.mask);
+          });
+          list.appendChild(button);
+        });
+
+        tileUsageInfo.appendChild(header);
+        tileUsageInfo.appendChild(list);
       }
 
       function getMaskVariants(mask) {
@@ -893,6 +1044,7 @@
         for (const mask of getVisibleMaskChoices()) {
           const card = document.createElement("div");
           card.className = "maskCard" + (mask === state.selectedMask ? " active" : "");
+          card.dataset.mask = String(mask);
 
           const variants = getMaskVariants(mask);
           const assigned = variants.length > 0 ? variants[0] : null;
@@ -998,6 +1150,7 @@
         clampTileSelection();
         renderAtlas();
         renderSelectionInfo();
+        renderTileUsageInfo();
         renderMaskGrid();
         renderTestCanvas();
       }
@@ -1080,13 +1233,28 @@
               drawMappedTestTile(x, y, drawX, drawY);
             }
 
-            testContext.strokeStyle = "rgba(148, 163, 184, 0.2)";
-            testContext.strokeRect(drawX + 0.5, drawY + 0.5, testState.tileSize - 1, testState.tileSize - 1);
+            if (testState.showGrid) {
+              testContext.strokeStyle = "rgba(148, 163, 184, 0.2)";
+              testContext.strokeRect(drawX + 0.5, drawY + 0.5, testState.tileSize - 1, testState.tileSize - 1);
+            }
           }
         }
       }
 
       function setTestTileAtEvent(event, forceMode = null) {
+        const tileCoords = getTestTileCoordsFromEvent(event);
+        if (!tileCoords) {
+          return;
+        }
+
+        const { tileX, tileY } = tileCoords;
+        const index = tileY * testState.width + tileX;
+        const mode = forceMode || testState.pointerMode;
+        testState.tiles[index] = mode === "erase" ? 0 : 1;
+        renderTestCanvas();
+      }
+
+      function getTestTileCoordsFromEvent(event) {
         const bounds = testCanvas.getBoundingClientRect();
         const scaledX = (event.clientX - bounds.left) * (testCanvas.width / bounds.width);
         const scaledY = (event.clientY - bounds.top) * (testCanvas.height / bounds.height);
@@ -1094,13 +1262,26 @@
         const tileY = Math.floor(scaledY / testState.tileSize);
 
         if (tileX < 0 || tileY < 0 || tileX >= testState.width || tileY >= testState.height) {
+          return null;
+        }
+
+        return { tileX, tileY };
+      }
+
+      function updatePickMaskButtonUi() {
+        testPickMaskBtn.textContent = testState.pickMaskMode ? "Pick Mask: On" : "Pick Mask: Off";
+      }
+
+      function pickMaskFromTestEvent(event) {
+        const tileCoords = getTestTileCoordsFromEvent(event);
+        if (!tileCoords) {
           return;
         }
 
-        const index = tileY * testState.width + tileX;
-        const mode = forceMode || testState.pointerMode;
-        testState.tiles[index] = mode === "erase" ? 0 : 1;
-        renderTestCanvas();
+        const { tileX, tileY } = tileCoords;
+        const mask = getMaskFromTestGrid(tileX, tileY);
+        jumpToMask(mask);
+        setStatus(`Picked mask ${mask} from test tile (${tileX}, ${tileY})`);
       }
 
       function buildMaskOrderOutput() {
@@ -1596,6 +1777,11 @@
         setAtlasZoom(1);
       });
 
+      overlayOpacityRange.addEventListener("input", () => {
+        setOverlayOpacity(overlayOpacityRange.value);
+        renderAtlas();
+      });
+
       atlasCanvas.addEventListener("click", (event) => {
         if (event.button === 2) {
           return;
@@ -1624,7 +1810,7 @@
       });
 
       atlasCanvas.addEventListener("pointerdown", (event) => {
-        if (event.button !== 2 || state.atlasZoom <= 1) {
+        if (event.button !== 2) {
           return;
         }
 
@@ -1704,6 +1890,12 @@
       });
 
       clearMappingsBtn.addEventListener("click", () => {
+        const confirmed = window.confirm("Remove all mask mappings?");
+        if (!confirmed) {
+          setStatus("Remove mappings cancelled");
+          return;
+        }
+
         state.maskVariants.clear();
         setStatus("All mask mappings removed");
         syncAfterMappingChange();
@@ -1712,6 +1904,11 @@
       clearTestBtn.addEventListener("click", () => {
         initializeTestGrid();
         renderTestCanvas();
+      });
+
+      testPickMaskBtn.addEventListener("click", () => {
+        testState.pickMaskMode = !testState.pickMaskMode;
+        updatePickMaskButtonUi();
       });
 
       testZoomRange.addEventListener("input", () => {
@@ -1730,11 +1927,22 @@
         setTestZoom(1);
       });
 
+      testGridToggle.addEventListener("change", () => {
+        testState.showGrid = !!testGridToggle.checked;
+        renderTestCanvas();
+      });
+
       testCanvas.addEventListener("contextmenu", (event) => {
         event.preventDefault();
       });
 
       testCanvas.addEventListener("pointerdown", (event) => {
+        if (testState.pickMaskMode && event.button !== 2) {
+          event.preventDefault();
+          pickMaskFromTestEvent(event);
+          return;
+        }
+
         if (event.button === 2 && testState.zoom > 1) {
           event.preventDefault();
           testState.panning = true;
@@ -1860,7 +2068,10 @@
 
       initializeTestGrid();
       setAtlasZoom(1);
+      setOverlayOpacity(state.overlayOpacity);
       setTestZoom(1);
+      updatePickMaskButtonUi();
+      testGridToggle.checked = testState.showGrid;
       variantDetailsToggle.checked = state.showVariantDetails;
       advancedMasksToggle.checked = state.showAdvancedMasks;
       applyVariantDetailsVisibility();
