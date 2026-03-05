@@ -106,6 +106,12 @@ const debugNetSimPanel = document.getElementById("debugNetSimPanel");
 const debugSimPingInput = document.getElementById("debugSimPingInput");
 const debugSimJitterInput = document.getElementById("debugSimJitterInput");
 const debugSimLossInput = document.getElementById("debugSimLossInput");
+const pauseOverlay = document.getElementById("pauseOverlay");
+const pauseExitWorldBtn = document.getElementById("pauseExitWorldBtn");
+const pauseRespawnBtn = document.getElementById("pauseRespawnBtn");
+const pauseOptionsBtn = document.getElementById("pauseOptionsBtn");
+const pauseLogoutBtn = document.getElementById("pauseLogoutBtn");
+const pauseBackBtn = document.getElementById("pauseBackBtn");
 const gameHud = document.getElementById("gameHud");
 const gameTopbar = document.querySelector(".gameTopbar");
 
@@ -170,6 +176,7 @@ const state = {
   netSimJitterMs: 0,
   netSimLossPercent: 0,
   debugPingToolsVisible: true,
+  pauseMenuOpen: false,
   debugLastFrameAt: 0,
   debugLastInfoAt: 0,
   pingTimerId: null,
@@ -270,6 +277,40 @@ function updateDebugInfo(force = false) {
 
 function stopPingTimer() {
   chatDebug.stopPingTimer();
+}
+
+function setPauseMenuOpen(open) {
+  const nextOpen = !!open;
+  state.pauseMenuOpen = nextOpen;
+  pauseOverlay?.classList.toggle("hidden", !nextOpen);
+
+  if (nextOpen) {
+    setChatInputOpen(false);
+    state.keys.clear();
+    state.jumpQueued = false;
+    pauseBackBtn?.focus();
+  }
+}
+
+function togglePauseMenu() {
+  if (!screens.game.classList.contains("active")) {
+    return;
+  }
+  setPauseMenuOpen(!state.pauseMenuOpen);
+}
+
+function respawnInCurrentWorld() {
+  if (!state.world) {
+    return;
+  }
+  sendWs({ type: "respawn" });
+}
+
+function openPauseOptions() {
+  state.debugEnabled = !state.debugEnabled;
+  updateDebugUi();
+  updateDebugInfo(true);
+  appendChatLine("system", `Options: debug ${state.debugEnabled ? "enabled" : "disabled"}.`);
 }
 
 function sendDebugPing() {
@@ -1653,6 +1694,7 @@ async function enterWorld(targetWorldName = null) {
 
 function leaveWorld() {
   const leavingWorldName = state.world?.name;
+  setPauseMenuOpen(false);
 
   sendWs({ type: "leave_world" });
   setChatInputOpen(false);
@@ -1679,6 +1721,7 @@ function leaveWorld() {
 
 function logout() {
   leaveWorld();
+  setPauseMenuOpen(false);
   state.chatLogLines = [];
   renderChatLog();
   state.token = null;
@@ -1705,6 +1748,30 @@ leaveWorldBtn.addEventListener("mousedown", (event) => {
   event.stopPropagation();
   leaveWorld();
 });
+pauseBackBtn?.addEventListener("click", () => {
+  setPauseMenuOpen(false);
+});
+pauseExitWorldBtn?.addEventListener("click", () => {
+  setPauseMenuOpen(false);
+  leaveWorld();
+});
+pauseRespawnBtn?.addEventListener("click", () => {
+  setPauseMenuOpen(false);
+  respawnInCurrentWorld();
+});
+pauseOptionsBtn?.addEventListener("click", () => {
+  setPauseMenuOpen(false);
+  openPauseOptions();
+});
+pauseLogoutBtn?.addEventListener("click", () => {
+  setPauseMenuOpen(false);
+  logout();
+});
+pauseOverlay?.addEventListener("click", (event) => {
+  if (event.target === pauseOverlay) {
+    setPauseMenuOpen(false);
+  }
+});
 
 blockSelect.addEventListener("change", () => {
   const nextBlockId = Number(blockSelect.value);
@@ -1729,13 +1796,23 @@ worldInput.addEventListener("keydown", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && screens.game.classList.contains("active")) {
+    event.preventDefault();
+    if (state.pauseMenuOpen) {
+      setPauseMenuOpen(false);
+      return;
+    }
+
     if (state.chatInputOpen) {
-      event.preventDefault();
       setChatInputOpen(false);
       return;
     }
 
-    leaveWorld();
+    setPauseMenuOpen(true);
+    return;
+  }
+
+  if (state.pauseMenuOpen) {
+    event.preventDefault();
     return;
   }
 
@@ -1789,6 +1866,10 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keyup", (event) => {
+  if (state.pauseMenuOpen) {
+    return;
+  }
+
   if (state.chatInputOpen && event.key.toLowerCase() !== "escape") {
     return;
   }

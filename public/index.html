@@ -84,9 +84,19 @@
           <button id="zoomResetBtn" type="button">1x</button>
           <button id="chatToggleBtn" type="button">Chat</button>
           <button id="debugToggleBtn" type="button">Debug</button>
-          <div class="spacer">LMB: break | RMB: place | WASD/Arrows: move | Enter: chat | ESC: leave</div>
+          <div class="spacer">LMB: break | RMB: place | WASD/Arrows: move | Enter: chat | ESC: pause</div>
           <button id="leaveWorldBtn">Leave World</button>
         </div>
+        </div>
+        <div id="pauseOverlay" class="pauseOverlay hidden" role="dialog" aria-modal="true" aria-label="Pause Menu">
+          <div class="pausePanel">
+            <div class="pauseTitle">Paused</div>
+            <button id="pauseExitWorldBtn" type="button">Exit world</button>
+            <button id="pauseRespawnBtn" type="button">Respawn</button>
+            <button id="pauseOptionsBtn" type="button">Options</button>
+            <button id="pauseLogoutBtn" type="button">Logout</button>
+            <button id="pauseBackBtn" type="button">Back</button>
+          </div>
         </div>
         <div id="debugOverlay" class="debugOverlay hidden">
           <div class="debugHead">

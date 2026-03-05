@@ -1356,6 +1356,27 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if not world:
                 continue
 
+            if msg_type == "respawn":
+                player = world["players"].get(client_id)
+                if not player:
+                    continue
+
+                spawn_x, spawn_y = get_spawn_from_door(world)
+                player["x"] = spawn_x
+                player["y"] = spawn_y
+
+                await broadcast_to_world(
+                    world,
+                    {
+                        "type": "player_moved",
+                        "id": client_id,
+                        "x": spawn_x,
+                        "y": spawn_y,
+                        "teleport": True,
+                    },
+                )
+                continue
+
             if msg_type == "player_move":
                 player = world["players"].get(client_id)
                 if not player:
