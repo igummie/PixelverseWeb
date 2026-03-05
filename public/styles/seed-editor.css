@@ -252,12 +252,17 @@ button.secondary {
   background: #020617;
   image-rendering: pixelated;
   display: block;
-  width: 100%;
 }
 
 .cardPreview {
   grid-column: 1 / -1;
+  width: 76px;
   height: 76px;
+  justify-self: center;
+}
+
+.stagePreview {
+  width: 100%;
 }
 
 .stagePreview {

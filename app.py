@@ -1803,7 +1803,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     if tile not in BLOCKS_BY_ID:
                         continue
 
-                    if tile in BACKGROUND_BLOCK_IDS:
+                    block_def = BLOCKS_BY_ID.get(tile) or {}
+                    block_type = str(block_def.get("BLOCK_TYPE", "")).upper()
+
+                    # Platforms share the foreground layer with solid blocks.
+                    # Only explicit BACKGROUND blocks are placed in background.
+                    place_in_background = block_type == "BACKGROUND"
+
+                    if place_in_background:
                         if world["background"][index] == 0:
                             world["background"][index] = tile
                             target_layer = "background"
