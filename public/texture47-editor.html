@@ -16,6 +16,26 @@
         color: #e5e7eb;
       }
 
+      .pageControls {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(17, 24, 39, 0.92);
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      .pageControls input[type="checkbox"] {
+        width: 14px;
+        height: 14px;
+      }
+
       .layout {
         display: grid;
         grid-template-columns: 420px 1fr;
@@ -46,6 +66,7 @@
       }
 
       input,
+      select,
       button,
       textarea {
         background: #111827;
@@ -186,6 +207,7 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
+        cursor: pointer;
       }
 
       .maskCard.active {
@@ -219,38 +241,79 @@
         opacity: 0.9;
       }
 
+      .variantList {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 2px;
+      }
+
+      .variantDetailsBlock {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      body.hideVariantDetails .variantDetailsBlock {
+        display: none;
+      }
+
+      .variantItem {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #374151;
+        border-radius: 6px;
+        padding: 5px;
+        background: #0f172a;
+      }
+
+      .variantThumb {
+        width: 28px;
+        height: 28px;
+        border: 1px solid #4b5563;
+        border-radius: 4px;
+        image-rendering: pixelated;
+        flex: 0 0 auto;
+      }
+
+      .variantMeta {
+        flex: 1;
+        font-size: 11px;
+        opacity: 0.95;
+      }
+
+      .variantBadge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        border: 1px solid #14532d;
+        background: #166534;
+        color: #dcfce7;
+        border-radius: 4px;
+        padding: 1px 5px;
+        margin-right: 6px;
+      }
+
+      .removeVariantBtn {
+        flex: 0 0 auto;
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid #7f1d1d;
+        background: #3f0b0b;
+        color: #fecaca;
+      }
+
+      .removeVariantBtn:hover {
+        background: #5b1111;
+      }
+
       .inspector {
         border: 1px solid #374151;
         border-radius: 8px;
         padding: 8px;
         background: #111827;
-      }
-
-      .toggleGrid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 6px;
-      }
-
-      .toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 34px;
-        border: 1px solid #4b5563;
-        border-radius: 6px;
-        font-size: 12px;
-        user-select: none;
-      }
-
-      .toggle input {
-        margin-right: 6px;
-      }
-
-      .toggle.center {
-        background: #1e3a8a;
-        border-color: #60a5fa;
-        font-weight: 700;
       }
 
       .links {
@@ -270,6 +333,13 @@
     </style>
   </head>
   <body>
+    <div class="pageControls">
+      <label for="variantDetailsToggle">Show Variant Details</label>
+      <input id="variantDetailsToggle" type="checkbox" />
+      <label for="advancedMasksToggle">Show Advanced Masks</label>
+      <input id="advancedMasksToggle" type="checkbox" />
+    </div>
+
     <div class="layout">
       <div class="panel">
         <div class="title">Texture47 Visual Editor</div>
@@ -303,23 +373,14 @@
         <div class="tiny" id="selectionInfo">Tile: 0 | Mask: 0</div>
 
         <div class="row">
-          <button id="assignBtn">Assign Selected Tile</button>
+          <button id="assignBtn">Set Primary Tile</button>
+          <button id="addVariantBtn">Add Variant</button>
           <button id="clearMaskBtn">Clear Mask Assignment</button>
-        </div>
-
-        <div class="inspector">
-          <div class="tiny" style="margin-bottom: 6px">Mask Inspector (optional)</div>
-          <div class="toggleGrid" id="toggleGrid"></div>
-          <div class="tiny" id="inspectorMaskText" style="margin-top: 8px">Computed mask: 0</div>
-          <div class="row" style="margin-top: 8px">
-            <button id="focusMaskBtn">Focus This Mask</button>
-            <button id="assignInspectorBtn">Assign Tile to This Mask</button>
-          </div>
         </div>
 
         <div class="row">
           <button id="resetDefaultBtn">Reset Default Mapping</button>
-          <button id="generateBtn">Generate JSON</button>
+          <button id="clearMappingsBtn">Remove Mappings</button>
         </div>
 
         <div class="inspector">
@@ -342,9 +403,21 @@
         <textarea id="jsonOutput" spellcheck="false"></textarea>
 
         <div class="row">
+          <button id="cleanupJsonBtn">Cleanup JSON</button>
           <button id="copyBtn">Copy JSON</button>
           <button id="saveBtn">Save JSON</button>
           <button id="downloadBtn">Download JSON</button>
+        </div>
+
+        <div class="row">
+          <input id="presetNameInput" type="text" placeholder="preset name" />
+          <button id="savePresetBtn">Save Preset</button>
+        </div>
+
+        <div class="row">
+          <select id="presetSelect"></select>
+          <button id="loadPresetBtn">Load Preset</button>
+          <button id="deletePresetBtn">Delete Preset</button>
         </div>
 
         <div id="status" class="status"></div>
@@ -364,6 +437,7 @@
         91, 94, 95, 104, 106, 107, 120, 122, 123, 126, 127, 208, 210, 214, 216, 218, 219, 222, 223,
         248, 250, 251, 254, 255,
       ];
+      const ALL_MASK_CHOICES = Array.from({ length: 256 }, (_, index) => index);
 
       const atlasIdInput = document.getElementById("atlasIdInput");
       const atlasSuggestions = document.getElementById("atlasSuggestions");
@@ -380,18 +454,23 @@
       const selectionInfo = document.getElementById("selectionInfo");
       const maskGrid = document.getElementById("maskGrid");
       const assignBtn = document.getElementById("assignBtn");
+      const addVariantBtn = document.getElementById("addVariantBtn");
       const clearMaskBtn = document.getElementById("clearMaskBtn");
       const resetDefaultBtn = document.getElementById("resetDefaultBtn");
-      const generateBtn = document.getElementById("generateBtn");
+      const clearMappingsBtn = document.getElementById("clearMappingsBtn");
+      const variantDetailsToggle = document.getElementById("variantDetailsToggle");
+      const advancedMasksToggle = document.getElementById("advancedMasksToggle");
+      const cleanupJsonBtn = document.getElementById("cleanupJsonBtn");
       const jsonOutput = document.getElementById("jsonOutput");
       const copyBtn = document.getElementById("copyBtn");
       const saveBtn = document.getElementById("saveBtn");
       const downloadBtn = document.getElementById("downloadBtn");
+      const presetNameInput = document.getElementById("presetNameInput");
+      const savePresetBtn = document.getElementById("savePresetBtn");
+      const presetSelect = document.getElementById("presetSelect");
+      const loadPresetBtn = document.getElementById("loadPresetBtn");
+      const deletePresetBtn = document.getElementById("deletePresetBtn");
       const status = document.getElementById("status");
-      const toggleGrid = document.getElementById("toggleGrid");
-      const inspectorMaskText = document.getElementById("inspectorMaskText");
-      const focusMaskBtn = document.getElementById("focusMaskBtn");
-      const assignInspectorBtn = document.getElementById("assignInspectorBtn");
       const testCanvasWrap = document.getElementById("testCanvasWrap");
       const testCanvas = document.getElementById("testCanvas");
       const clearTestBtn = document.getElementById("clearTestBtn");
@@ -411,6 +490,7 @@
       const MIN_TEST_ZOOM = 0.5;
       const MAX_TEST_ZOOM = 4;
       const TEST_ZOOM_STEP = 0.25;
+      const PRESET_STORAGE_KEY = "texture47-editor-presets.v1";
 
       const state = {
         atlasId: "dirt",
@@ -421,8 +501,10 @@
         tileHeight: 32,
         selectedTileIndex: 0,
         selectedMask: DEFAULT_TEXTURE47_VALID_MASKS[0],
-        maskToTile: new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, index])),
+        maskVariants: new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, [index]])),
         atlasZoom: 1,
+        showVariantDetails: false,
+        showAdvancedMasks: false,
         saveHandle: null,
         atlasOptions: ["dirt", "dev", "sand", "cave_background"],
         filteredAtlasOptions: [],
@@ -454,31 +536,62 @@
         originScrollTop: 0,
       };
 
-      const inspector = {
-        n: false,
-        e: false,
-        s: false,
-        w: false,
-        ne: false,
-        se: false,
-        sw: false,
-        nw: false,
-      };
+      function isMaskInRange(mask) {
+        return Number.isInteger(mask) && mask >= 0 && mask <= 255;
+      }
 
-      const TOGGLE_DEFS = [
-        { key: "nw", label: "NW", bit: 4, edgeA: "n", edgeB: "w" },
-        { key: "n", label: "N", bit: 2 },
-        { key: "ne", label: "NE", bit: 1, edgeA: "n", edgeB: "e" },
-        { key: "w", label: "W", bit: 8 },
-        { key: "center", label: "C", center: true },
-        { key: "e", label: "E", bit: 16 },
-        { key: "sw", label: "SW", bit: 128, edgeA: "s", edgeB: "w" },
-        { key: "s", label: "S", bit: 64 },
-        { key: "se", label: "SE", bit: 32, edgeA: "s", edgeB: "e" },
-      ];
+      function getVisibleMaskChoices() {
+        if (state.showAdvancedMasks) {
+          return ALL_MASK_CHOICES;
+        }
+
+        const mappedMasks = Array.from(state.maskVariants.keys()).filter((mask) => isMaskInRange(mask));
+        const merged = new Set([...DEFAULT_TEXTURE47_VALID_MASKS, ...mappedMasks]);
+        return Array.from(merged).sort((a, b) => a - b);
+      }
+
+      function normalizeStatusMessage(message) {
+        if (typeof message === "string") {
+          return message;
+        }
+
+        if (Array.isArray(message)) {
+          const parts = message.map((item) => {
+            if (typeof item === "string") {
+              return item;
+            }
+            if (item && typeof item.msg === "string") {
+              const location = Array.isArray(item.loc) ? item.loc.join(".") : "";
+              return location ? `${location}: ${item.msg}` : item.msg;
+            }
+            try {
+              return JSON.stringify(item);
+            } catch {
+              return String(item);
+            }
+          });
+          return parts.join(" | ");
+        }
+
+        if (message && typeof message === "object") {
+          if (typeof message.detail === "string") {
+            return message.detail;
+          }
+          if (Array.isArray(message.detail)) {
+            return normalizeStatusMessage(message.detail);
+          }
+          try {
+            return JSON.stringify(message);
+          } catch {
+            return String(message);
+          }
+        }
+
+        return String(message);
+      }
 
       function setStatus(message, isError = false) {
-        status.textContent = message;
+        status.textContent = normalizeStatusMessage(message);
         status.classList.toggle("error", isError);
       }
 
@@ -565,24 +678,6 @@
         }
       }
 
-      function computeInspectorMask() {
-        if (!(inspector.n && inspector.e)) inspector.ne = false;
-        if (!(inspector.s && inspector.e)) inspector.se = false;
-        if (!(inspector.s && inspector.w)) inspector.sw = false;
-        if (!(inspector.n && inspector.w)) inspector.nw = false;
-
-        let mask = 0;
-        if (inspector.n) mask |= 2;
-        if (inspector.e) mask |= 16;
-        if (inspector.s) mask |= 64;
-        if (inspector.w) mask |= 8;
-        if (inspector.ne) mask |= 1;
-        if (inspector.se) mask |= 32;
-        if (inspector.sw) mask |= 128;
-        if (inspector.nw) mask |= 4;
-        return mask;
-      }
-
       function maskToBooleanBits(mask) {
         return {
           n: !!(mask & 2),
@@ -594,19 +689,6 @@
           sw: !!(mask & 128),
           nw: !!(mask & 4),
         };
-      }
-
-      function applyMaskToInspector(mask) {
-        const bits = maskToBooleanBits(mask);
-        inspector.n = bits.n;
-        inspector.e = bits.e;
-        inspector.s = bits.s;
-        inspector.w = bits.w;
-        inspector.ne = bits.ne && bits.n && bits.e;
-        inspector.se = bits.se && bits.s && bits.e;
-        inspector.sw = bits.sw && bits.s && bits.w;
-        inspector.nw = bits.nw && bits.n && bits.w;
-        renderInspector();
       }
 
       function drawMaskMini(canvas, mask) {
@@ -693,6 +775,22 @@
           atlasContext.stroke();
         }
 
+        const assignedTileIndices = new Set(
+          Array.from(state.maskVariants.values())
+            .flatMap((values) => values)
+            .filter((value) => Number.isInteger(value) && value >= 0 && value < getTileCount()),
+        );
+
+        atlasContext.fillStyle = "rgba(34, 197, 94, 0.22)";
+        atlasContext.strokeStyle = "rgba(34, 197, 94, 0.65)";
+        atlasContext.lineWidth = 1;
+        for (const tileIndex of assignedTileIndices) {
+          const tileX = (tileIndex % state.columns) * state.tileWidth;
+          const tileY = Math.floor(tileIndex / state.columns) * state.tileHeight;
+          atlasContext.fillRect(tileX + 1, tileY + 1, state.tileWidth - 2, state.tileHeight - 2);
+          atlasContext.strokeRect(tileX + 1.5, tileY + 1.5, state.tileWidth - 3, state.tileHeight - 3);
+        }
+
         const selectedX = (state.selectedTileIndex % state.columns) * state.tileWidth;
         const selectedY = Math.floor(state.selectedTileIndex / state.columns) * state.tileHeight;
         atlasContext.lineWidth = 2;
@@ -706,31 +804,103 @@
         selectionInfo.textContent = `Tile: ${state.selectedTileIndex} | Mask: ${state.selectedMask}`;
       }
 
+      function getMaskVariants(mask) {
+        const variants = state.maskVariants.get(mask);
+        if (!Array.isArray(variants)) {
+          return [];
+        }
+        return variants.filter((value) => Number.isInteger(value) && value >= 0 && value < getTileCount());
+      }
+
+      function getPrimaryTile(mask) {
+        const variants = getMaskVariants(mask);
+        return variants.length > 0 ? variants[0] : null;
+      }
+
       function setMaskAssignment(mask, tileIndex) {
-        if (!DEFAULT_TEXTURE47_VALID_MASKS.includes(mask)) {
-          return;
+        if (!isMaskInRange(mask)) {
+          return false;
         }
 
         if (tileIndex == null || tileIndex < 0 || tileIndex >= getTileCount()) {
-          state.maskToTile.delete(mask);
-        } else {
-          state.maskToTile.set(mask, tileIndex);
+          if (!state.maskVariants.has(mask)) {
+            return false;
+          }
+          state.maskVariants.delete(mask);
+          return true;
         }
+
+        const current = getMaskVariants(mask);
+        if (current.includes(tileIndex)) {
+          return false;
+        }
+
+        state.maskVariants.set(mask, [...current, tileIndex]);
+        return true;
+      }
+
+      function setPrimaryVariant(mask, tileIndex) {
+        if (!isMaskInRange(mask)) {
+          return false;
+        }
+
+        if (tileIndex == null || tileIndex < 0 || tileIndex >= getTileCount()) {
+          return false;
+        }
+
+        const current = getMaskVariants(mask);
+        const next = [tileIndex, ...current.filter((value) => value !== tileIndex)];
+        if (current.length === next.length && current.every((value, index) => value === next[index])) {
+          return false;
+        }
+
+        state.maskVariants.set(mask, next);
+        return true;
+      }
+
+      function removeMaskVariant(mask, tileIndex) {
+        if (!isMaskInRange(mask)) {
+          return false;
+        }
+
+        const current = getMaskVariants(mask);
+        const next = current.filter((value) => value !== tileIndex);
+        if (next.length === current.length) {
+          return false;
+        }
+
+        if (next.length === 0) {
+          state.maskVariants.delete(mask);
+        } else {
+          state.maskVariants.set(mask, next);
+        }
+
+        return true;
+      }
+
+      function syncAfterMappingChange() {
+        generateJsonOutput();
+        renderAll();
+      }
+
+      function applyVariantDetailsVisibility() {
+        document.body.classList.toggle("hideVariantDetails", !state.showVariantDetails);
       }
 
       function renderMaskGrid() {
         maskGrid.innerHTML = "";
 
-        for (const mask of DEFAULT_TEXTURE47_VALID_MASKS) {
-          const card = document.createElement("button");
-          card.type = "button";
+        for (const mask of getVisibleMaskChoices()) {
+          const card = document.createElement("div");
           card.className = "maskCard" + (mask === state.selectedMask ? " active" : "");
 
-          const assigned = state.maskToTile.has(mask) ? state.maskToTile.get(mask) : null;
+          const variants = getMaskVariants(mask);
+          const assigned = variants.length > 0 ? variants[0] : null;
+          const extraVariants = variants.slice(1);
 
           const head = document.createElement("div");
           head.className = "maskHead";
-          head.innerHTML = `<strong>${mask}</strong><span>tile ${assigned ?? "-"}</span>`;
+          head.innerHTML = `<strong>${mask}</strong><span>${variants.length > 0 ? `${variants.length} variants` : "0 variants"}</span>`;
 
           const miniRow = document.createElement("div");
           miniRow.className = "miniRow";
@@ -752,7 +922,51 @@
           details.className = "tiny";
           details.textContent = assigned == null
             ? "No assignment"
-            : `Tile r${Math.floor(assigned / state.columns)} c${assigned % state.columns}`;
+            : `Primary r${Math.floor(assigned / state.columns)} c${assigned % state.columns}`;
+
+          const variantDetails = document.createElement("div");
+          variantDetails.className = "variantDetailsBlock";
+
+          const variantsLabel = document.createElement("div");
+          variantsLabel.className = "tiny";
+          variantsLabel.textContent = extraVariants.length > 0 ? "Extra Variants" : "No extra variants";
+
+          const variantList = document.createElement("div");
+          variantList.className = "variantList";
+
+          extraVariants.forEach((tileIndex) => {
+            const item = document.createElement("div");
+            item.className = "variantItem";
+
+            const thumb = document.createElement("canvas");
+            thumb.className = "variantThumb";
+            thumb.width = 28;
+            thumb.height = 28;
+            drawTilePreview(thumb, tileIndex);
+
+            const meta = document.createElement("div");
+            meta.className = "variantMeta";
+            meta.textContent = `Tile ${tileIndex} (r${Math.floor(tileIndex / state.columns)} c${tileIndex % state.columns})`;
+
+            const removeButton = document.createElement("button");
+            removeButton.type = "button";
+            removeButton.className = "removeVariantBtn";
+            removeButton.textContent = "Remove";
+            removeButton.title = `Remove tile ${tileIndex} from mask ${mask}`;
+            removeButton.addEventListener("click", (event) => {
+              event.stopPropagation();
+              const removed = removeMaskVariant(mask, tileIndex);
+              if (removed) {
+                setStatus(`Removed variant tile ${tileIndex} from mask ${mask}`);
+                syncAfterMappingChange();
+              }
+            });
+
+            item.appendChild(thumb);
+            item.appendChild(meta);
+            item.appendChild(removeButton);
+            variantList.appendChild(item);
+          });
 
           miniRow.appendChild(miniMask);
           miniRow.appendChild(miniTile);
@@ -760,60 +974,24 @@
           card.appendChild(head);
           card.appendChild(miniRow);
           card.appendChild(details);
+          variantDetails.appendChild(variantsLabel);
+          variantDetails.appendChild(variantList);
+
+          card.appendChild(variantDetails);
 
           card.addEventListener("click", () => {
             state.selectedMask = mask;
-            applyMaskToInspector(mask);
             renderAll();
           });
 
           card.addEventListener("dblclick", () => {
             setMaskAssignment(mask, state.selectedTileIndex);
             setStatus(`Assigned tile ${state.selectedTileIndex} -> mask ${mask}`);
-            renderAll();
+            syncAfterMappingChange();
           });
 
           maskGrid.appendChild(card);
         }
-      }
-
-      function renderInspector() {
-        toggleGrid.innerHTML = "";
-
-        for (const toggle of TOGGLE_DEFS) {
-          const item = document.createElement("label");
-          item.className = "toggle" + (toggle.center ? " center" : "");
-
-          if (toggle.center) {
-            item.textContent = "CENTER";
-            toggleGrid.appendChild(item);
-            continue;
-          }
-
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.checked = !!inspector[toggle.key];
-
-          if (toggle.edgeA && toggle.edgeB) {
-            checkbox.disabled = !(inspector[toggle.edgeA] && inspector[toggle.edgeB]);
-          }
-
-          checkbox.addEventListener("change", () => {
-            inspector[toggle.key] = checkbox.checked;
-            const mask = computeInspectorMask();
-            inspectorMaskText.textContent = `Computed mask: ${mask}`;
-            renderInspector();
-          });
-
-          const text = document.createElement("span");
-          text.textContent = toggle.label;
-
-          item.appendChild(checkbox);
-          item.appendChild(text);
-          toggleGrid.appendChild(item);
-        }
-
-        inspectorMaskText.textContent = `Computed mask: ${computeInspectorMask()}`;
       }
 
       function renderAll() {
@@ -821,7 +999,6 @@
         renderAtlas();
         renderSelectionInfo();
         renderMaskGrid();
-        renderInspector();
         renderTestCanvas();
       }
 
@@ -858,9 +1035,11 @@
 
       function drawMappedTestTile(tileX, tileY, drawX, drawY) {
         const mask = getMaskFromTestGrid(tileX, tileY);
-        const assignedIndex = state.maskToTile.get(mask);
-        const fallbackIndex = state.maskToTile.get(255) ?? state.selectedTileIndex;
-        const tileIndex = Number.isInteger(assignedIndex) ? assignedIndex : fallbackIndex;
+        const variants = getMaskVariants(mask);
+        const fallbackVariants = getMaskVariants(255);
+        const sourceVariants = variants.length > 0 ? variants : (fallbackVariants.length > 0 ? fallbackVariants : [state.selectedTileIndex]);
+        const hash = Math.abs((tileX * 73856093) ^ (tileY * 19349663));
+        const tileIndex = sourceVariants[hash % sourceVariants.length];
 
         if (!state.image || !Number.isInteger(tileIndex) || tileIndex < 0 || tileIndex >= getTileCount()) {
           testContext.fillStyle = "#334155";
@@ -925,33 +1104,204 @@
       }
 
       function buildMaskOrderOutput() {
-        const assignedIndices = Array.from(state.maskToTile.values());
+        const assignedIndices = Array.from(state.maskVariants.values()).flatMap((values) => values);
         const highestAssigned = assignedIndices.length ? Math.max(...assignedIndices) : 0;
-        const totalEntries = Math.max(DEFAULT_TEXTURE47_VALID_MASKS.length, highestAssigned + 1);
-        const fallbackMask = 255;
+        const atlasTileCount = Math.max(1, state.columns * state.rows);
+        const totalEntries = Math.max(atlasTileCount, highestAssigned + 1);
+        const tileToMask = new Array(totalEntries).fill(255);
 
-        const tileToMask = new Array(totalEntries).fill(fallbackMask);
-
-        for (const [mask, tileIndex] of state.maskToTile.entries()) {
-          if (tileIndex >= 0 && tileIndex < totalEntries) {
-            tileToMask[tileIndex] = mask;
+        for (const [mask, tileIndices] of state.maskVariants.entries()) {
+          const primary = Array.isArray(tileIndices) && tileIndices.length > 0 ? tileIndices[0] : null;
+          if (Number.isInteger(primary) && primary >= 0 && primary < totalEntries) {
+            tileToMask[primary] = mask;
           }
         }
 
         return tileToMask;
       }
 
+      function buildMaskVariantsOutput() {
+        const output = {};
+        const masks = Array.from(state.maskVariants.keys())
+          .map((value) => Number(value))
+          .filter((value) => isMaskInRange(value))
+          .sort((a, b) => a - b);
+
+        for (const mask of masks) {
+          const variants = getMaskVariants(mask);
+          if (variants.length > 0) {
+            output[String(mask)] = variants;
+          }
+        }
+        return output;
+      }
+
+      function buildCompactMaskOrderOutput() {
+        const compact = [...buildMaskOrderOutput()];
+        while (compact.length > 1) {
+          const last = compact[compact.length - 1];
+          if (last === 255 || last == null) {
+            compact.pop();
+            continue;
+          }
+          break;
+        }
+
+        if (compact.length === 0) {
+          compact.push(255);
+        }
+
+        return compact;
+      }
+
+      function buildCleanJsonOutput() {
+        return {
+          columns: state.columns,
+          rows: state.rows,
+          maskOrder: buildCompactMaskOrderOutput(),
+          maskVariants: buildMaskVariantsOutput(),
+        };
+      }
+
+      function readPresetsFromStorage() {
+        try {
+          const raw = localStorage.getItem(PRESET_STORAGE_KEY);
+          if (!raw) {
+            return {};
+          }
+
+          const parsed = JSON.parse(raw);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return {};
+          }
+
+          return parsed;
+        } catch {
+          return {};
+        }
+      }
+
+      function writePresetsToStorage(presets) {
+        localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets));
+      }
+
+      function refreshPresetOptions(selectedName = "") {
+        const presets = readPresetsFromStorage();
+        const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+        presetSelect.innerHTML = "";
+
+        if (names.length === 0) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "no presets";
+          presetSelect.appendChild(option);
+          presetSelect.disabled = true;
+          loadPresetBtn.disabled = true;
+          deletePresetBtn.disabled = true;
+          return;
+        }
+
+        presetSelect.disabled = false;
+        loadPresetBtn.disabled = false;
+        deletePresetBtn.disabled = false;
+
+        for (const name of names) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          presetSelect.appendChild(option);
+        }
+
+        if (selectedName && names.includes(selectedName)) {
+          presetSelect.value = selectedName;
+        }
+      }
+
+      function saveCurrentPreset() {
+        const presetName = String(presetNameInput.value || "").trim();
+        if (!presetName) {
+          setStatus("Enter a preset name", true);
+          return;
+        }
+
+        const presets = readPresetsFromStorage();
+        presets[presetName] = {
+          columns: state.columns,
+          rows: state.rows,
+          maskVariants: buildMaskVariantsOutput(),
+        };
+
+        writePresetsToStorage(presets);
+        refreshPresetOptions(presetName);
+        setStatus(`Saved preset: ${presetName}`);
+      }
+
+      async function loadPresetByName(presetName) {
+        const presets = readPresetsFromStorage();
+        const preset = presets[presetName];
+        if (!preset || typeof preset !== "object") {
+          setStatus("Preset not found", true);
+          return;
+        }
+
+        const nextColumns = parsePositiveInt(preset.columns, state.columns);
+        const nextRows = parsePositiveInt(preset.rows, state.rows);
+        state.columns = nextColumns;
+        state.rows = nextRows;
+        columnsInput.value = String(state.columns);
+        rowsInput.value = String(state.rows);
+
+        if (state.image) {
+          state.tileWidth = Math.floor(state.image.width / state.columns);
+          state.tileHeight = Math.floor(state.image.height / state.rows);
+        }
+
+        parseConfigIntoState({ maskVariants: preset.maskVariants || {} });
+        clampTileSelection();
+        generateJsonOutput();
+        renderAll();
+        setStatus(`Loaded preset: ${presetName} (applied to current texture ${state.atlasId})`);
+      }
+
       function parseConfigIntoState(config) {
+        state.maskVariants.clear();
+
+        if (config && typeof config.maskVariants === "object" && config.maskVariants !== null) {
+          for (const [maskKey, variantsValue] of Object.entries(config.maskVariants)) {
+            const mask = Number(maskKey);
+            if (!isMaskInRange(mask)) {
+              continue;
+            }
+
+            const variants = Array.isArray(variantsValue)
+              ? variantsValue
+                .map((value) => Number(value))
+                .filter((value) => Number.isInteger(value) && value >= 0)
+              : [];
+
+            if (variants.length > 0) {
+              state.maskVariants.set(mask, Array.from(new Set(variants)));
+            }
+          }
+        }
+
+        if (state.maskVariants.size > 0) {
+          return;
+        }
+
         if (Array.isArray(config?.maskOrder)) {
-          state.maskToTile.clear();
+          state.maskVariants.clear();
           config.maskOrder.forEach((mask, index) => {
             const value = Number(mask);
-            if (Number.isInteger(value) && value >= 0 && DEFAULT_TEXTURE47_VALID_MASKS.includes(value)) {
-              state.maskToTile.set(value, index);
+            if (isMaskInRange(value)) {
+              // Legacy maskOrder does not preserve true variant sets. Keep only first seen as primary.
+              if (!state.maskVariants.has(value)) {
+                state.maskVariants.set(value, [index]);
+              }
             }
           });
         } else {
-          state.maskToTile = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, index]));
+          state.maskVariants = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, [index]]));
         }
       }
 
@@ -1004,7 +1354,7 @@
           parseConfigIntoState(config);
           setStatus(`Loaded ${state.atlasId}.png and ${state.atlasId}.json`);
         } catch {
-          state.maskToTile = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, index]));
+          state.maskVariants = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, [index]]));
           setStatus(`Loaded ${state.atlasId}.png. JSON missing, using default mask order.`);
         }
 
@@ -1018,6 +1368,7 @@
           columns: state.columns,
           rows: state.rows,
           maskOrder: buildMaskOrderOutput(),
+          maskVariants: buildMaskVariantsOutput(),
         };
 
         jsonOutput.value = JSON.stringify(output, null, 2);
@@ -1104,6 +1455,7 @@
           columns: state.columns,
           rows: state.rows,
           maskOrder: buildMaskOrderOutput(),
+          maskVariants: buildMaskVariantsOutput(),
         };
 
         jsonOutput.value = JSON.stringify(
@@ -1111,6 +1463,7 @@
             columns: payloadToSave.columns,
             rows: payloadToSave.rows,
             maskOrder: payloadToSave.maskOrder,
+            maskVariants: payloadToSave.maskVariants,
           },
           null,
           2,
@@ -1133,7 +1486,33 @@
           }
 
           if (!response.ok) {
+            const details = payload?.detail;
+            const legacyMaskValidation = Array.isArray(details)
+              && details.length > 0
+              && details.every((item) => {
+                const message = String(item?.msg || "").toLowerCase();
+                const location = Array.isArray(item?.loc) ? item.loc.join(".").toLowerCase() : "";
+                return message.includes("valid integer") && location.startsWith("body.maskorder");
+              });
+
+            if (legacyMaskValidation) {
+              setStatus(
+                "Server is using an older save schema that rejects empty mapping slots. Restart backend so null/sparse mask mappings are supported.",
+                true,
+              );
+              return;
+            }
+
             setStatus(payload?.detail || "Server save failed", true);
+            return;
+          }
+
+          const serverSavedMaskVariants = payload?.saved?.maskVariants;
+          if (!serverSavedMaskVariants || typeof serverSavedMaskVariants !== "object") {
+            setStatus(
+              "Server save endpoint is outdated and dropped maskVariants. Restart backend so variant changes persist.",
+              true,
+            );
             return;
           }
 
@@ -1278,26 +1657,56 @@
       atlasCanvas.addEventListener("pointercancel", stopAtlasPan);
 
       assignBtn.addEventListener("click", () => {
-        setMaskAssignment(state.selectedMask, state.selectedTileIndex);
-        setStatus(`Assigned tile ${state.selectedTileIndex} -> mask ${state.selectedMask}`);
-        generateJsonOutput();
+        const changed = setPrimaryVariant(state.selectedMask, state.selectedTileIndex);
+        if (changed) {
+          setStatus(`Set tile ${state.selectedTileIndex} as PRIMARY for mask ${state.selectedMask}`);
+          syncAfterMappingChange();
+        } else {
+          setStatus(`Tile ${state.selectedTileIndex} is already PRIMARY for mask ${state.selectedMask}`);
+        }
+      });
+
+      addVariantBtn.addEventListener("click", () => {
+        const changed = setMaskAssignment(state.selectedMask, state.selectedTileIndex);
+        if (changed) {
+          setStatus(`Added variant tile ${state.selectedTileIndex} -> mask ${state.selectedMask}`);
+          syncAfterMappingChange();
+        } else {
+          setStatus(`Tile ${state.selectedTileIndex} already exists for mask ${state.selectedMask}`);
+        }
+      });
+
+      variantDetailsToggle.addEventListener("change", () => {
+        state.showVariantDetails = !!variantDetailsToggle.checked;
+        applyVariantDetailsVisibility();
+      });
+
+      advancedMasksToggle.addEventListener("change", () => {
+        state.showAdvancedMasks = !!advancedMasksToggle.checked;
+        const visibleMasks = getVisibleMaskChoices();
+        if (!visibleMasks.includes(state.selectedMask)) {
+          state.selectedMask = visibleMasks[0] ?? 0;
+        }
         renderAll();
       });
 
       clearMaskBtn.addEventListener("click", () => {
-        state.maskToTile.delete(state.selectedMask);
+        setMaskAssignment(state.selectedMask, null);
         setStatus(`Cleared assignment for mask ${state.selectedMask}`);
-        generateJsonOutput();
-        renderAll();
+        syncAfterMappingChange();
       });
 
       resetDefaultBtn.addEventListener("click", () => {
-        state.maskToTile = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, index]));
+        state.maskVariants = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, [index]]));
         state.selectedMask = DEFAULT_TEXTURE47_VALID_MASKS[0];
-        applyMaskToInspector(state.selectedMask);
         setStatus("Reset to default sequential mapping");
-        generateJsonOutput();
-        renderAll();
+        syncAfterMappingChange();
+      });
+
+      clearMappingsBtn.addEventListener("click", () => {
+        state.maskVariants.clear();
+        setStatus("All mask mappings removed");
+        syncAfterMappingChange();
       });
 
       clearTestBtn.addEventListener("click", () => {
@@ -1369,11 +1778,6 @@
       testCanvas.addEventListener("pointerleave", stopDrawing);
       testCanvas.addEventListener("pointercancel", stopDrawing);
 
-      generateBtn.addEventListener("click", () => {
-        generateJsonOutput();
-        setStatus("JSON generated");
-      });
-
       copyBtn.addEventListener("click", async () => {
         try {
           await navigator.clipboard.writeText(jsonOutput.value);
@@ -1385,6 +1789,11 @@
 
       saveBtn.addEventListener("click", async () => {
         await saveJsonToFile();
+      });
+
+      cleanupJsonBtn.addEventListener("click", () => {
+        jsonOutput.value = JSON.stringify(buildCleanJsonOutput(), null, 2);
+        setStatus("JSON cleaned: removed trailing default mask entries");
       });
 
       downloadBtn.addEventListener("click", () => {
@@ -1400,29 +1809,37 @@
         setStatus("Downloaded JSON file");
       });
 
-      focusMaskBtn.addEventListener("click", () => {
-        const mask = computeInspectorMask();
-        state.selectedMask = mask;
-        if (!DEFAULT_TEXTURE47_VALID_MASKS.includes(mask)) {
-          setStatus(`Mask ${mask} is not in the 47 valid mask list`, true);
-        } else {
-          setStatus(`Focused mask ${mask}`);
-        }
-        renderAll();
+      savePresetBtn.addEventListener("click", () => {
+        saveCurrentPreset();
       });
 
-      assignInspectorBtn.addEventListener("click", () => {
-        const mask = computeInspectorMask();
-        if (!DEFAULT_TEXTURE47_VALID_MASKS.includes(mask)) {
-          setStatus(`Mask ${mask} is not valid in this 47-tile set`, true);
+      loadPresetBtn.addEventListener("click", async () => {
+        const selectedName = String(presetSelect.value || "").trim();
+        if (!selectedName) {
+          setStatus("Select a preset to load", true);
+          return;
+        }
+        await loadPresetByName(selectedName);
+      });
+
+      deletePresetBtn.addEventListener("click", () => {
+        const selectedName = String(presetSelect.value || "").trim();
+        if (!selectedName) {
+          setStatus("Select a preset to delete", true);
           return;
         }
 
-        state.selectedMask = mask;
-        setMaskAssignment(mask, state.selectedTileIndex);
-        setStatus(`Assigned tile ${state.selectedTileIndex} -> inspector mask ${mask}`);
-        generateJsonOutput();
-        renderAll();
+        const presets = readPresetsFromStorage();
+        if (!presets[selectedName]) {
+          setStatus("Preset not found", true);
+          refreshPresetOptions();
+          return;
+        }
+
+        delete presets[selectedName];
+        writePresetsToStorage(presets);
+        refreshPresetOptions();
+        setStatus(`Deleted preset: ${selectedName}`);
       });
 
       columnsInput.addEventListener("change", () => {
@@ -1441,12 +1858,15 @@
         renderAll();
       });
 
-      applyMaskToInspector(state.selectedMask);
       initializeTestGrid();
       setAtlasZoom(1);
       setTestZoom(1);
+      variantDetailsToggle.checked = state.showVariantDetails;
+      advancedMasksToggle.checked = state.showAdvancedMasks;
+      applyVariantDetailsVisibility();
       generateJsonOutput();
       renderAll();
+      refreshPresetOptions();
       loadAtlasOptions();
       loadAtlasAndConfig();
 

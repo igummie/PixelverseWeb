@@ -174,8 +174,9 @@ function drawConnected47TileToContext(targetContext, block, drawX, drawY) {
   const tileX = Math.floor(drawX / TILE_SIZE);
   const tileY = Math.floor(drawY / TILE_SIZE);
   const mask = getTexture47Mask(tileX, tileY, block.ATLAS_ID);
-  const maskToIndex = texture47.maskToIndex;
-  const variantIndex = maskToIndex.get(mask) ?? (texture47.maskOrder.length - 1);
+  const variants = texture47.maskVariants.get(mask) || texture47.maskVariants.get(255) || [texture47.fallbackIndex];
+  const hash = Math.abs((tileX * 73856093) ^ (tileY * 19349663));
+  const variantIndex = variants[hash % variants.length];
   const atlasColumns = Number.isInteger(texture47.columns) && texture47.columns > 0
     ? texture47.columns
     : TEXTURE47_COLS;
@@ -554,6 +555,7 @@ async function loadBlockDefinitions() {
       let columns = TEXTURE47_COLS;
       let rows = TEXTURE47_ROWS;
       let maskOrder = DEFAULT_TEXTURE47_VALID_MASKS;
+      let maskVariants = new Map();
 
       try {
         let config = null;
@@ -572,14 +574,57 @@ async function loadBlockDefinitions() {
         }
 
         if (Array.isArray(config?.maskOrder) && config.maskOrder.length > 0) {
-          maskOrder = config.maskOrder
-            .map((value) => Number(value))
-            .filter((value) => Number.isInteger(value) && value >= 0);
-          if (maskOrder.length === 0) {
-            maskOrder = DEFAULT_TEXTURE47_VALID_MASKS;
+          const normalized = config.maskOrder.map((value) => {
+            const parsed = Number(value);
+            return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+          });
+          const hasValidMask = normalized.some((value) => Number.isInteger(value));
+          if (hasValidMask) {
+            maskOrder = normalized;
+          }
+        }
+
+        if (config?.maskVariants && typeof config.maskVariants === "object") {
+          for (const [maskKey, variantValues] of Object.entries(config.maskVariants)) {
+            const mask = Number(maskKey);
+            if (!Number.isInteger(mask) || mask < 0) {
+              continue;
+            }
+
+            if (!Array.isArray(variantValues)) {
+              continue;
+            }
+
+            const variants = variantValues
+              .map((value) => Number(value))
+              .filter((value) => Number.isInteger(value) && value >= 0);
+
+            if (variants.length > 0) {
+              maskVariants.set(mask, Array.from(new Set(variants)));
+            }
           }
         }
       } catch {
+      }
+
+      const maskToIndex = new Map();
+      let fallbackIndex = 0;
+      for (let i = 0; i < maskOrder.length; i += 1) {
+        const value = maskOrder[i];
+        if (Number.isInteger(value) && value >= 0) {
+          maskToIndex.set(value, i);
+          fallbackIndex = i;
+        }
+      }
+
+      if (maskToIndex.has(255)) {
+        fallbackIndex = Number(maskToIndex.get(255));
+      }
+
+      if (maskVariants.size === 0) {
+        for (const [maskValue, tileIndex] of maskToIndex.entries()) {
+          maskVariants.set(maskValue, [tileIndex]);
+        }
       }
 
       state.texture47.set(atlasId, {
@@ -589,7 +634,9 @@ async function loadBlockDefinitions() {
         tileWidth: Math.floor(image.width / columns),
         tileHeight: Math.floor(image.height / rows),
         maskOrder,
-        maskToIndex: new Map(maskOrder.map((value, index) => [value, index])),
+        fallbackIndex,
+        maskVariants,
+        maskToIndex,
       });
     } catch (error) {
       console.warn(`47-tile texture missing for ${atlasId}:`, error.message);

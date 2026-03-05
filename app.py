@@ -396,7 +396,8 @@ class SaveTexture47ConfigBody(BaseModel):
     atlasId: str = Field(min_length=1, max_length=64)
     columns: int = Field(ge=1, le=512)
     rows: int = Field(ge=1, le=512)
-    maskOrder: list[int] = Field(default_factory=list)
+    maskOrder: list[Any] = Field(default_factory=list)
+    maskVariants: dict[str, list[Any]] = Field(default_factory=dict)
 
 
 world_cache: dict[str, dict[str, Any]] = {}
@@ -537,20 +538,51 @@ def save_texture47_config(
     if not re.fullmatch(r"[a-z0-9_-]+", atlas_id):
         raise HTTPException(status_code=400, detail="Invalid atlas id")
 
-    sanitized_mask_order: list[int] = []
+    sanitized_mask_order: list[int | None] = []
     for value in payload.maskOrder:
         try:
             mask = int(value)
         except Exception:
+            sanitized_mask_order.append(None)
             continue
 
         if 0 <= mask <= 255:
             sanitized_mask_order.append(mask)
+        else:
+            sanitized_mask_order.append(None)
+
+    sanitized_mask_variants: dict[str, list[int]] = {}
+    if isinstance(payload.maskVariants, dict):
+        for key, values in payload.maskVariants.items():
+            try:
+                mask = int(key)
+            except Exception:
+                continue
+
+            if mask < 0 or mask > 255:
+                continue
+
+            if not isinstance(values, list):
+                continue
+
+            variants: list[int] = []
+            for raw in values:
+                try:
+                    tile_index = int(raw)
+                except Exception:
+                    continue
+
+                if tile_index >= 0 and tile_index not in variants:
+                    variants.append(tile_index)
+
+            if variants:
+                sanitized_mask_variants[str(mask)] = variants
 
     output = {
         "columns": int(payload.columns),
         "rows": int(payload.rows),
         "maskOrder": sanitized_mask_order,
+        "maskVariants": sanitized_mask_variants,
     }
 
     texture47_dir = PUBLIC_DIR / "assets" / "texture47" / "configs"
