@@ -95,6 +95,12 @@
         flex: 1;
       }
 
+      .fieldStack {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
       .atlasSearchWrap {
         position: relative;
         flex: 1;
@@ -386,20 +392,27 @@
 
     <div class="layout">
       <div class="panel">
-        <div class="title">Texture47 Visual Editor</div>
-        <div class="subtitle">Click an atlas tile, pick a mask, then assign. Export JSON when done.</div>
+        <div class="title">Pixelverse Texture Visual Editor</div>
+        <div class="subtitle">Click an atlas tile, pick a mask, then assign. Save JSON when done.</div>
+        <div class="subtitle"></div>
 
         <div class="row">
           <div class="atlasSearchWrap">
-            <input id="atlasIdInput" type="search" value="dirt" placeholder="search atlas id (ex: dirt)" autocomplete="off" />
+            <input id="atlasIdInput" type="search" value="" placeholder="search atlas id (ex: dirt)" autocomplete="off" />
             <div id="atlasSuggestions" class="atlasSuggestions"></div>
           </div>
           <button id="loadBtn">Load</button>
         </div>
 
         <div class="row">
-          <input id="columnsInput" type="number" min="1" value="8" placeholder="columns" />
-          <input id="rowsInput" type="number" min="1" value="6" placeholder="rows" />
+          <div class="fieldStack">
+            <label for="columnsInput">Columns</label>
+            <input id="columnsInput" type="number" min="1" value="8" placeholder="columns" />
+          </div>
+          <div class="fieldStack">
+            <label for="rowsInput">Rows</label>
+            <input id="rowsInput" type="number" min="1" value="6" placeholder="rows" />
+          </div>
         </div>
 
         <div id="atlasWrap" class="atlasWrap">
