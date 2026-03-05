@@ -622,33 +622,18 @@
           return ALL_MASK_CHOICES;
         }
 
-        const mappedMaskSet = new Set(
-          Array.from(state.maskVariants.keys())
-            .map((value) => Number(value))
-            .filter((mask) => isMaskInRange(mask) && getMaskVariants(mask).length > 0),
+        // Keep default masks visible even when mappings are empty or partial.
+        const baseDefaults = Array.from(
+          new Set(DEFAULT_TEXTURE47_VALID_MASKS.filter((mask) => isMaskInRange(mask))),
         );
+        const defaultSet = new Set(baseDefaults);
 
-        const orderedDefaults = [];
-        const seen = new Set();
-        for (const mask of DEFAULT_TEXTURE47_VALID_MASKS) {
-          if (!mappedMaskSet.has(mask) || seen.has(mask)) {
-            continue;
-          }
-          orderedDefaults.push(mask);
-          seen.add(mask);
-        }
-
-        const extraMapped = Array.from(mappedMaskSet)
-          .filter((mask) => !seen.has(mask))
+        const extraMapped = Array.from(state.maskVariants.keys())
+          .map((value) => Number(value))
+          .filter((mask) => isMaskInRange(mask) && getMaskVariants(mask).length > 0 && !defaultSet.has(mask))
           .sort((a, b) => a - b);
 
-        const visible = [...orderedDefaults, ...extraMapped];
-        if (visible.length > 0) {
-          return visible;
-        }
-
-        // Fallback for brand new atlases: show base defaults until mappings are created.
-        return Array.from(new Set(DEFAULT_TEXTURE47_VALID_MASKS.filter((mask) => isMaskInRange(mask))));
+        return [...baseDefaults, ...extraMapped];
       }
 
       function normalizeStatusMessage(message) {
@@ -1451,6 +1436,7 @@
         presets[presetName] = {
           columns: state.columns,
           rows: state.rows,
+          maskOrder: buildMaskOrderOutput(),
           maskVariants: buildMaskVariantsOutput(),
         };
 
@@ -1479,7 +1465,10 @@
           state.tileHeight = Math.floor(state.image.height / state.rows);
         }
 
-        parseConfigIntoState({ maskVariants: preset.maskVariants || {} });
+        parseConfigIntoState({
+          maskOrder: preset.maskOrder,
+          maskVariants: preset.maskVariants || {},
+        });
         clampTileSelection();
         generateJsonOutput();
         renderAll();
@@ -1489,7 +1478,13 @@
       function parseConfigIntoState(config) {
         state.maskVariants.clear();
 
-        if (config && typeof config.maskVariants === "object" && config.maskVariants !== null) {
+        const hasMaskVariantsField = !!(
+          config
+          && typeof config === "object"
+          && Object.prototype.hasOwnProperty.call(config, "maskVariants")
+        );
+
+        if (hasMaskVariantsField && typeof config.maskVariants === "object" && config.maskVariants !== null) {
           for (const [maskKey, variantsValue] of Object.entries(config.maskVariants)) {
             const mask = Number(maskKey);
             if (!isMaskInRange(mask)) {
@@ -1506,9 +1501,8 @@
               state.maskVariants.set(mask, Array.from(new Set(variants)));
             }
           }
-        }
 
-        if (state.maskVariants.size > 0) {
+          // Respect explicit maskVariants payloads, including an intentionally empty mapping set.
           return;
         }
 
