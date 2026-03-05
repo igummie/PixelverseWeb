@@ -1,56 +1,552 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" shape-rendering="crispEdges">
-  <rect width="128" height="128" fill="#00000000" />
-
-  <rect x="0" y="0" width="16" height="16" fill="#0f172a" />
-
-  <rect x="16" y="0" width="16" height="16" fill="#7c3f00" />
-  <rect x="16" y="10" width="16" height="6" fill="#5a2e00" />
-
-  <rect x="32" y="0" width="16" height="16" fill="#3f3f46" />
-  <rect x="33" y="2" width="4" height="3" fill="#71717a" />
-  <rect x="40" y="6" width="3" height="3" fill="#52525b" />
-  <rect x="37" y="11" width="5" height="3" fill="#27272a" />
-
-  <rect x="48" y="0" width="16" height="16" fill="#6b7280" />
-  <rect x="50" y="3" width="3" height="3" fill="#9ca3af" />
-  <rect x="56" y="8" width="2" height="2" fill="#9ca3af" />
-
-  <rect x="64" y="0" width="16" height="16" fill="#ef4444" />
-  <rect x="80" y="0" width="16" height="16" fill="#22c55e" />
-  <rect x="96" y="0" width="16" height="16" fill="#3b82f6" />
-  <rect x="112" y="0" width="16" height="16" fill="#eab308" />
-
-  <rect x="0" y="16" width="16" height="16" fill="#a855f7" />
-
-  <rect x="16" y="16" width="16" height="16" fill="#8b5a2b" />
-  <rect x="16" y="24" width="16" height="3" fill="#d4a373" />
-
-  <rect x="32" y="16" width="16" height="16" fill="#4b5563" />
-  <rect x="32" y="24" width="16" height="3" fill="#cbd5e1" />
-
-  <rect x="48" y="16" width="16" height="16" fill="#60a5fa" />
-  <rect x="48" y="24" width="16" height="8" fill="#93c5fd" />
-
-  <rect x="64" y="16" width="16" height="16" fill="#9a3412" />
-  <rect x="66" y="18" width="12" height="2" fill="#7c2d12" />
-  <rect x="66" y="24" width="12" height="2" fill="#7c2d12" />
-
-  <rect x="80" y="16" width="16" height="16" fill="#14532d" />
-  <circle cx="88" cy="24" r="5" fill="#22c55e" />
-
-  <rect x="96" y="16" width="16" height="16" fill="#111827" />
-  <rect x="101" y="19" width="6" height="10" fill="#fde68a" />
-  <rect x="103" y="16" width="2" height="3" fill="#f59e0b" />
-
-  <rect x="112" y="16" width="16" height="16" fill="#2563eb" />
-  <rect x="112" y="23" width="16" height="3" fill="#60a5fa" />
-
-  <rect x="0" y="32" width="16" height="16" fill="#b91c1c" />
-  <rect x="0" y="39" width="16" height="3" fill="#f97316" />
-
-  <rect x="16" y="32" width="16" height="16" fill="#6b3f1d" />
-  <rect x="19" y="34" width="10" height="12" fill="#8b5a2b" />
-  <rect x="24" y="34" width="1" height="12" fill="#5b3418" />
-  <rect x="22" y="38" width="5" height="1" fill="#5b3418" />
-  <rect x="27" y="40" width="2" height="2" fill="#facc15" />
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 128 128"
+   shape-rendering="crispEdges"
+   version="1.1"
+   id="svg38"
+   sodipodi:docname="basic_atlas.svg"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs38">
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath5">
+      <path
+         id="path5"
+         style="stroke-width:0.1;stroke-linecap:square;paint-order:markers fill stroke;stop-color:#000000"
+         d="m 438.25066,553.76374 859.87054,0 v 201.39554 l -859.87054,0 z"
+         sodipodi:nodetypes="ccccc" />
+    </clipPath>
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath52">
+      <path
+         id="path52"
+         style="stroke-width:0.1;stroke-linecap:square;paint-order:markers fill stroke;stop-color:#000000"
+         d="m -880.82767,-187.29769 h 1640.84 v 73.28155 h -1640.84 z" />
+    </clipPath>
+    <filter
+       style="color-interpolation-filters:sRGB;"
+       inkscape:label="Color Shift"
+       id="filter161"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="110"
+         result="color1"
+         id="feColorMatrix160" />
+      <feColorMatrix
+         type="saturate"
+         values="0.6"
+         result="color2"
+         id="feColorMatrix161" />
+    </filter>
+    <filter
+       style="color-interpolation-filters:sRGB;"
+       inkscape:label="Color Shift"
+       id="filter163"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="110"
+         result="color1"
+         id="feColorMatrix162" />
+      <feColorMatrix
+         type="saturate"
+         values="0.6"
+         result="color2"
+         id="feColorMatrix163" />
+    </filter>
+    <filter
+       style="color-interpolation-filters:sRGB;"
+       inkscape:label="Color Shift"
+       id="filter165"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="110"
+         result="color1"
+         id="feColorMatrix164" />
+      <feColorMatrix
+         type="saturate"
+         values="0.6"
+         result="color2"
+         id="feColorMatrix165" />
+    </filter>
+    <filter
+       style="color-interpolation-filters:sRGB"
+       inkscape:label="Color Shift"
+       id="filter165-6"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="110"
+         result="color1"
+         id="feColorMatrix164-5" />
+      <feColorMatrix
+         type="saturate"
+         values="0.6"
+         result="color2"
+         id="feColorMatrix165-0" />
+    </filter>
+    <filter
+       style="color-interpolation-filters:sRGB"
+       inkscape:label="Color Shift"
+       id="filter163-2"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="110"
+         result="color1"
+         id="feColorMatrix162-8" />
+      <feColorMatrix
+         type="saturate"
+         values="0.6"
+         result="color2"
+         id="feColorMatrix163-6" />
+    </filter>
+    <filter
+       style="color-interpolation-filters:sRGB"
+       inkscape:label="Color Shift"
+       id="filter161-0"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="110"
+         result="color1"
+         id="feColorMatrix160-2" />
+      <feColorMatrix
+         type="saturate"
+         values="0.6"
+         result="color2"
+         id="feColorMatrix161-4" />
+    </filter>
+    <filter
+       style="color-interpolation-filters:sRGB;"
+       inkscape:label="Color Shift"
+       id="filter284"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="213"
+         result="color1"
+         id="feColorMatrix283" />
+      <feColorMatrix
+         type="saturate"
+         values="0.665653"
+         result="color2"
+         id="feColorMatrix284" />
+    </filter>
+    <filter
+       style="color-interpolation-filters:sRGB;"
+       inkscape:label="Color Shift"
+       id="filter286"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="213"
+         result="color1"
+         id="feColorMatrix285" />
+      <feColorMatrix
+         type="saturate"
+         values="0.665653"
+         result="color2"
+         id="feColorMatrix286" />
+    </filter>
+    <filter
+       style="color-interpolation-filters:sRGB;"
+       inkscape:label="Color Shift"
+       id="filter288"
+       x="0"
+       y="0"
+       width="1"
+       height="1">
+      <feColorMatrix
+         type="hueRotate"
+         values="213"
+         result="color1"
+         id="feColorMatrix287" />
+      <feColorMatrix
+         type="saturate"
+         values="0.665653"
+         result="color2"
+         id="feColorMatrix288" />
+    </filter>
+  </defs>
+  <sodipodi:namedview
+     id="namedview38"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="11.313709"
+     inkscape:cx="54.800775"
+     inkscape:cy="23.113553"
+     inkscape:window-width="2560"
+     inkscape:window-height="1417"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg38" />
+  <rect
+     width="128"
+     height="128"
+     fill="#00000000"
+     id="rect1" />
+  <rect
+     x="0"
+     y="0"
+     width="16"
+     height="16"
+     fill="#0f172a"
+     id="rect2" />
+  <rect
+     x="16"
+     y="0"
+     width="16"
+     height="16"
+     fill="#7c3f00"
+     id="rect3" />
+  <rect
+     x="16"
+     y="10"
+     width="16"
+     height="6"
+     fill="#5a2e00"
+     id="rect4" />
+  <rect
+     x="32"
+     y="0"
+     width="16"
+     height="16"
+     fill="#3f3f46"
+     id="rect5" />
+  <rect
+     x="33"
+     y="2"
+     width="4"
+     height="3"
+     fill="#71717a"
+     id="rect6" />
+  <rect
+     x="40"
+     y="6"
+     width="3"
+     height="3"
+     fill="#52525b"
+     id="rect7" />
+  <rect
+     x="37"
+     y="11"
+     width="5"
+     height="3"
+     fill="#27272a"
+     id="rect8" />
+  <rect
+     x="48"
+     y="0"
+     width="16"
+     height="16"
+     fill="#6b7280"
+     id="rect9" />
+  <rect
+     x="50"
+     y="3"
+     width="3"
+     height="3"
+     fill="#9ca3af"
+     id="rect10" />
+  <rect
+     x="56"
+     y="8"
+     width="2"
+     height="2"
+     fill="#9ca3af"
+     id="rect11" />
+  <rect
+     x="64"
+     y="0"
+     width="16"
+     height="16"
+     fill="#ef4444"
+     id="rect12"
+     style="fill:#ff0000;fill-opacity:1;stroke:none;stroke-linecap:round;paint-order:normal;stroke-linejoin:miter" />
+  <rect
+     x="-15.356256"
+     y="78.787071"
+     width="14.624689"
+     height="0.62137532"
+     fill="#7c2d12"
+     id="rect24-9"
+     transform="rotate(-90)"
+     style="fill:#ff3900;fill-opacity:1;stroke-width:0.61534" />
+  <rect
+     x="64.786263"
+     y="14.748852"
+     width="14.624689"
+     height="0.62137532"
+     fill="#7c2d12"
+     id="rect24-9-8"
+     style="fill:#ff3900;fill-opacity:1;stroke-width:0.61534" />
+  <rect
+     x="0"
+     y="16"
+     width="16"
+     height="16"
+     fill="#a855f7"
+     id="rect16" />
+  <rect
+     x="16"
+     y="16"
+     width="16"
+     height="3"
+     fill="#d4a373"
+     id="rect18" />
+  <rect
+     x="32"
+     y="16"
+     width="16"
+     height="3"
+     fill="#cbd5e1"
+     id="rect20" />
+  <rect
+     x="48"
+     y="16"
+     width="16"
+     height="16"
+     fill="#60a5fa"
+     id="rect21" />
+  <rect
+     x="48"
+     y="24"
+     width="16"
+     height="8"
+     fill="#93c5fd"
+     id="rect22" />
+  <rect
+     x="64"
+     y="16"
+     width="16"
+     height="16"
+     fill="#9a3412"
+     id="rect23" />
+  <rect
+     x="66"
+     y="18"
+     width="12"
+     height="2"
+     fill="#7c2d12"
+     id="rect24" />
+  <rect
+     x="66"
+     y="24"
+     width="12"
+     height="2"
+     fill="#7c2d12"
+     id="rect25" />
+  <rect
+     x="80"
+     y="16"
+     width="16"
+     height="16"
+     fill="#14532d"
+     id="rect26" />
+  <circle
+     cx="88"
+     cy="24"
+     r="5"
+     fill="#22c55e"
+     id="circle26" />
+  <rect
+     x="96"
+     y="16"
+     width="16"
+     height="16"
+     fill="#111827"
+     id="rect27" />
+  <rect
+     x="101"
+     y="19"
+     width="6"
+     height="10"
+     fill="#fde68a"
+     id="rect28" />
+  <rect
+     x="103"
+     y="16"
+     width="2"
+     height="3"
+     fill="#f59e0b"
+     id="rect29" />
+  <rect
+     x="112"
+     y="16"
+     width="16"
+     height="16"
+     fill="#2563eb"
+     id="rect30" />
+  <rect
+     x="112"
+     y="23"
+     width="16"
+     height="3"
+     fill="#60a5fa"
+     id="rect31" />
+  <rect
+     x="0"
+     y="32"
+     width="16"
+     height="16"
+     fill="#b91c1c"
+     id="rect32" />
+  <rect
+     x="0"
+     y="39"
+     width="16"
+     height="3"
+     fill="#f97316"
+     id="rect33" />
+  <rect
+     x="16"
+     y="32"
+     width="16"
+     height="16"
+     fill="#6b3f1d"
+     id="rect34" />
+  <rect
+     x="19"
+     y="34"
+     width="10"
+     height="12"
+     fill="#8b5a2b"
+     id="rect35" />
+  <rect
+     x="24"
+     y="34"
+     width="1"
+     height="12"
+     fill="#5b3418"
+     id="rect36" />
+  <rect
+     x="22"
+     y="38"
+     width="5"
+     height="1"
+     fill="#5b3418"
+     id="rect37" />
+  <rect
+     x="27"
+     y="40"
+     width="2"
+     height="2"
+     fill="#facc15"
+     id="rect38" />
+  <rect
+     x="80"
+     y="0"
+     width="16"
+     height="16"
+     fill="#ef4444"
+     id="rect72"
+     style="fill:#ff0000;fill-opacity:1;stroke:none;stroke-linecap:round;stroke-linejoin:miter;paint-order:normal;filter:url(#filter165)" />
+  <rect
+     x="-15.356256"
+     y="94.787071"
+     width="14.624689"
+     height="0.62137532"
+     fill="#7c2d12"
+     id="rect73"
+     transform="rotate(-90)"
+     style="fill:#ff3900;fill-opacity:1;stroke-width:0.61534;filter:url(#filter163)" />
+  <rect
+     x="80.786263"
+     y="14.748852"
+     width="14.624689"
+     height="0.62137532"
+     fill="#7c2d12"
+     id="rect74"
+     style="fill:#ff3900;fill-opacity:1;stroke-width:0.61534;filter:url(#filter161)" />
+  <rect
+     x="96"
+     y="0"
+     width="16"
+     height="16"
+     fill="#ef4444"
+     id="rect266"
+     style="fill:#ff0000;fill-opacity:1;stroke:none;stroke-linecap:round;stroke-linejoin:miter;paint-order:normal;filter:url(#filter288)" />
+  <rect
+     x="-15.356256"
+     y="110.78707"
+     width="14.624689"
+     height="0.62137532"
+     fill="#7c2d12"
+     id="rect267"
+     transform="rotate(-90)"
+     style="fill:#ff3900;fill-opacity:1;stroke-width:0.61534;filter:url(#filter286)" />
+  <rect
+     x="96.786263"
+     y="14.748852"
+     width="14.624689"
+     height="0.62137532"
+     fill="#7c2d12"
+     id="rect268"
+     style="fill:#ff3900;fill-opacity:1;stroke-width:0.61534;filter:url(#filter284)" />
+  <rect
+     x="112"
+     y="0"
+     width="16"
+     height="16"
+     fill="#ef4444"
+     id="rect297"
+     style="fill:#ffc800;fill-opacity:1;stroke:none;stroke-linecap:round;stroke-linejoin:miter;paint-order:normal" />
+  <rect
+     x="-15.356256"
+     y="126.78708"
+     width="14.624689"
+     height="0.62137532"
+     fill="#7c2d12"
+     id="rect298"
+     transform="rotate(-90)"
+     style="fill:#ffd12c;fill-opacity:1;stroke-width:0.61534" />
+  <rect
+     x="112.78626"
+     y="14.748852"
+     width="14.624689"
+     height="0.62137532"
+     fill="#7c2d12"
+     id="rect299"
+     style="fill:#ffd12c;fill-opacity:1;stroke-width:0.61534" />
 </svg>

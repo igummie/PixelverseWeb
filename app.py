@@ -19,6 +19,7 @@ from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconne
 from fastapi.responses import FileResponse, JSONResponse, Response
 from modules.chat_commands import process_chat_command
 from modules.command_runtime import apply_command_result
+from modules.editor_tools import load_texture47_configs, register_editor_routes
 from modules.ws_player_actions import respawn_player_to_door
 from modules.worldgen import generate_world_layers
 from pydantic import BaseModel, Field
@@ -113,121 +114,6 @@ def initialize_db() -> None:
 
 def normalize_name(value: str | None, fallback: str = "") -> str:
     return (value or fallback).strip().lower()
-
-
-def normalize_atlas_id_value(value: Any) -> int | str | None:
-    if isinstance(value, bool):
-        return None
-
-    if isinstance(value, int):
-        return value
-
-    if isinstance(value, float) and value.is_integer():
-        return int(value)
-
-    text = str(value or "").strip()
-    if not text:
-        return None
-
-    if re.fullmatch(r"-?[0-9]+", text):
-        try:
-            return int(text)
-        except Exception:
-            return None
-
-    lowered = text.lower()
-    if re.fullmatch(r"[a-z0-9_-]+", lowered):
-        return lowered
-
-    return None
-
-
-def normalize_atlas_texture_rect(value: Any) -> dict[str, int] | None:
-    if not isinstance(value, dict):
-        return None
-
-    try:
-        x = int(value.get("x", 0))
-        y = int(value.get("y", 0))
-        w = int(value.get("w", 0))
-        h = int(value.get("h", 0))
-    except Exception:
-        return None
-
-    if x < 0 or y < 0 or w <= 0 or h <= 0:
-        return None
-
-    return {
-        "x": x,
-        "y": y,
-        "w": w,
-        "h": h,
-    }
-
-
-def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
-    compacted: dict[str, Any] = {}
-    key_order = [
-        "ID",
-        "NAME",
-        "BLOCK_TYPE",
-        "ATLAS_ID",
-        "ATLAS_TEXTURE",
-        "TOUGHNESS",
-        "GEM_CHANCE",
-        "GEM_AMOUNT",
-        "GEM_AMOUNT_VAR",
-        "PLACEABLE",
-        "BREAKABLE",
-    ]
-
-    atlas_id_value = block.get("ATLAS_ID")
-    normalized_atlas_id = normalize_atlas_id_value(atlas_id_value)
-    if normalized_atlas_id is not None:
-        atlas_id_value = normalized_atlas_id
-
-    uses_texture47 = isinstance(atlas_id_value, str) and bool(str(atlas_id_value).strip())
-
-    normalized_values: dict[str, Any] = {}
-    for key, value in block.items():
-        next_value = value
-        if key == "ATLAS_ID":
-            next_value = atlas_id_value
-
-        # Texture47 blocks derive tile data from mask config, so explicit atlas rect is redundant.
-        if key == "ATLAS_TEXTURE" and uses_texture47:
-            continue
-
-        # Keep payload compact by omitting false boolean flags. BREAKABLE is intentionally
-        # excluded here because runtime currently defaults missing BREAKABLE to true.
-        if isinstance(next_value, bool) and next_value is False and key != "BREAKABLE":
-            continue
-
-        normalized_values[key] = next_value
-
-    for key in key_order:
-        if key in normalized_values:
-            compacted[key] = normalized_values.pop(key)
-
-    for key in sorted(normalized_values.keys()):
-        compacted[key] = normalized_values[key]
-
-    return compacted
-
-
-def compact_blocks_payload_for_storage(payload: dict[str, Any]) -> None:
-    blocks = payload.get("blocks")
-    if not isinstance(blocks, list):
-        return
-
-    compacted_blocks: list[Any] = []
-    for block in blocks:
-        if isinstance(block, dict):
-            compacted_blocks.append(compact_block_for_storage(block))
-            continue
-        compacted_blocks.append(block)
-
-    payload["blocks"] = compacted_blocks
 
 
 def get_user_gems(user_id: int) -> int:
@@ -418,40 +304,6 @@ def load_blocks_payload() -> dict[str, Any]:
         "atlases": atlases if isinstance(atlases, list) else [],
         "blocks": blocks if isinstance(blocks, list) else [],
     }
-
-
-def load_texture47_configs(atlas_ids: set[str]) -> dict[str, dict[str, Any]]:
-    configs: dict[str, dict[str, Any]] = {}
-    config_dir = PUBLIC_DIR / "assets" / "texture47" / "configs"
-    fallback_dir = PUBLIC_DIR / "assets" / "texture47"
-
-    for atlas_id in atlas_ids:
-        if not re.fullmatch(r"[a-z0-9_-]+", atlas_id):
-            continue
-
-        candidates = [
-            config_dir / f"{atlas_id}.json",
-            fallback_dir / f"{atlas_id}.json",
-        ]
-
-        loaded: dict[str, Any] | None = None
-        for path in candidates:
-            if not path.exists() or not path.is_file():
-                continue
-
-            try:
-                with path.open("r", encoding="utf-8") as handle:
-                    parsed = json.load(handle)
-                if isinstance(parsed, dict):
-                    loaded = parsed
-                    break
-            except Exception:
-                continue
-
-        if loaded is not None:
-            configs[atlas_id] = loaded
-
-    return configs
 
 
 def is_breakable(tile_id: int) -> bool:
@@ -997,28 +849,6 @@ class GuestLoginBody(BaseModel):
     deviceId: str = Field(min_length=12, max_length=128)
 
 
-class SaveTexture47ConfigBody(BaseModel):
-    atlasId: str = Field(min_length=1, max_length=64)
-    columns: int = Field(ge=1, le=512)
-    rows: int = Field(ge=1, le=512)
-    maskOrder: list[Any] = Field(default_factory=list)
-    maskVariants: dict[str, list[Any]] = Field(default_factory=dict)
-
-
-class SaveRegularAtlasTextureEntry(BaseModel):
-    blockId: int = Field(ge=0)
-    atlasId: Any
-    texture: dict[str, Any] = Field(default_factory=dict)
-
-
-class SaveRegularAtlasTexturesBody(BaseModel):
-    updates: list[SaveRegularAtlasTextureEntry] = Field(default_factory=list)
-
-
-class SaveBlocksDataBody(BaseModel):
-    blocks: list[dict[str, Any]] = Field(default_factory=list)
-
-
 world_cache: dict[str, dict[str, Any]] = {}
 save_tasks: dict[str, asyncio.Task[Any]] = {}
 
@@ -1062,6 +892,13 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 initialize_db()
 refresh_block_definitions_if_changed(force=True)
+register_editor_routes(
+    app,
+    public_dir=PUBLIC_DIR,
+    blocks_path=BLOCKS_PATH,
+    load_blocks_payload=load_blocks_payload,
+    refresh_block_definitions_if_changed=refresh_block_definitions_if_changed,
+)
 
 
 async def schedule_world_save(world_name: str) -> None:
@@ -1206,7 +1043,7 @@ def bootstrap_payload(authorization: str | None = Header(default=None)) -> dict[
 
     payload = {
         "blocks": blocks_payload,
-        "texture47Configs": load_texture47_configs(texture47_atlas_ids),
+        "texture47Configs": load_texture47_configs(PUBLIC_DIR, texture47_atlas_ids),
     }
     return JSONResponse(
         payload,
@@ -1231,245 +1068,6 @@ def get_public_cache_headers(safe_path: str) -> dict[str, str]:
         return {"Cache-Control": "public, max-age=31536000, immutable"}
 
     return {"Cache-Control": "no-cache"}
-
-
-@app.post("/api/tools/texture47/save")
-def save_texture47_config(
-    payload: SaveTexture47ConfigBody,
-) -> dict[str, Any]:
-    atlas_id = normalize_name(payload.atlasId)
-    if not re.fullmatch(r"[a-z0-9_-]+", atlas_id):
-        raise HTTPException(status_code=400, detail="Invalid atlas id")
-
-    sanitized_mask_order: list[int | None] = []
-    for value in payload.maskOrder:
-        try:
-            mask = int(value)
-        except Exception:
-            sanitized_mask_order.append(None)
-            continue
-
-        if 0 <= mask <= 255:
-            sanitized_mask_order.append(mask)
-        else:
-            sanitized_mask_order.append(None)
-
-    sanitized_mask_variants: dict[str, list[int]] = {}
-    if isinstance(payload.maskVariants, dict):
-        for key, values in payload.maskVariants.items():
-            try:
-                mask = int(key)
-            except Exception:
-                continue
-
-            if mask < 0 or mask > 255:
-                continue
-
-            if not isinstance(values, list):
-                continue
-
-            variants: list[int] = []
-            for raw in values:
-                try:
-                    tile_index = int(raw)
-                except Exception:
-                    continue
-
-                if tile_index >= 0 and tile_index not in variants:
-                    variants.append(tile_index)
-
-            if variants:
-                sanitized_mask_variants[str(mask)] = variants
-
-    output = {
-        "columns": int(payload.columns),
-        "rows": int(payload.rows),
-        "maskOrder": sanitized_mask_order,
-        "maskVariants": sanitized_mask_variants,
-    }
-
-    texture47_dir = PUBLIC_DIR / "assets" / "texture47" / "configs"
-    texture47_dir.mkdir(parents=True, exist_ok=True)
-    output_path = (texture47_dir / f"{atlas_id}.json").resolve()
-
-    if not str(output_path).startswith(str(texture47_dir.resolve())):
-        raise HTTPException(status_code=400, detail="Invalid atlas id")
-
-    with output_path.open("w", encoding="utf-8") as handle:
-        json.dump(output, handle, indent=2)
-        handle.write("\n")
-
-    return {
-        "ok": True,
-        "path": f"assets/texture47/configs/{atlas_id}.json",
-        "saved": output,
-    }
-
-
-@app.get("/api/tools/texture47/atlases")
-def list_texture47_atlases() -> dict[str, Any]:
-    texture47_dir = PUBLIC_DIR / "assets" / "texture47"
-    atlases: list[str] = []
-
-    if texture47_dir.exists() and texture47_dir.is_dir():
-        for file_path in sorted(texture47_dir.glob("*.png")):
-            name = file_path.stem.strip().lower()
-            if name and re.fullmatch(r"[a-z0-9_-]+", name):
-                atlases.append(name)
-
-    return {
-        "atlases": atlases,
-    }
-
-
-@app.get("/api/tools/blocks/editor-data")
-def get_blocks_editor_data() -> dict[str, Any]:
-    payload = load_blocks_payload()
-    atlases = payload.get("atlases", [])
-    blocks = payload.get("blocks", [])
-
-    return {
-        "atlases": atlases if isinstance(atlases, list) else [],
-        "blocks": blocks if isinstance(blocks, list) else [],
-    }
-
-
-@app.post("/api/tools/blocks/save-textures")
-def save_regular_atlas_textures(payload: SaveRegularAtlasTexturesBody) -> dict[str, Any]:
-    try:
-        with BLOCKS_PATH.open("r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-    except Exception as error:
-        raise HTTPException(status_code=500, detail=f"Failed to read blocks.json: {error}")
-
-    if not isinstance(raw, dict):
-        raise HTTPException(status_code=500, detail="Invalid blocks.json payload")
-
-    atlases = raw.get("atlases", [])
-    blocks = raw.get("blocks", [])
-    if not isinstance(atlases, list) or not isinstance(blocks, list):
-        raise HTTPException(status_code=500, detail="Invalid blocks.json structure")
-
-    allowed_atlas_ids = {
-        normalized
-        for atlas in atlases
-        for normalized in [normalize_atlas_id_value(atlas.get("ATLAS_ID") if isinstance(atlas, dict) else None)]
-        if normalized is not None
-    }
-
-    block_index_by_id: dict[int, int] = {}
-    for index, block in enumerate(blocks):
-        if not isinstance(block, dict):
-            continue
-        try:
-            block_id = int(block.get("ID"))
-        except Exception:
-            continue
-        block_index_by_id[block_id] = index
-
-    updated_block_ids: list[int] = []
-    for update in payload.updates:
-        block_id = int(update.blockId)
-        atlas_id = normalize_atlas_id_value(update.atlasId)
-        texture_rect = normalize_atlas_texture_rect(update.texture)
-
-        if block_id not in block_index_by_id:
-            raise HTTPException(status_code=400, detail=f"Unknown block id: {block_id}")
-
-        if atlas_id is None:
-            raise HTTPException(status_code=400, detail=f"Invalid atlas id for block {block_id}")
-
-        if allowed_atlas_ids and atlas_id not in allowed_atlas_ids:
-            raise HTTPException(status_code=400, detail=f"Atlas id {atlas_id!r} is not defined in blocks.json atlases")
-
-        if texture_rect is None:
-            raise HTTPException(status_code=400, detail=f"Invalid texture rect for block {block_id}")
-
-        block = blocks[block_index_by_id[block_id]]
-        if not isinstance(block, dict):
-            raise HTTPException(status_code=500, detail=f"Invalid block payload for id {block_id}")
-
-        block["ATLAS_ID"] = atlas_id
-        block["ATLAS_TEXTURE"] = texture_rect
-        updated_block_ids.append(block_id)
-
-    compact_blocks_payload_for_storage(raw)
-
-    with BLOCKS_PATH.open("w", encoding="utf-8") as handle:
-        json.dump(raw, handle, indent=2)
-        handle.write("\n")
-
-    refresh_block_definitions_if_changed(force=True)
-
-    return {
-        "ok": True,
-        "path": "data/blocks.json",
-        "updatedBlockIds": updated_block_ids,
-        "updatedCount": len(updated_block_ids),
-    }
-
-
-@app.post("/api/tools/blocks/save-data")
-def save_blocks_data(payload: SaveBlocksDataBody) -> dict[str, Any]:
-    try:
-        with BLOCKS_PATH.open("r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-    except Exception as error:
-        raise HTTPException(status_code=500, detail=f"Failed to read blocks.json: {error}")
-
-    if not isinstance(raw, dict):
-        raise HTTPException(status_code=500, detail="Invalid blocks.json payload")
-
-    blocks = raw.get("blocks", [])
-    if not isinstance(blocks, list):
-        raise HTTPException(status_code=500, detail="Invalid blocks.json structure")
-
-    block_index_by_id: dict[int, int] = {}
-    for index, block in enumerate(blocks):
-        if not isinstance(block, dict):
-            continue
-        try:
-            block_id = int(block.get("ID"))
-        except Exception:
-            continue
-        block_index_by_id[block_id] = index
-
-    updated_block_ids: list[int] = []
-    for edited_block in payload.blocks:
-        if not isinstance(edited_block, dict):
-            raise HTTPException(status_code=400, detail="Each block must be an object")
-
-        try:
-            block_id = int(edited_block.get("ID"))
-        except Exception:
-            raise HTTPException(status_code=400, detail="Edited block is missing a valid ID")
-
-        # Preserve canonical integer ID value.
-        edited_block["ID"] = block_id
-
-        compacted = compact_block_for_storage(edited_block)
-        if block_id not in block_index_by_id:
-            block_index_by_id[block_id] = len(blocks)
-            blocks.append(compacted)
-        else:
-            blocks[block_index_by_id[block_id]] = compacted
-
-        updated_block_ids.append(block_id)
-
-    compact_blocks_payload_for_storage(raw)
-
-    with BLOCKS_PATH.open("w", encoding="utf-8") as handle:
-        json.dump(raw, handle, indent=2)
-        handle.write("\n")
-
-    refresh_block_definitions_if_changed(force=True)
-
-    return {
-        "ok": True,
-        "path": "data/blocks.json",
-        "updatedBlockIds": updated_block_ids,
-        "updatedCount": len(updated_block_ids),
-    }
 
 
 clients: dict[str, dict[str, Any]] = {}

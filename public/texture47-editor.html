@@ -30,7 +30,8 @@
             <input id="atlasIdInput" type="search" value="" placeholder="search atlas id (ex: dirt)" autocomplete="off" />
             <div id="atlasSuggestions" class="atlasSuggestions"></div>
           </div>
-          <button id="loadBtn">Load</button>
+          <button id="loadBtn" class="compactTopBtn">Load</button>
+          <button id="openCreateAtlasBtn" class="compactTopBtn" type="button">Create Atlas</button>
         </div>
 
         <div class="row">
@@ -82,7 +83,7 @@
             <button id="clearTestBtn" type="button">Clear Test</button>
             <button id="testPickMaskBtn" type="button">Pick Mask: Off</button>
           </div>
-          <div class="atlasControls" style="margin-bottom: 8px">
+          <div class="atlasControls testControls" style="margin-bottom: 8px">
             <button id="testZoomOutBtn" type="button">-</button>
             <input id="testZoomRange" type="range" min="0.5" max="4" step="0.25" value="1" />
             <button id="testZoomInBtn" type="button">+</button>
@@ -129,6 +130,38 @@
       </div>
     </div>
 
+    <div id="createAtlasModal" class="modalBackdrop" hidden>
+      <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="createAtlasTitle">
+        <div class="modalHeader">
+          <div id="createAtlasTitle" class="title">Create New Atlas</div>
+          <button id="closeCreateAtlasBtn" type="button">Close</button>
+        </div>
+        <div class="modalGrid">
+          <div class="fieldStack">
+            <label for="createAtlasIdInput">ATLAS_ID</label>
+            <input id="createAtlasIdInput" type="text" placeholder="my_atlas or 3" />
+          </div>
+          <div class="fieldStack">
+            <label for="createAtlasNameInput">NAME</label>
+            <input id="createAtlasNameInput" type="text" placeholder="MY_ATLAS" />
+          </div>
+          <div class="fieldStack">
+            <label for="createAtlasSrcInput">SRC</label>
+            <input id="createAtlasSrcInput" type="text" placeholder="/assets/atlases/my_atlas.svg" />
+            <input id="createAtlasUploadInput" type="file" accept=".png,.svg,.jpg,.jpeg,.webp" hidden />
+            <button id="uploadAtlasBtn" type="button">Upload Atlas File</button>
+          </div>
+          <div class="fieldStack">
+            <label for="createAtlasTileSizeInput">TILE_SIZE</label>
+            <input id="createAtlasTileSizeInput" type="number" min="1" step="1" value="16" />
+          </div>
+        </div>
+        <div class="row">
+          <button id="createAtlasSubmitBtn" type="button">Create Atlas & Save</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module">
       const DEFAULT_TEXTURE47_VALID_MASKS = [
         255, 248, 31, 115, 206, 112, 200, 19, 14, 66, 64, 2, 0, 251, 254, 127, 223, 250, 95, 123,
@@ -139,6 +172,7 @@
 
       const atlasIdInput = document.getElementById("atlasIdInput");
       const atlasSuggestions = document.getElementById("atlasSuggestions");
+      const openCreateAtlasBtn = document.getElementById("openCreateAtlasBtn");
       const columnsInput = document.getElementById("columnsInput");
       const rowsInput = document.getElementById("rowsInput");
       const loadBtn = document.getElementById("loadBtn");
@@ -182,6 +216,15 @@
       const testZoomRange = document.getElementById("testZoomRange");
       const testZoomInfo = document.getElementById("testZoomInfo");
       const testGridToggle = document.getElementById("testGridToggle");
+      const createAtlasModal = document.getElementById("createAtlasModal");
+      const closeCreateAtlasBtn = document.getElementById("closeCreateAtlasBtn");
+      const createAtlasIdInput = document.getElementById("createAtlasIdInput");
+      const createAtlasNameInput = document.getElementById("createAtlasNameInput");
+      const createAtlasSrcInput = document.getElementById("createAtlasSrcInput");
+      const createAtlasUploadInput = document.getElementById("createAtlasUploadInput");
+      const uploadAtlasBtn = document.getElementById("uploadAtlasBtn");
+      const createAtlasTileSizeInput = document.getElementById("createAtlasTileSizeInput");
+      const createAtlasSubmitBtn = document.getElementById("createAtlasSubmitBtn");
 
       const atlasContext = atlasCanvas.getContext("2d");
       atlasContext.imageSmoothingEnabled = false;
@@ -303,6 +346,214 @@
         }
 
         return String(message);
+      }
+
+      function normalizeAtlasIdValue(value) {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          return value;
+        }
+
+        const text = String(value ?? "").trim();
+        if (/^-?[0-9]+$/.test(text)) {
+          return Number(text);
+        }
+        return text;
+      }
+
+      function atlasKey(value) {
+        const normalized = normalizeAtlasIdValue(value);
+        return typeof normalized === "number" ? `n:${normalized}` : `s:${String(normalized)}`;
+      }
+
+      function formatAtlasId(value) {
+        return typeof value === "string" ? `"${value}"` : String(value);
+      }
+
+      async function loadBlocksDocumentForAtlasCreate() {
+        const response = await fetch(`/data/blocks.json?ts=${Date.now()}`);
+        if (!response.ok) {
+          throw new Error("Could not load blocks.json");
+        }
+
+        const payload = await response.json();
+        const atlases = Array.isArray(payload?.atlases) ? payload.atlases : [];
+        const blocks = Array.isArray(payload?.blocks) ? payload.blocks : [];
+        const version = Number.isInteger(payload?.VERSION) ? payload.VERSION : 1;
+        return {
+          VERSION: version,
+          atlases,
+          blocks,
+        };
+      }
+
+      function getNextAvailableAtlasId(atlases) {
+        let candidate = 0;
+        const used = new Set(
+          (Array.isArray(atlases) ? atlases : [])
+            .map((atlas) => Number(atlas?.ATLAS_ID))
+            .filter((value) => Number.isInteger(value) && value >= 0),
+        );
+        while (used.has(candidate)) {
+          candidate += 1;
+        }
+        return candidate;
+      }
+
+      function slugifyAtlasIdFromFilename(filename) {
+        const baseName = String(filename || "")
+          .replace(/\.[^.]+$/, "")
+          .trim()
+          .toLowerCase();
+        return baseName.replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
+      }
+
+      async function openCreateAtlasModal() {
+        try {
+          const payload = await loadBlocksDocumentForAtlasCreate();
+          createAtlasIdInput.value = String(getNextAvailableAtlasId(payload.atlases));
+        } catch {
+          createAtlasIdInput.value = "0";
+        }
+
+        createAtlasNameInput.value = "";
+        createAtlasSrcInput.value = "/assets/texture47/";
+        createAtlasTileSizeInput.value = "16";
+        createAtlasUploadInput.value = "";
+        createAtlasModal.hidden = false;
+      }
+
+      function closeCreateAtlasModal() {
+        createAtlasModal.hidden = true;
+      }
+
+      async function uploadCreateAtlasFile() {
+        const file = createAtlasUploadInput?.files?.[0];
+        if (!file) {
+          return;
+        }
+
+        const body = new FormData();
+        body.append("file", file);
+
+        try {
+          const response = await fetch("/api/tools/atlases/upload", {
+            method: "POST",
+            body,
+          });
+
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch {
+          }
+
+          if (!response.ok) {
+            setStatus(payload?.detail || "Atlas upload failed", true);
+            return;
+          }
+
+          const src = String(payload?.src || "");
+          if (src) {
+            createAtlasSrcInput.value = src;
+          }
+
+          const suggested = payload?.suggestedAtlasId;
+          const fileSlug = slugifyAtlasIdFromFilename(file.name);
+          const idFromPayload = suggested == null ? "" : String(suggested);
+          const preferredId = idFromPayload || fileSlug;
+
+          if (!String(createAtlasIdInput.value || "").trim() && preferredId) {
+            createAtlasIdInput.value = preferredId;
+          }
+
+          if (!String(createAtlasNameInput.value || "").trim()) {
+            createAtlasNameInput.value = (fileSlug || "NEW_ATLAS").toUpperCase();
+          }
+
+          setStatus(`Uploaded atlas file: ${payload?.filename || file.name}`);
+        } catch {
+          setStatus("Could not reach server for atlas upload", true);
+        }
+      }
+
+      async function createAtlasAndSave() {
+        const normalizedId = normalizeAtlasIdValue(createAtlasIdInput.value);
+        if (normalizedId == null || String(normalizedId).trim() === "") {
+          setStatus("ATLAS_ID is required", true);
+          return;
+        }
+
+        const src = String(createAtlasSrcInput.value || "").trim();
+        if (!src) {
+          setStatus("SRC is required", true);
+          return;
+        }
+
+        const tileSize = parsePositiveInt(createAtlasTileSizeInput.value, 0);
+        if (!Number.isInteger(tileSize) || tileSize < 1) {
+          setStatus("TILE_SIZE must be a positive integer", true);
+          return;
+        }
+
+        const fallbackName = typeof normalizedId === "string" ? normalizedId.toUpperCase() : `ATLAS_${normalizedId}`;
+        const atlasName = String(createAtlasNameInput.value || "").trim() || fallbackName;
+
+        let blocksPayload = null;
+        try {
+          blocksPayload = await loadBlocksDocumentForAtlasCreate();
+        } catch {
+          setStatus("Could not load blocks.json for atlas create", true);
+          return;
+        }
+
+        const existing = new Set((blocksPayload.atlases || []).map((atlas) => atlasKey(atlas?.ATLAS_ID)));
+        const key = atlasKey(normalizedId);
+        if (existing.has(key)) {
+          setStatus(`Atlas ID ${formatAtlasId(normalizedId)} already exists`, true);
+          return;
+        }
+
+        const updatedPayload = {
+          VERSION: blocksPayload.VERSION,
+          atlases: [...blocksPayload.atlases, {
+            ATLAS_ID: normalizedId,
+            NAME: atlasName,
+            SRC: src,
+            TILE_SIZE: tileSize,
+          }],
+          blocks: blocksPayload.blocks,
+        };
+
+        try {
+          const response = await fetch("/api/tools/blocks/save-document", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            cache: "no-store",
+            body: JSON.stringify(updatedPayload),
+          });
+
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch {
+          }
+
+          if (!response.ok) {
+            if (response.status === 404) {
+              setStatus("Save endpoint unavailable. Restart backend to enable create-atlas saves.", true);
+              return;
+            }
+            setStatus(payload?.detail || "Could not save atlas to blocks.json", true);
+            return;
+          }
+
+          closeCreateAtlasModal();
+          setStatus(`Created atlas ${formatAtlasId(normalizedId)} in blocks.json`);
+        } catch {
+          setStatus("Could not reach server for atlas create", true);
+        }
       }
 
       function getInitialAtlasIdFromQuery() {
@@ -1376,6 +1627,32 @@
       }
 
       loadBtn.addEventListener("click", loadAtlasAndConfig);
+
+      openCreateAtlasBtn.addEventListener("click", async () => {
+        await openCreateAtlasModal();
+      });
+
+      closeCreateAtlasBtn.addEventListener("click", () => {
+        closeCreateAtlasModal();
+      });
+
+      createAtlasModal.addEventListener("click", (event) => {
+        if (event.target === createAtlasModal) {
+          closeCreateAtlasModal();
+        }
+      });
+
+      uploadAtlasBtn.addEventListener("click", () => {
+        createAtlasUploadInput.click();
+      });
+
+      createAtlasUploadInput.addEventListener("change", async () => {
+        await uploadCreateAtlasFile();
+      });
+
+      createAtlasSubmitBtn.addEventListener("click", async () => {
+        await createAtlasAndSave();
+      });
 
       atlasIdInput.addEventListener("focus", () => {
         loadAtlasOptions(true);
