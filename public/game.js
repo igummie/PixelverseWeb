@@ -29,7 +29,11 @@ import {
   MIN_CAMERA_ZOOM,
   REMOTE_PLAYER_INTERP_SPEED,
   REMOTE_PLAYER_SNAP_DISTANCE,
+  REMOTE_PLAYER_EXTRAPOLATE_BASE_MS,
+  REMOTE_PLAYER_EXTRAPOLATE_MAX_MS,
+  REMOTE_PLAYER_MAX_EXTRAPOLATE_SPEED,
   SELF_TELEPORT_SNAP_DISTANCE,
+  SELF_RECONCILE_SNAP_DISTANCE,
   TEXTURE47_COLS,
   TEXTURE47_ROWS,
   TILE_SIZE,
@@ -43,6 +47,7 @@ import {
 } from "./game/session.js";
 import { getGemDrawSizeForValue, getGemFrameForValue } from "./game/gems.js";
 import { createHudController } from "./game/hud.js";
+import { createChatDebugController } from "./game/chat_debug.js";
 
 const screens = {
   main: document.getElementById("mainScreen"),
@@ -96,6 +101,11 @@ const chatInput = document.getElementById("chatInput");
 const debugOverlay = document.getElementById("debugOverlay");
 const debugInfo = document.getElementById("debugInfo");
 const debugGridToggle = document.getElementById("debugGridToggle");
+const debugPingToolsToggle = document.getElementById("debugPingToolsToggle");
+const debugNetSimPanel = document.getElementById("debugNetSimPanel");
+const debugSimPingInput = document.getElementById("debugSimPingInput");
+const debugSimJitterInput = document.getElementById("debugSimJitterInput");
+const debugSimLossInput = document.getElementById("debugSimLossInput");
 const gameHud = document.getElementById("gameHud");
 const gameTopbar = document.querySelector(".gameTopbar");
 
@@ -156,6 +166,10 @@ const state = {
   debugGridEnabled: false,
   debugFps: 0,
   debugPingMs: null,
+  netSimPingMs: 0,
+  netSimJitterMs: 0,
+  netSimLossPercent: 0,
+  debugPingToolsVisible: true,
   debugLastFrameAt: 0,
   debugLastInfoAt: 0,
   pingTimerId: null,
@@ -188,6 +202,51 @@ const hud = createHudController({
   },
 });
 
+const chatDebug = createChatDebugController({
+  state,
+  screens,
+  canvas,
+  ctx,
+  elements: {
+    chatToggleBtn,
+    debugToggleBtn,
+    chatDrawerHandle,
+    chatDrawer,
+    chatLog,
+    worldChatLog,
+    worldChatDrawerHandle,
+    worldChatDrawer,
+    loadingChatLog,
+    loadingChatDrawerHandle,
+    loadingChatDrawer,
+    chatInput,
+    debugGridToggle,
+    debugPingToolsToggle,
+    debugNetSimPanel,
+    debugSimPingInput,
+    debugSimJitterInput,
+    debugSimLossInput,
+  },
+  settings: {
+    TILE_SIZE,
+    MAX_CHAT_LOG_LINES,
+    DEBUG_PING_INTERVAL_MS,
+  },
+  actions: {
+    sendWs,
+    setChatLogOpen,
+    setChatInputOpen,
+    applyChatDrawerPosition,
+    getChatDrawerHiddenOffset,
+    applyWorldChatDrawerPosition,
+    getWorldChatDrawerHiddenOffset,
+    applyLoadingChatDrawerPosition,
+    getLoadingChatDrawerHiddenOffset,
+    updateDebugUi,
+    updateDebugInfo,
+  },
+});
+
 function clampCameraZoom(value) {
   return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
 }
@@ -209,62 +268,35 @@ function updateDebugInfo(force = false) {
 }
 
 function stopPingTimer() {
-  if (state.pingTimerId) {
-    clearInterval(state.pingTimerId);
-    state.pingTimerId = null;
-  }
+  chatDebug.stopPingTimer();
 }
 
 function sendDebugPing() {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-    return;
-  }
+  chatDebug.sendDebugPing();
+}
 
-  sendWs({
-    type: "ping",
-    clientSentAt: performance.now(),
-  });
+function updateNetworkSimInputsFromState() {
+  chatDebug.updateNetworkSimInputsFromState();
+}
+
+function refreshNetworkSimStateFromInputs() {
+  chatDebug.refreshNetworkSimStateFromInputs();
+}
+
+function getNetworkSimulationDelayMs() {
+  return chatDebug.getNetworkSimulationDelayMs();
+}
+
+function shouldDropSimulatedPacket(payloadType = "") {
+  return chatDebug.shouldDropSimulatedPacket(payloadType);
 }
 
 function startPingTimer() {
-  stopPingTimer();
-  sendDebugPing();
-  state.pingTimerId = setInterval(sendDebugPing, DEBUG_PING_INTERVAL_MS);
+  chatDebug.startPingTimer();
 }
 
 function drawDebugGrid() {
-  if (!state.world || !state.debugEnabled || !state.debugGridEnabled) {
-    return;
-  }
-
-  const zoom = Math.max(0.0001, state.camera.zoom);
-  const worldTileSize = TILE_SIZE;
-  const leftTile = Math.max(0, Math.floor(state.camera.x / worldTileSize));
-  const topTile = Math.max(0, Math.floor(state.camera.y / worldTileSize));
-  const rightTile = Math.min(state.world.width, Math.ceil((state.camera.x + canvas.width / zoom) / worldTileSize) + 1);
-  const bottomTile = Math.min(state.world.height, Math.ceil((state.camera.y + canvas.height / zoom) / worldTileSize) + 1);
-
-  ctx.save();
-  ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
-  ctx.lineWidth = 1;
-
-  for (let tileX = leftTile; tileX <= rightTile; tileX += 1) {
-    const screenX = Math.round((tileX * worldTileSize - state.camera.x) * zoom) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(screenX, 0);
-    ctx.lineTo(screenX, canvas.height);
-    ctx.stroke();
-  }
-
-  for (let tileY = topTile; tileY <= bottomTile; tileY += 1) {
-    const screenY = Math.round((tileY * worldTileSize - state.camera.y) * zoom) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, screenY);
-    ctx.lineTo(canvas.width, screenY);
-    ctx.stroke();
-  }
-
-  ctx.restore();
+  chatDebug.drawDebugGrid();
 }
 
 function setCameraZoom(nextZoom) {
@@ -375,6 +407,9 @@ function initializeRemotePlayerTracking(player) {
   player.targetY = player.y;
   player.renderX = player.x;
   player.renderY = player.y;
+  player.netVx = 0;
+  player.netVy = 0;
+  player.lastNetUpdateAt = performance.now();
   if (!Number.isFinite(player.chatUntil)) {
     player.chatUntil = 0;
   }
@@ -383,53 +418,12 @@ function initializeRemotePlayerTracking(player) {
   }
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
 function appendChatLine(kind, text, username = "") {
-  const line = {
-    kind,
-    text: String(text || "").trim(),
-    username: String(username || "").trim(),
-    createdAt: Date.now(),
-  };
-
-  if (!line.text) {
-    return;
-  }
-
-  state.chatLogLines.push(line);
-  if (state.chatLogLines.length > MAX_CHAT_LOG_LINES) {
-    state.chatLogLines.splice(0, state.chatLogLines.length - MAX_CHAT_LOG_LINES);
-  }
-
-  renderChatLog();
+  chatDebug.appendChatLine(kind, text, username);
 }
 
 function renderChatLog() {
-  const targets = [chatLog, worldChatLog, loadingChatLog].filter(Boolean);
-  if (targets.length === 0) {
-    return;
-  }
-
-  for (const target of targets) {
-    target.innerHTML = "";
-    for (const line of state.chatLogLines) {
-      const row = document.createElement("div");
-      row.className = `chatLine ${line.kind}`;
-      if (line.kind === "player") {
-        row.innerHTML = `<strong>${escapeHtml(line.username || "player")}</strong>: ${escapeHtml(line.text)}`;
-      } else {
-        row.textContent = line.text;
-      }
-      target.appendChild(row);
-    }
-    target.scrollTop = target.scrollHeight;
-  }
+  chatDebug.renderChatLog();
 }
 
 function getChatDrawerMaxHeight() {
@@ -604,6 +598,10 @@ function updateRemotePlayersInterpolation(deltaSeconds) {
   }
 
   const alpha = 1 - Math.exp(-REMOTE_PLAYER_INTERP_SPEED * deltaSeconds);
+  const now = performance.now();
+  const pingMs = Number.isFinite(state.debugPingMs) ? Math.max(0, state.debugPingMs) : 0;
+  const pingLeadMs = Math.min(120, pingMs * 0.5);
+
   for (const [playerId, player] of state.players) {
     if (playerId === state.selfId) {
       continue;
@@ -615,8 +613,23 @@ function updateRemotePlayersInterpolation(deltaSeconds) {
 
     const targetX = Number.isFinite(player.targetX) ? player.targetX : player.x;
     const targetY = Number.isFinite(player.targetY) ? player.targetY : player.y;
-    const dx = targetX - player.renderX;
-    const dy = targetY - player.renderY;
+    const maxSpeed = Math.max(0, Number(REMOTE_PLAYER_MAX_EXTRAPOLATE_SPEED) || 0);
+    const rawNetVx = Number.isFinite(player.netVx) ? player.netVx : 0;
+    const rawNetVy = Number.isFinite(player.netVy) ? player.netVy : 0;
+    const netVx = Math.max(-maxSpeed, Math.min(maxSpeed, rawNetVx));
+    const netVy = Math.max(-maxSpeed, Math.min(maxSpeed, rawNetVy));
+    const sinceUpdateMs = Number.isFinite(player.lastNetUpdateAt)
+      ? Math.max(0, now - player.lastNetUpdateAt)
+      : 0;
+    const staleLeadMs = Math.min(40, sinceUpdateMs * 0.15);
+    const leadMs = Math.min(
+      REMOTE_PLAYER_EXTRAPOLATE_MAX_MS,
+      REMOTE_PLAYER_EXTRAPOLATE_BASE_MS + staleLeadMs + pingLeadMs * 0.35,
+    );
+    const predictedX = targetX + netVx * (leadMs / 1000);
+    const predictedY = targetY + netVy * (leadMs / 1000);
+    const dx = predictedX - player.renderX;
+    const dy = predictedY - player.renderY;
 
     // Teleports or very stale jumps should snap to avoid rubber-band trails.
     if (Math.abs(dx) > REMOTE_PLAYER_SNAP_DISTANCE || Math.abs(dy) > REMOTE_PLAYER_SNAP_DISTANCE) {
@@ -1306,6 +1319,23 @@ function connectSocket() {
   state.ws.addEventListener("message", (event) => {
     const msg = JSON.parse(event.data);
 
+    const alreadyDelayed = !!msg.__simulatedDelayed;
+    if (alreadyDelayed) {
+      delete msg.__simulatedDelayed;
+    } else {
+      const simulatedDelayMs = getNetworkSimulationDelayMs();
+      if (simulatedDelayMs > 0) {
+        const delayedMsg = { ...msg, __simulatedDelayed: true };
+        setTimeout(() => {
+          if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          state.ws.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(delayedMsg) }));
+        }, simulatedDelayMs);
+        return;
+      }
+    }
+
     if (msg.type === "connected") {
       state.selfId = msg.id;
       return;
@@ -1399,32 +1429,60 @@ function connectSocket() {
     }
 
     if (msg.type === "player_moved") {
+      if (msg.id === state.selfId) {
+        // Ignore routine self echoes, but allow authoritative teleport snaps.
+        if (msg.teleport) {
+          state.me.x = Number(msg.x) || state.me.x;
+          state.me.y = Number(msg.y) || state.me.y;
+          state.velocity.x = 0;
+          state.velocity.y = 0;
+          state.onGround = false;
+          state.jumpQueued = false;
+
+          const selfPlayer = state.players.get(state.selfId);
+          if (selfPlayer) {
+            selfPlayer.x = state.me.x;
+            selfPlayer.y = state.me.y;
+            selfPlayer.targetX = state.me.x;
+            selfPlayer.targetY = state.me.y;
+            selfPlayer.renderX = state.me.x;
+            selfPlayer.renderY = state.me.y;
+            selfPlayer.netVx = 0;
+            selfPlayer.netVy = 0;
+            selfPlayer.lastNetUpdateAt = performance.now();
+          }
+        }
+        return;
+      }
+
       const existing = state.players.get(msg.id);
       if (existing) {
+        const now = performance.now();
         const prevX = existing.x;
         const prevY = existing.y;
         if (!Number.isFinite(existing.renderX) || !Number.isFinite(existing.renderY)) {
           initializeRemotePlayerTracking(existing);
         }
+
+        const previousTargetX = Number.isFinite(existing.targetX) ? existing.targetX : existing.x;
+        const previousTargetY = Number.isFinite(existing.targetY) ? existing.targetY : existing.y;
+        const previousUpdateAt = Number.isFinite(existing.lastNetUpdateAt)
+          ? existing.lastNetUpdateAt
+          : now;
+        const dtSeconds = Math.max(0.016, (now - previousUpdateAt) / 1000);
+
         existing.x = msg.x;
         existing.y = msg.y;
         existing.targetX = msg.x;
         existing.targetY = msg.y;
+        existing.netVx = (msg.x - previousTargetX) / dtSeconds;
+        existing.netVy = (msg.y - previousTargetY) / dtSeconds;
+        existing.lastNetUpdateAt = now;
 
-        if (msg.id === state.selfId) {
-          state.me.x = msg.x;
-          state.me.y = msg.y;
-          const deltaX = msg.x - prevX;
-          const deltaY = msg.y - prevY;
-          const movedDistance = Math.hypot(deltaX, deltaY);
-
-          // Preserve normal gravity/jump unless this looks like a teleport snap.
-          if (movedDistance >= SELF_TELEPORT_SNAP_DISTANCE) {
-            state.velocity.x = 0;
-            state.velocity.y = 0;
-            state.onGround = false;
-            state.jumpQueued = false;
-          }
+        const deltaX = msg.x - prevX;
+        const deltaY = msg.y - prevY;
+        const movedDistance = Math.hypot(deltaX, deltaY);
+        if (movedDistance >= SELF_TELEPORT_SNAP_DISTANCE + SELF_RECONCILE_SNAP_DISTANCE) {
           existing.renderX = msg.x;
           existing.renderY = msg.y;
         }
@@ -1533,7 +1591,24 @@ function sendWs(payload) {
     return false;
   }
 
-  state.ws.send(JSON.stringify(payload));
+  const payloadType = String(payload?.type || "");
+  if (shouldDropSimulatedPacket(payloadType)) {
+    return true;
+  }
+
+  const serialized = JSON.stringify(payload);
+  const simulatedDelayMs = getNetworkSimulationDelayMs();
+  if (simulatedDelayMs > 0) {
+    setTimeout(() => {
+      if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      state.ws.send(serialized);
+    }, simulatedDelayMs);
+    return true;
+  }
+
+  state.ws.send(serialized);
   return true;
 }
 
@@ -1719,159 +1794,7 @@ document.addEventListener("keyup", (event) => {
   state.keys.delete(event.key.toLowerCase());
 });
 
-chatToggleBtn?.addEventListener("click", () => {
-  setChatLogOpen(!state.chatLogOpen);
-});
-
-debugToggleBtn?.addEventListener("click", () => {
-  state.debugEnabled = !state.debugEnabled;
-  updateDebugUi();
-  updateDebugInfo(true);
-});
-
-debugGridToggle?.addEventListener("change", () => {
-  state.debugGridEnabled = !!debugGridToggle.checked;
-  updateDebugInfo(true);
-});
-
-chatDrawerHandle?.addEventListener("pointerdown", (event) => {
-  if (!screens.game.classList.contains("active")) {
-    return;
-  }
-
-  event.preventDefault();
-  state.chatDrawerDragging = true;
-  state.chatDrawerDragStartY = event.clientY;
-  state.chatDrawerDragStartOffsetY = state.chatDrawerOffsetY;
-  chatDrawerHandle.setPointerCapture?.(event.pointerId);
-  chatDrawer?.classList.add("dragging");
-});
-
-chatDrawerHandle?.addEventListener("pointermove", (event) => {
-  if (!state.chatDrawerDragging) {
-    return;
-  }
-
-  event.preventDefault();
-  const deltaY = event.clientY - state.chatDrawerDragStartY;
-  applyChatDrawerPosition(state.chatDrawerDragStartOffsetY + deltaY, true);
-});
-
-const endChatDrawerDrag = (event) => {
-  if (!state.chatDrawerDragging) {
-    return;
-  }
-
-  state.chatDrawerDragging = false;
-  chatDrawer?.classList.remove("dragging");
-  chatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
-
-  // Keep the drawer exactly where the user dropped it (no snap open/closed).
-  applyChatDrawerPosition(state.chatDrawerOffsetY);
-  const hiddenOffset = getChatDrawerHiddenOffset();
-  state.chatLogOpen = state.chatDrawerOffsetY > hiddenOffset + 0.5;
-  if (!state.chatLogOpen && state.chatInputOpen) {
-    setChatInputOpen(false);
-  }
-};
-
-chatDrawerHandle?.addEventListener("pointerup", endChatDrawerDrag);
-chatDrawerHandle?.addEventListener("pointercancel", endChatDrawerDrag);
-
-applyChatDrawerPosition(state.chatDrawerOffsetY);
-
-worldChatDrawerHandle?.addEventListener("pointerdown", (event) => {
-  if (!screens.world.classList.contains("active")) {
-    return;
-  }
-
-  event.preventDefault();
-  state.worldChatDrawerDragging = true;
-  state.worldChatDrawerDragStartY = event.clientY;
-  state.worldChatDrawerDragStartOffsetY = state.worldChatDrawerOffsetY;
-  worldChatDrawerHandle.setPointerCapture?.(event.pointerId);
-  worldChatDrawer?.classList.add("dragging");
-});
-
-worldChatDrawerHandle?.addEventListener("pointermove", (event) => {
-  if (!state.worldChatDrawerDragging) {
-    return;
-  }
-
-  event.preventDefault();
-  const deltaY = event.clientY - state.worldChatDrawerDragStartY;
-  applyWorldChatDrawerPosition(state.worldChatDrawerDragStartOffsetY + deltaY, true);
-});
-
-const endWorldChatDrawerDrag = (event) => {
-  if (!state.worldChatDrawerDragging) {
-    return;
-  }
-
-  state.worldChatDrawerDragging = false;
-  worldChatDrawer?.classList.remove("dragging");
-  worldChatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
-
-  // Keep the drawer exactly where the user dropped it (no snap open/closed).
-  applyWorldChatDrawerPosition(state.worldChatDrawerOffsetY);
-  const hiddenOffset = getWorldChatDrawerHiddenOffset();
-  state.worldChatLogOpen = state.worldChatDrawerOffsetY > hiddenOffset + 0.5;
-};
-
-worldChatDrawerHandle?.addEventListener("pointerup", endWorldChatDrawerDrag);
-worldChatDrawerHandle?.addEventListener("pointercancel", endWorldChatDrawerDrag);
-
-applyWorldChatDrawerPosition(state.worldChatDrawerOffsetY);
-
-loadingChatDrawerHandle?.addEventListener("pointerdown", (event) => {
-  if (!screens.loading.classList.contains("active")) {
-    return;
-  }
-
-  event.preventDefault();
-  state.loadingChatDrawerDragging = true;
-  state.loadingChatDrawerDragStartY = event.clientY;
-  state.loadingChatDrawerDragStartOffsetY = state.loadingChatDrawerOffsetY;
-  loadingChatDrawerHandle.setPointerCapture?.(event.pointerId);
-  loadingChatDrawer?.classList.add("dragging");
-});
-
-loadingChatDrawerHandle?.addEventListener("pointermove", (event) => {
-  if (!state.loadingChatDrawerDragging) {
-    return;
-  }
-
-  event.preventDefault();
-  const deltaY = event.clientY - state.loadingChatDrawerDragStartY;
-  applyLoadingChatDrawerPosition(state.loadingChatDrawerDragStartOffsetY + deltaY, true);
-});
-
-const endLoadingChatDrawerDrag = (event) => {
-  if (!state.loadingChatDrawerDragging) {
-    return;
-  }
-
-  state.loadingChatDrawerDragging = false;
-  loadingChatDrawer?.classList.remove("dragging");
-  loadingChatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
-
-  // Keep the drawer exactly where the user dropped it (no snap open/closed).
-  applyLoadingChatDrawerPosition(state.loadingChatDrawerOffsetY);
-  const hiddenOffset = getLoadingChatDrawerHiddenOffset();
-  state.loadingChatLogOpen = state.loadingChatDrawerOffsetY > hiddenOffset + 0.5;
-};
-
-loadingChatDrawerHandle?.addEventListener("pointerup", endLoadingChatDrawerDrag);
-loadingChatDrawerHandle?.addEventListener("pointercancel", endLoadingChatDrawerDrag);
-
-applyLoadingChatDrawerPosition(state.loadingChatDrawerOffsetY);
-
-chatInput?.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    event.preventDefault();
-    setChatInputOpen(false);
-  }
-});
+chatDebug.bindControls();
 
 canvas.addEventListener("mousemove", (event) => {
   const rect = canvas.getBoundingClientRect();
@@ -2000,7 +1923,7 @@ function update() {
 
   updateRemotePlayersInterpolation(deltaSeconds);
 
-  if (now - state.lastMoveSentAt > 50) {
+  if (now - state.lastMoveSentAt > 33) {
     sendWs({ type: "player_move", x: state.me.x, y: state.me.y });
     state.lastMoveSentAt = now;
   }
@@ -2359,3 +2282,4 @@ function loop() {
 updateZoomUi();
 updateGemUi();
 updateDebugUi();
+updateNetworkSimInputsFromState();
