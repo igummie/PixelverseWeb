@@ -228,3 +228,40 @@ def load_block_definitions(
     blocks_by_id, _, background_ids = build_block_indexes(payload.get("blocks", []))
     runtime_ids = resolve_runtime_block_ids(payload, blocks_by_id, required_roles=required_roles)
     return background_ids, blocks_by_id, runtime_ids
+
+
+class BlockCatalog:
+    def __init__(
+        self,
+        blocks_path: Path,
+        *,
+        required_roles: Iterable[str] = DEFAULT_RUNTIME_BLOCK_ROLES,
+    ) -> None:
+        self.blocks_path = blocks_path
+        self.required_roles = tuple(required_roles)
+        self.background_ids: set[int] = set()
+        self.blocks_by_id: dict[int, dict[str, Any]] = {}
+        self.runtime_ids: dict[str, int] = {}
+        self.blocks_mtime_ns = 0
+
+    def load_payload(self) -> dict[str, Any]:
+        return load_blocks_payload(self.blocks_path)
+
+    def refresh_if_changed(self, force: bool = False) -> bool:
+        try:
+            current_mtime_ns = self.blocks_path.stat().st_mtime_ns
+        except Exception:
+            current_mtime_ns = 0
+
+        if not force and current_mtime_ns == self.blocks_mtime_ns:
+            return False
+
+        background_ids, blocks_by_id, runtime_ids = load_block_definitions(
+            self.blocks_path,
+            required_roles=self.required_roles,
+        )
+        self.background_ids = background_ids
+        self.blocks_by_id = blocks_by_id
+        self.runtime_ids = runtime_ids
+        self.blocks_mtime_ns = current_mtime_ns
+        return True

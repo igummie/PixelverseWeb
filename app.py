@@ -18,9 +18,8 @@ import jwt
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from modules.block_registry import (
+    BlockCatalog,
     DEFAULT_RUNTIME_BLOCK_ROLES,
-    load_block_definitions as load_block_definitions_from_path,
-    load_blocks_payload as load_blocks_payload_from_path,
 )
 from modules.chat_commands import process_chat_command
 from modules.command_runtime import apply_command_result
@@ -246,29 +245,26 @@ def parse_token(token: str | None) -> dict[str, Any] | None:
         return None
 
 
-def load_block_definitions() -> tuple[set[int], dict[int, dict[str, Any]], dict[str, int]]:
-    return load_block_definitions_from_path(BLOCKS_PATH, required_roles=DEFAULT_RUNTIME_BLOCK_ROLES)
+BLOCK_CATALOG = BlockCatalog(BLOCKS_PATH, required_roles=DEFAULT_RUNTIME_BLOCK_ROLES)
+BACKGROUND_BLOCK_IDS: set[int] = set()
+BLOCKS_BY_ID: dict[int, dict[str, Any]] = {}
+RUNTIME_BLOCK_IDS: dict[str, int] = {}
 
 
-BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID, RUNTIME_BLOCK_IDS = load_block_definitions()
-BLOCKS_MTIME_NS = 0
+def _sync_block_catalog_cache() -> None:
+    global BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID, RUNTIME_BLOCK_IDS
+    BACKGROUND_BLOCK_IDS = set(BLOCK_CATALOG.background_ids)
+    BLOCKS_BY_ID = dict(BLOCK_CATALOG.blocks_by_id)
+    RUNTIME_BLOCK_IDS = dict(BLOCK_CATALOG.runtime_ids)
 
 
 def refresh_block_definitions_if_changed(force: bool = False) -> None:
-    global BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID, RUNTIME_BLOCK_IDS, BLOCKS_MTIME_NS
-
-    try:
-        current_mtime_ns = BLOCKS_PATH.stat().st_mtime_ns
-    except Exception:
-        current_mtime_ns = 0
-
-    if force or current_mtime_ns != BLOCKS_MTIME_NS:
-        BACKGROUND_BLOCK_IDS, BLOCKS_BY_ID, RUNTIME_BLOCK_IDS = load_block_definitions()
-        BLOCKS_MTIME_NS = current_mtime_ns
+    if BLOCK_CATALOG.refresh_if_changed(force=force):
+        _sync_block_catalog_cache()
 
 
 def load_blocks_payload() -> dict[str, Any]:
-    return load_blocks_payload_from_path(BLOCKS_PATH)
+    return BLOCK_CATALOG.load_payload()
 
 
 def is_breakable(tile_id: int) -> bool:
