@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixelverse Seed Editor</title>
+    <link rel="stylesheet" href="/styles/seed-editor.css" />
+  </head>
+  <body>
+    <div class="editorSwitcher" aria-label="Editor Switcher">
+      <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
+      <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
+      <a class="switchBtn active" href="/seed-editor.html">Seed Editor</a>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="title">Pixelverse Seed Editor</div>
+        <div class="subtitle">Create seeds from scratch. Pick textures from atlas canvas, then assign to seed or tree growth stage.</div>
+
+        <div class="seedOptionsSection">
+          <div class="title small">Seed Options</div>
+          <div class="row">
+            <div class="fieldStack" style="min-width: 280px">
+              <label for="seedSelect">Seed Entry</label>
+              <select id="seedSelect"></select>
+            </div>
+            <button id="createSeedBtn" type="button">Create Seed</button>
+            <button id="deleteSeedBtn" class="secondary" type="button">Delete Seed</button>
+            <button id="reloadBtn" class="secondary" type="button">Reload</button>
+          </div>
+
+          <div class="row">
+            <div class="fieldStack">
+              <label for="seedIdInput">SEED_ID</label>
+              <input id="seedIdInput" type="number" min="0" step="1" />
+            </div>
+            <div class="fieldStack" style="min-width: 220px">
+              <label for="seedNameInput">NAME</label>
+              <input id="seedNameInput" type="text" maxlength="80" />
+            </div>
+            <div class="fieldStack">
+              <label for="growtimeInput">GROWTIME</label>
+              <input id="growtimeInput" type="number" min="0" step="1" value="3600" />
+            </div>
+            <div class="fieldStack">
+              <label for="fruitMinInput">FRUIT_MIN</label>
+              <input id="fruitMinInput" type="number" min="0" step="1" value="1" />
+            </div>
+            <div class="fieldStack">
+              <label for="fruitMaxInput">FRUIT_MAX</label>
+              <input id="fruitMaxInput" type="number" min="0" step="1" value="3" />
+            </div>
+            <div class="fieldStack">
+              <label for="seedTintInput">SEED_TINT</label>
+              <input id="seedTintInput" type="text" placeholder="#ffffff" />
+            </div>
+            <div class="fieldStack">
+              <label for="seedTintColorInput">Seed Tint Picker</label>
+              <input id="seedTintColorInput" type="color" value="#ffffff" />
+            </div>
+          </div>
+        </div>
+
+        <div id="treeSection" class="treeSection">
+          <div class="title small">Tree Settings</div>
+          <div class="row">
+            <div class="fieldStack" style="min-width: 220px">
+              <label for="treeNameInput">TREE.NAME</label>
+              <input id="treeNameInput" type="text" maxlength="80" placeholder="APPLE_TREE" />
+            </div>
+            <div class="fieldStack">
+              <label for="treeTintInput">TREE.TINT</label>
+              <input id="treeTintInput" type="text" placeholder="#ffffff" />
+            </div>
+            <div class="fieldStack">
+              <label for="treeTintColorInput">Tint Picker</label>
+              <input id="treeTintColorInput" type="color" value="#ffffff" />
+            </div>
+          </div>
+
+          <table class="stageTable">
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Growth %</th>
+                <th>Atlas</th>
+                <th>Rect</th>
+              </tr>
+            </thead>
+            <tbody id="stageTableBody"></tbody>
+          </table>
+        </div>
+        <div id="treeEmptyHint" class="tiny" hidden>Create or select a seed to edit tree stages.</div>
+
+        <div class="pickerGrid">
+          <div class="pickerSection">
+            <div class="title small">Seed Texture Picker</div>
+            <div class="row">
+              <div class="fieldStack" style="min-width: 200px">
+                <label for="seedAtlasSelect">Seed Atlas</label>
+                <select id="seedAtlasSelect"></select>
+              </div>
+              <div class="fieldStack">
+                <label for="seedTileSizeInput">Tile Size</label>
+                <input id="seedTileSizeInput" type="number" min="1" step="1" value="16" />
+              </div>
+              <button id="loadSeedAtlasBtn" type="button">Load Seed Atlas</button>
+              <button id="assignSeedTextureBtn" type="button">Assign Seed Texture</button>
+            </div>
+            <div id="seedAtlasWrap" class="atlasWrap">
+              <canvas id="seedAtlasCanvas" width="256" height="256"></canvas>
+            </div>
+            <div class="tiny" id="seedSelectionInfo">Tile: 0 | Rect: 0,0,16,16</div>
+          </div>
+
+          <div class="pickerSection">
+            <div class="title small">Tree Texture Picker</div>
+            <div class="row">
+              <div class="fieldStack" style="min-width: 200px">
+                <label for="treeAtlasSelect">Tree Atlas</label>
+                <select id="treeAtlasSelect"></select>
+              </div>
+              <div class="fieldStack">
+                <label for="treeTileSizeInput">Tile Size</label>
+                <input id="treeTileSizeInput" type="number" min="1" step="1" value="16" />
+              </div>
+              <div class="fieldStack" style="min-width: 180px">
+                <label for="treeStageTargetSelect">Stage Target</label>
+                <select id="treeStageTargetSelect">
+                  <option value="1">Tree Stage 1</option>
+                  <option value="2">Tree Stage 2</option>
+                  <option value="3">Tree Stage 3</option>
+                  <option value="4">Tree Stage 4</option>
+                </select>
+              </div>
+              <button id="loadTreeAtlasBtn" type="button">Load Tree Atlas</button>
+              <button id="assignTreeTextureBtn" type="button">Assign Tree Texture</button>
+            </div>
+            <div id="treeAtlasWrap" class="atlasWrap">
+              <canvas id="treeAtlasCanvas" width="256" height="256"></canvas>
+            </div>
+            <div class="tiny" id="treeSelectionInfo">Tile: 0 | Rect: 0,0,16,16</div>
+          </div>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div class="links">Other tools: <a href="/atlas-editor.html">block editor</a> | <a href="/texture47-editor.html">texture47 editor</a> | <a href="/index.html">game</a></div>
+      </div>
+
+      <div class="panel">
+        <div class="title">Seeds</div>
+        <div class="subtitle">Cards mirror the block editor style. Click a card to select a seed.</div>
+        <div id="seedCardList" class="seedCardList"></div>
+        <div class="title small" style="margin-top: 12px">Seeds JSON</div>
+        <textarea id="jsonOutput" spellcheck="false" readonly></textarea>
+        <div class="row" style="margin-top: 8px">
+          <button id="saveBtn" type="button">Save seeds.json</button>
+          <button id="resetJsonBtn" class="secondary" type="button">Reset JSON To State</button>
+          <button id="copyJsonBtn" class="secondary" type="button">Copy JSON</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      const seedSelect = document.getElementById("seedSelect");
+      const createSeedBtn = document.getElementById("createSeedBtn");
+      const deleteSeedBtn = document.getElementById("deleteSeedBtn");
+      const reloadBtn = document.getElementById("reloadBtn");
+      const seedIdInput = document.getElementById("seedIdInput");
+      const seedNameInput = document.getElementById("seedNameInput");
+      const growtimeInput = document.getElementById("growtimeInput");
+      const fruitMinInput = document.getElementById("fruitMinInput");
+      const fruitMaxInput = document.getElementById("fruitMaxInput");
+      const seedTintInput = document.getElementById("seedTintInput");
+      const seedTintColorInput = document.getElementById("seedTintColorInput");
+      const treeNameInput = document.getElementById("treeNameInput");
+      const treeTintInput = document.getElementById("treeTintInput");
+      const treeTintColorInput = document.getElementById("treeTintColorInput");
+      const stageTableBody = document.getElementById("stageTableBody");
+      const treeSection = document.getElementById("treeSection");
+      const treeEmptyHint = document.getElementById("treeEmptyHint");
+      const seedAtlasSelect = document.getElementById("seedAtlasSelect");
+      const seedTileSizeInput = document.getElementById("seedTileSizeInput");
+      const loadSeedAtlasBtn = document.getElementById("loadSeedAtlasBtn");
+      const assignSeedTextureBtn = document.getElementById("assignSeedTextureBtn");
+      const seedAtlasCanvas = document.getElementById("seedAtlasCanvas");
+      const seedSelectionInfo = document.getElementById("seedSelectionInfo");
+      const treeAtlasSelect = document.getElementById("treeAtlasSelect");
+      const treeTileSizeInput = document.getElementById("treeTileSizeInput");
+      const treeStageTargetSelect = document.getElementById("treeStageTargetSelect");
+      const loadTreeAtlasBtn = document.getElementById("loadTreeAtlasBtn");
+      const assignTreeTextureBtn = document.getElementById("assignTreeTextureBtn");
+      const treeAtlasCanvas = document.getElementById("treeAtlasCanvas");
+      const treeSelectionInfo = document.getElementById("treeSelectionInfo");
+      const saveBtn = document.getElementById("saveBtn");
+      const status = document.getElementById("status");
+      const jsonOutput = document.getElementById("jsonOutput");
+      const seedCardList = document.getElementById("seedCardList");
+      const resetJsonBtn = document.getElementById("resetJsonBtn");
+      const copyJsonBtn = document.getElementById("copyJsonBtn");
+
+      const seedInputs = [seedIdInput, seedNameInput, growtimeInput, fruitMinInput, fruitMaxInput, seedTintInput, seedTintColorInput, treeNameInput, treeTintInput, treeTintColorInput];
+      const seedActionButtons = [deleteSeedBtn, saveBtn, assignSeedTextureBtn, assignTreeTextureBtn, loadSeedAtlasBtn, loadTreeAtlasBtn];
+
+      const state = {
+        pickerAtlases: [],
+        seedAtlases: [],
+        seeds: [],
+        selectedIndex: -1,
+        atlasImageCache: {},
+        seedPicker: {
+          atlasImage: null,
+          selectedRect: { x: 0, y: 0, w: 16, h: 16 },
+        },
+        treePicker: {
+          atlasImage: null,
+          selectedRect: { x: 0, y: 0, w: 16, h: 16 },
+        },
+      };
+
+      function normalizeAtlasId(value) {
+        if (typeof value === "number" && Number.isInteger(value)) return value;
+        const text = String(value ?? "").trim();
+        if (!text) return "";
+        if (/^-?\d+$/.test(text)) return Number.parseInt(text, 10);
+        return text.toLowerCase();
+      }
+
+      function normalizeTint(value) {
+        const text = String(value ?? "").trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{8}$/.test(text)) {
+          return text.toLowerCase();
+        }
+        return "";
+      }
+
+      function setStatus(message, isError = false) {
+        status.textContent = message || "";
+        status.style.color = isError ? "#fca5a5" : "#93c5fd";
+      }
+
+      function makeDefaultStages() {
+        return [1, 2, 3, 4].map((stage) => ({
+          STAGE: stage,
+          GROWTH_PERCENT: stage === 4 ? 100 : stage * 25,
+          ATLAS_ID: "",
+          ATLAS_TEXTURE: { x: (stage - 1) * 16, y: 0, w: 16, h: 16 },
+        }));
+      }
+
+      function ensureSeed(seed) {
+        const stagesRaw = Array.isArray(seed?.TREE?.STAGES) ? seed.TREE.STAGES : [];
+        const stages = makeDefaultStages();
+        for (const stage of stagesRaw) {
+          const idx = Math.max(1, Number.parseInt(stage?.STAGE ?? 0, 10) || 0) - 1;
+          if (idx < 0 || idx >= stages.length) continue;
+          stages[idx] = {
+            STAGE: idx + 1,
+            GROWTH_PERCENT: Math.max(0, Math.min(100, Number(stage?.GROWTH_PERCENT ?? stages[idx].GROWTH_PERCENT) || 0)),
+            ATLAS_ID: normalizeAtlasId(stage?.ATLAS_ID ?? ""),
+            ATLAS_TEXTURE: {
+              x: Math.max(0, Number.parseInt(stage?.ATLAS_TEXTURE?.x ?? stages[idx].ATLAS_TEXTURE.x, 10) || 0),
+              y: Math.max(0, Number.parseInt(stage?.ATLAS_TEXTURE?.y ?? stages[idx].ATLAS_TEXTURE.y, 10) || 0),
+              w: Math.max(1, Number.parseInt(stage?.ATLAS_TEXTURE?.w ?? stages[idx].ATLAS_TEXTURE.w, 10) || 16),
+              h: Math.max(1, Number.parseInt(stage?.ATLAS_TEXTURE?.h ?? stages[idx].ATLAS_TEXTURE.h, 10) || 16),
+            },
+          };
+        }
+
+        return {
+          SEED_ID: Math.max(0, Number.parseInt(seed?.SEED_ID ?? 0, 10) || 0),
+          NAME: String(seed?.NAME ?? "").trim() || `SEED_${seed?.SEED_ID ?? 0}`,
+          GROWTIME: Math.max(0, Number.parseInt(seed?.GROWTIME ?? 3600, 10) || 3600),
+          FRUIT_MIN: Math.max(0, Number.parseInt(seed?.FRUIT_MIN ?? 1, 10) || 1),
+          FRUIT_MAX: Math.max(0, Number.parseInt(seed?.FRUIT_MAX ?? 3, 10) || 3),
+          SEED_TINT: normalizeTint(seed?.SEED_TINT ?? ""),
+          SEED_ATLAS_ID: normalizeAtlasId(seed?.SEED_ATLAS_ID ?? ""),
+          SEED_ATLAS_TEXTURE: {
+            x: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.x ?? 0, 10) || 0),
+            y: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.y ?? 0, 10) || 0),
+            w: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.w ?? 16, 10) || 16),
+            h: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.h ?? 16, 10) || 16),
+          },
+          TREE: {
+            NAME: String(seed?.TREE?.NAME ?? "").trim(),
+            TINT: normalizeTint(seed?.TREE?.TINT ?? ""),
+            STAGES: stages,
+          },
+        };
+      }
+
+      function updateJsonOutput() {
+        jsonOutput.value = JSON.stringify({ atlases: state.seedAtlases, seeds: state.seeds }, null, 2);
+      }
+
+      function renderSeedOptions() {
+        seedSelect.innerHTML = "";
+        for (let i = 0; i < state.seeds.length; i += 1) {
+          const seed = state.seeds[i];
+          const option = document.createElement("option");
+          option.value = String(i);
+          option.textContent = `${seed.SEED_ID} - ${seed.NAME}`;
+          seedSelect.append(option);
+        }
+
+        seedSelect.disabled = !state.seeds.length;
+        if (!state.seeds.length) {
+          state.selectedIndex = -1;
+          return;
+        }
+
+        if (state.selectedIndex < 0 || state.selectedIndex >= state.seeds.length) {
+          state.selectedIndex = 0;
+        }
+        seedSelect.value = String(state.selectedIndex);
+      }
+
+      function renderAtlasSelect(selectEl) {
+        const current = String(normalizeAtlasId(selectEl.value));
+        selectEl.innerHTML = "";
+        const atlasChoices = Array.isArray(state.seedAtlases) ? state.seedAtlases : [];
+        for (const atlas of atlasChoices) {
+          const atlasId = normalizeAtlasId(atlas?.ATLAS_ID);
+          const option = document.createElement("option");
+          option.value = String(atlasId);
+          option.textContent = `${String(atlas?.NAME ?? "ATLAS")} (${String(atlasId)})`;
+          selectEl.append(option);
+        }
+        if (selectEl.options.length) {
+          selectEl.value = Array.from(selectEl.options).some((opt) => opt.value === current)
+            ? current
+            : selectEl.options[0].value;
+        }
+      }
+
+      function getAtlasById(atlasId) {
+        const key = String(normalizeAtlasId(atlasId));
+        const fromSeedAtlases = state.seedAtlases.find((item) => String(normalizeAtlasId(item?.ATLAS_ID)) === key);
+        if (fromSeedAtlases) {
+          return fromSeedAtlases;
+        }
+        return state.pickerAtlases.find((item) => String(normalizeAtlasId(item?.ATLAS_ID)) === key);
+      }
+
+      function getAtlasImage(atlasId) {
+        const key = String(normalizeAtlasId(atlasId));
+        const atlas = getAtlasById(key);
+        if (!atlas || !atlas.SRC) return Promise.resolve(null);
+
+        if (state.atlasImageCache[key]) {
+          return state.atlasImageCache[key];
+        }
+
+        state.atlasImageCache[key] = new Promise((resolve) => {
+          const image = new Image();
+          image.decoding = "async";
+          image.onload = () => resolve(image);
+          image.onerror = () => resolve(null);
+          image.src = String(atlas.SRC);
+        });
+        return state.atlasImageCache[key];
+      }
+
+      function renderStageRows(seed) {
+        stageTableBody.innerHTML = "";
+        for (const stage of seed.TREE.STAGES) {
+          const tr = document.createElement("tr");
+
+          const s = document.createElement("td");
+          s.textContent = String(stage.STAGE);
+          tr.append(s);
+
+          const g = document.createElement("td");
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.max = "100";
+          input.step = "0.1";
+          input.value = String(stage.GROWTH_PERCENT);
+          input.addEventListener("input", () => {
+            stage.GROWTH_PERCENT = Math.max(0, Math.min(100, Number(input.value) || 0));
+            updateJsonOutput();
+            renderSeedCards();
+          });
+          g.append(input);
+          tr.append(g);
+
+          const a = document.createElement("td");
+          a.textContent = String(stage.ATLAS_ID || "(none)");
+          tr.append(a);
+
+          const r = document.createElement("td");
+          const rect = stage.ATLAS_TEXTURE || { x: 0, y: 0, w: 16, h: 16 };
+          r.textContent = `${rect.x},${rect.y},${rect.w},${rect.h}`;
+          tr.append(r);
+
+          stageTableBody.append(tr);
+        }
+      }
+
+      function renderFromSelected() {
+        renderSeedOptions();
+        renderAtlasSelect(seedAtlasSelect);
+        renderAtlasSelect(treeAtlasSelect);
+        renderSeedCards();
+
+        const seed = state.seeds[state.selectedIndex];
+        if (!seed) {
+          seedIdInput.value = "";
+          seedNameInput.value = "";
+          growtimeInput.value = "";
+          fruitMinInput.value = "";
+          fruitMaxInput.value = "";
+          seedTintInput.value = "";
+          seedTintColorInput.value = "#ffffff";
+          treeNameInput.value = "";
+          treeTintInput.value = "";
+          treeTintColorInput.value = "#ffffff";
+          stageTableBody.innerHTML = "";
+          treeSection.hidden = true;
+          treeEmptyHint.hidden = false;
+          for (const input of seedInputs) {
+            input.disabled = true;
+          }
+          for (const btn of seedActionButtons) {
+            btn.disabled = state.seeds.length === 0;
+          }
+          updateJsonOutput();
+          return;
+        }
+
+        treeSection.hidden = false;
+        treeEmptyHint.hidden = true;
+        for (const input of seedInputs) {
+          input.disabled = false;
+        }
+        for (const btn of seedActionButtons) {
+          btn.disabled = false;
+        }
+
+        seedIdInput.value = String(seed.SEED_ID);
+        seedNameInput.value = seed.NAME;
+        growtimeInput.value = String(seed.GROWTIME);
+        fruitMinInput.value = String(seed.FRUIT_MIN);
+        fruitMaxInput.value = String(seed.FRUIT_MAX);
+        seedTintInput.value = seed.SEED_TINT || "";
+        if (/^#[0-9a-f]{6}$/i.test(seed.SEED_TINT || "")) {
+          seedTintColorInput.value = seed.SEED_TINT;
+        }
+        treeNameInput.value = seed.TREE.NAME || "";
+        treeTintInput.value = seed.TREE.TINT || "";
+        if (/^#[0-9a-f]{6}$/i.test(seed.TREE.TINT || "")) {
+          treeTintColorInput.value = seed.TREE.TINT;
+        }
+
+        renderStageRows(seed);
+        updateJsonOutput();
+      }
+
+      function drawTexturePreview(canvas, atlasId, rect, tint = "") {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#020617";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const innerX = 2;
+        const innerY = 2;
+        const innerW = Math.max(1, canvas.width - 4);
+        const innerH = Math.max(1, canvas.height - 4);
+
+        const normalizedRect = {
+          x: Math.max(0, Number.parseInt(rect?.x ?? 0, 10) || 0),
+          y: Math.max(0, Number.parseInt(rect?.y ?? 0, 10) || 0),
+          w: Math.max(1, Number.parseInt(rect?.w ?? 16, 10) || 16),
+          h: Math.max(1, Number.parseInt(rect?.h ?? 16, 10) || 16),
+        };
+
+        getAtlasImage(atlasId).then((image) => {
+          if (!image) return;
+          const spriteLayer = document.createElement("canvas");
+          spriteLayer.width = innerW;
+          spriteLayer.height = innerH;
+          const spriteCtx = spriteLayer.getContext("2d");
+          if (!spriteCtx) return;
+
+          spriteCtx.imageSmoothingEnabled = false;
+          spriteCtx.clearRect(0, 0, innerW, innerH);
+          spriteCtx.drawImage(
+            image,
+            normalizedRect.x,
+            normalizedRect.y,
+            normalizedRect.w,
+            normalizedRect.h,
+            0,
+            0,
+            innerW,
+            innerH
+          );
+
+          const tintColor = normalizeTint(tint);
+          if (tintColor) {
+            // Tint only non-transparent pixels of the sprite layer.
+            spriteCtx.globalCompositeOperation = "source-atop";
+            spriteCtx.globalAlpha = 0.35;
+            spriteCtx.fillStyle = tintColor;
+            spriteCtx.fillRect(0, 0, innerW, innerH);
+            spriteCtx.globalAlpha = 1;
+            spriteCtx.globalCompositeOperation = "source-over";
+          }
+
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(spriteLayer, innerX, innerY);
+        });
+      }
+
+      function renderSeedCards() {
+        seedCardList.innerHTML = "";
+
+        const addCard = document.createElement("button");
+        addCard.type = "button";
+        addCard.className = "seedCard addSeedCard";
+        addCard.innerHTML = '<div class="addSeedPlus">+</div><div class="seedCardMeta">Create Seed</div>';
+        addCard.addEventListener("click", () => {
+          createSeedEntry();
+        });
+        seedCardList.append(addCard);
+
+        for (let i = 0; i < state.seeds.length; i += 1) {
+          const seed = state.seeds[i];
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = `seedCard${i === state.selectedIndex ? " active" : ""}`;
+
+          const title = document.createElement("div");
+          title.className = "seedCardName";
+          title.textContent = `${seed.SEED_ID} - ${seed.NAME}`;
+          card.append(title);
+
+          const previews = document.createElement("div");
+          previews.className = "seedCardPreviews";
+
+          const seedCanvas = document.createElement("canvas");
+          seedCanvas.width = 40;
+          seedCanvas.height = 40;
+          seedCanvas.className = "cardPreview";
+          previews.append(seedCanvas);
+          drawTexturePreview(seedCanvas, seed.SEED_ATLAS_ID, seed.SEED_ATLAS_TEXTURE, seed.SEED_TINT);
+
+          for (const stage of seed.TREE.STAGES) {
+            const stageCanvas = document.createElement("canvas");
+            stageCanvas.width = 26;
+            stageCanvas.height = 26;
+            stageCanvas.className = "stagePreview";
+            previews.append(stageCanvas);
+            drawTexturePreview(stageCanvas, stage.ATLAS_ID, stage.ATLAS_TEXTURE, seed.TREE.TINT);
+          }
+
+          card.append(previews);
+
+          const meta = document.createElement("div");
+          meta.className = "seedCardMeta";
+          meta.textContent = `TREE: ${seed.TREE.NAME || "(none)"}`;
+          card.append(meta);
+
+          const tint = document.createElement("div");
+          tint.className = "seedCardTint";
+          const tintDot = document.createElement("span");
+          tintDot.className = "tintDot";
+          tintDot.style.background = normalizeTint(seed.TREE.TINT) || "transparent";
+          tint.append(tintDot);
+          const tintText = document.createElement("span");
+          tintText.textContent = normalizeTint(seed.TREE.TINT) || "No tint";
+          tint.append(tintText);
+          card.append(tint);
+
+          card.addEventListener("click", () => {
+            applyCurrentSeedFields();
+            state.selectedIndex = i;
+            renderFromSelected();
+          });
+
+          seedCardList.append(card);
+        }
+      }
+
+      function createSeedEntry() {
+        applyCurrentSeedFields();
+        const used = new Set(state.seeds.map((seed) => seed.SEED_ID));
+        let nextId = 0;
+        while (used.has(nextId)) nextId += 1;
+
+        state.seeds.push(
+          ensureSeed({
+            SEED_ID: nextId,
+            NAME: `SEED_${nextId}`,
+            GROWTIME: 3600,
+            FRUIT_MIN: 1,
+            FRUIT_MAX: 3,
+            TREE: {
+              NAME: `TREE_${nextId}`,
+              TINT: "",
+            },
+          })
+        );
+        state.selectedIndex = state.seeds.length - 1;
+        renderFromSelected();
+      }
+
+      function applyCurrentSeedFields() {
+        const seed = state.seeds[state.selectedIndex];
+        if (!seed) return;
+        seed.SEED_ID = Math.max(0, Number.parseInt(seedIdInput.value, 10) || 0);
+        seed.NAME = String(seedNameInput.value || "").trim() || `SEED_${seed.SEED_ID}`;
+        seed.GROWTIME = Math.max(0, Number.parseInt(growtimeInput.value, 10) || 0);
+        seed.FRUIT_MIN = Math.max(0, Number.parseInt(fruitMinInput.value, 10) || 0);
+        seed.FRUIT_MAX = Math.max(seed.FRUIT_MIN, Number.parseInt(fruitMaxInput.value, 10) || 0);
+        seed.SEED_TINT = normalizeTint(seedTintInput.value);
+        seed.TREE.NAME = String(treeNameInput.value || "").trim();
+        seed.TREE.TINT = normalizeTint(treeTintInput.value);
+      }
+
+      function drawPicker(canvas, image, selectedRect, tileSizeInputEl) {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        const tileSize = Math.max(1, Number.parseInt(tileSizeInputEl.value, 10) || 16);
+
+        if (!image) {
+          canvas.width = 256;
+          canvas.height = 256;
+          canvas.style.width = "512px";
+          canvas.style.height = "512px";
+          ctx.fillStyle = "#0b1220";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          return;
+        }
+
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const previewScale = 2;
+        canvas.style.width = `${canvas.width * previewScale}px`;
+        canvas.style.height = `${canvas.height * previewScale}px`;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(image, 0, 0);
+
+        ctx.strokeStyle = "rgba(148,163,184,0.35)";
+        for (let x = 0; x <= canvas.width; x += tileSize) {
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, 0);
+          ctx.lineTo(x + 0.5, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= canvas.height; y += tileSize) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + 0.5);
+          ctx.lineTo(canvas.width, y + 0.5);
+          ctx.stroke();
+        }
+
+        const r = selectedRect;
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      }
+
+      async function loadPickerImage(kind) {
+        const isSeed = kind === "seed";
+        const selectEl = isSeed ? seedAtlasSelect : treeAtlasSelect;
+        const canvasEl = isSeed ? seedAtlasCanvas : treeAtlasCanvas;
+        const tileInputEl = isSeed ? seedTileSizeInput : treeTileSizeInput;
+        const picker = isSeed ? state.seedPicker : state.treePicker;
+
+        const atlasId = String(selectEl.value || "");
+        const atlas = getAtlasById(atlasId);
+        if (!atlas || !atlas.SRC) {
+          picker.atlasImage = null;
+          drawPicker(canvasEl, null, picker.selectedRect, tileInputEl);
+          setStatus(`Selected ${isSeed ? "seed" : "tree"} atlas has no SRC.`, true);
+          return;
+        }
+
+        picker.atlasImage = await getAtlasImage(atlasId);
+        drawPicker(canvasEl, picker.atlasImage, picker.selectedRect, tileInputEl);
+        setStatus(`Loaded ${isSeed ? "seed" : "tree"} atlas ${atlas.NAME || atlasId}.`);
+      }
+
+      async function loadData() {
+        setStatus("Loading seed data...");
+        try {
+          const res = await fetch("/api/tools/seeds/editor-data", { cache: "no-store" });
+          if (!res.ok) throw new Error(`Failed to load seed editor data: ${res.status}`);
+          const payload = await res.json();
+
+          state.pickerAtlases = Array.isArray(payload.atlases) ? payload.atlases : [];
+          state.seedAtlases = Array.isArray(payload.seedAtlases)
+            ? payload.seedAtlases.filter((entry) => entry && typeof entry === "object")
+            : [];
+          const rawSeeds = Array.isArray(payload.seeds) ? payload.seeds : [];
+          state.seeds = rawSeeds.map((seed) => ensureSeed(seed));
+          state.seeds.sort((a, b) => a.SEED_ID - b.SEED_ID);
+          state.selectedIndex = state.seeds.length ? 0 : -1;
+
+          renderFromSelected();
+          if (state.seedAtlases.length) {
+            await loadPickerImage("seed");
+            await loadPickerImage("tree");
+          } else {
+            drawPicker(seedAtlasCanvas, null, state.seedPicker.selectedRect, seedTileSizeInput);
+            drawPicker(treeAtlasCanvas, null, state.treePicker.selectedRect, treeTileSizeInput);
+          }
+          setStatus("Seed data loaded.");
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      }
+
+      async function saveData() {
+        // Pull latest form values into state first.
+        applyCurrentSeedFields();
+        updateJsonOutput();
+
+        const payload = {
+          atlases: state.seedAtlases,
+          seeds: state.seeds,
+        };
+        setStatus("Saving seeds...");
+        try {
+          const res = await fetch("/api/tools/seeds/save-data", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.detail || `Save failed (${res.status})`);
+          setStatus(`Saved ${data.seedCount || state.seeds.length} seeds.`);
+          renderFromSelected();
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      }
+
+      function handlePickerClick(kind, canvasEl, tileInputEl, infoEl, event) {
+        const isSeed = kind === "seed";
+        const picker = isSeed ? state.seedPicker : state.treePicker;
+        if (!picker.atlasImage) return;
+
+        const rect = canvasEl.getBoundingClientRect();
+        const scaleX = canvasEl.width / rect.width;
+        const scaleY = canvasEl.height / rect.height;
+        const tileSize = Math.max(1, Number.parseInt(tileInputEl.value, 10) || 16);
+        const px = Math.max(0, Math.floor((event.clientX - rect.left) * scaleX));
+        const py = Math.max(0, Math.floor((event.clientY - rect.top) * scaleY));
+
+        picker.selectedRect = {
+          x: Math.floor(px / tileSize) * tileSize,
+          y: Math.floor(py / tileSize) * tileSize,
+          w: tileSize,
+          h: tileSize,
+        };
+
+        const tileX = Math.floor(picker.selectedRect.x / tileSize);
+        const tileY = Math.floor(picker.selectedRect.y / tileSize);
+        infoEl.textContent = `Tile: ${tileY * Math.max(1, Math.floor(canvasEl.width / tileSize)) + tileX} | Rect: ${picker.selectedRect.x},${picker.selectedRect.y},${picker.selectedRect.w},${picker.selectedRect.h}`;
+        drawPicker(canvasEl, picker.atlasImage, picker.selectedRect, tileInputEl);
+      }
+
+      seedAtlasCanvas.addEventListener("click", (event) => {
+        handlePickerClick("seed", seedAtlasCanvas, seedTileSizeInput, seedSelectionInfo, event);
+      });
+
+      treeAtlasCanvas.addEventListener("click", (event) => {
+        handlePickerClick("tree", treeAtlasCanvas, treeTileSizeInput, treeSelectionInfo, event);
+      });
+
+      assignSeedTextureBtn.addEventListener("click", () => {
+        applyCurrentSeedFields();
+        const seed = state.seeds[state.selectedIndex];
+        if (!seed) {
+          setStatus("Create or select a seed first.", true);
+          return;
+        }
+
+        seed.SEED_ATLAS_ID = normalizeAtlasId(seedAtlasSelect.value);
+        seed.SEED_ATLAS_TEXTURE = { ...state.seedPicker.selectedRect };
+
+        renderFromSelected();
+        setStatus("Assigned seed texture tile.");
+      });
+
+      assignTreeTextureBtn.addEventListener("click", () => {
+        applyCurrentSeedFields();
+        const seed = state.seeds[state.selectedIndex];
+        if (!seed) {
+          setStatus("Create or select a seed first.", true);
+          return;
+        }
+
+        const stageNum = Number.parseInt(treeStageTargetSelect.value, 10) || 1;
+        const stage = seed.TREE.STAGES.find((entry) => entry.STAGE === stageNum);
+        if (!stage) {
+          setStatus("Invalid stage target.", true);
+          return;
+        }
+
+        stage.ATLAS_ID = normalizeAtlasId(treeAtlasSelect.value);
+        stage.ATLAS_TEXTURE = { ...state.treePicker.selectedRect };
+
+        renderFromSelected();
+        setStatus(`Assigned tree texture to stage ${stageNum}.`);
+      });
+
+      createSeedBtn.addEventListener("click", () => {
+        createSeedEntry();
+      });
+
+      deleteSeedBtn.addEventListener("click", () => {
+        if (state.selectedIndex < 0 || state.selectedIndex >= state.seeds.length) return;
+        state.seeds.splice(state.selectedIndex, 1);
+        state.selectedIndex = Math.max(0, Math.min(state.selectedIndex, state.seeds.length - 1));
+        renderFromSelected();
+      });
+
+      seedSelect.addEventListener("change", () => {
+        applyCurrentSeedFields();
+        state.selectedIndex = Number.parseInt(seedSelect.value, 10) || 0;
+        renderFromSelected();
+      });
+
+      [seedIdInput, seedNameInput, growtimeInput, fruitMinInput, fruitMaxInput, seedTintInput, treeNameInput, treeTintInput].forEach((input) => {
+        input.addEventListener("input", () => {
+          applyCurrentSeedFields();
+          updateJsonOutput();
+          renderSeedCards();
+        });
+      });
+
+      seedTintColorInput.addEventListener("input", () => {
+        seedTintInput.value = seedTintColorInput.value;
+        applyCurrentSeedFields();
+        updateJsonOutput();
+        renderSeedCards();
+      });
+
+      treeTintColorInput.addEventListener("input", () => {
+        treeTintInput.value = treeTintColorInput.value;
+        applyCurrentSeedFields();
+        updateJsonOutput();
+        renderSeedCards();
+      });
+
+      loadSeedAtlasBtn.addEventListener("click", async () => {
+        try {
+          await loadPickerImage("seed");
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      });
+
+      loadTreeAtlasBtn.addEventListener("click", async () => {
+        try {
+          await loadPickerImage("tree");
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      });
+
+      seedAtlasSelect.addEventListener("change", async () => {
+        try {
+          await loadPickerImage("seed");
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      });
+
+      treeAtlasSelect.addEventListener("change", async () => {
+        try {
+          await loadPickerImage("tree");
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      });
+
+      seedTileSizeInput.addEventListener("input", () => {
+        drawPicker(seedAtlasCanvas, state.seedPicker.atlasImage, state.seedPicker.selectedRect, seedTileSizeInput);
+      });
+      treeTileSizeInput.addEventListener("input", () => {
+        drawPicker(treeAtlasCanvas, state.treePicker.atlasImage, state.treePicker.selectedRect, treeTileSizeInput);
+      });
+
+      resetJsonBtn.addEventListener("click", () => {
+        applyCurrentSeedFields();
+        updateJsonOutput();
+        setStatus("JSON reset to current editor state.");
+      });
+
+      copyJsonBtn.addEventListener("click", async () => {
+        try {
+          const text = jsonOutput.value || "";
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+            await navigator.clipboard.writeText(text);
+            setStatus("JSON copied to clipboard.");
+            return;
+          }
+          throw new Error("Clipboard API unavailable in this browser context.");
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      });
+
+      reloadBtn.addEventListener("click", loadData);
+      saveBtn.addEventListener("click", saveData);
+
+      loadData();
+    </script>
+  </body>
+</html>

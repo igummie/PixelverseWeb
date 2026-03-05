@@ -48,6 +48,7 @@ DATA_DIR = BASE_DIR / "data" / "db"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "game.db"
 BLOCKS_PATH = PUBLIC_DIR / "data" / "blocks.json"
+SEEDS_PATH = PUBLIC_DIR / "data" / "seeds.json"
 
 
 def get_db() -> sqlite3.Connection:
@@ -267,6 +268,28 @@ def load_blocks_payload() -> dict[str, Any]:
     return BLOCK_CATALOG.load_payload()
 
 
+def load_seeds_payload() -> dict[str, Any]:
+    try:
+        with SEEDS_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return {"seeds": []}
+
+    if not isinstance(payload, dict):
+        return {"seeds": []}
+
+    seeds = payload.get("seeds", [])
+    output = {"seeds": seeds if isinstance(seeds, list) else []}
+
+    # Preserve future metadata fields while intentionally omitting VERSION.
+    for key, value in payload.items():
+        if key in {"seeds", "VERSION"}:
+            continue
+        output[key] = value
+
+    return output
+
+
 def is_breakable(tile_id: int) -> bool:
     if tile_id <= 0:
         return False
@@ -322,6 +345,96 @@ def get_block_gem_drop_total(tile_id: int) -> int:
     return max(0, base_amount)
 
 
+def get_block_seed_drop_ids(tile_id: int) -> list[int]:
+    block = BLOCKS_BY_ID.get(tile_id)
+    if not block:
+        return []
+
+    drop_ids: list[int] = []
+
+    # Canonical format: optional list of seed IDs with per-entry chance.
+    if "SEED_IDS" in block:
+        raw_seed_ids = block.get("SEED_IDS")
+        if not isinstance(raw_seed_ids, list):
+            return []
+
+        for entry in raw_seed_ids:
+            chance = 1.0
+            seed_id = -1
+
+            if isinstance(entry, dict):
+                try:
+                    chance = float(entry.get("CHANCE", entry.get("chance", 0.2)))
+                except Exception:
+                    chance = 0.2
+
+                try:
+                    seed_id = int(entry.get("ID", entry.get("SEED_ID", entry.get("id", -1))))
+                except Exception:
+                    seed_id = -1
+            else:
+                try:
+                    seed_id = int(entry)
+                except Exception:
+                    seed_id = -1
+
+            chance = max(0.0, min(1.0, chance))
+            if chance <= 0.0 or random.random() > chance:
+                continue
+
+            if seed_id >= 0:
+                drop_ids.append(seed_id)
+
+        return drop_ids
+
+    # Legacy format: multiple optional seed drops.
+    raw_seed_drops = block.get("SEED_DROPS")
+    if isinstance(raw_seed_drops, list):
+        for entry in raw_seed_drops:
+            if not isinstance(entry, dict):
+                continue
+
+            try:
+                chance = float(entry.get("CHANCE", 0.0))
+            except Exception:
+                chance = 0.0
+
+            chance = max(0.0, min(1.0, chance))
+            if chance <= 0.0 or random.random() > chance:
+                continue
+
+            try:
+                seed_id = int(entry.get("SEED_ID", -1))
+            except Exception:
+                seed_id = -1
+
+            if seed_id >= 0:
+                drop_ids.append(seed_id)
+
+        if drop_ids:
+            return drop_ids
+
+    # Legacy format: single optional seed drop.
+    try:
+        chance = float(block.get("SEED_DROP_CHANCE", 0.0))
+    except Exception:
+        chance = 0.0
+
+    chance = max(0.0, min(1.0, chance))
+    if chance <= 0.0 or random.random() > chance:
+        return []
+
+    try:
+        seed_id = int(block.get("SEED_DROP_ID", -1))
+    except Exception:
+        seed_id = -1
+
+    if seed_id < 0:
+        return []
+
+    return [seed_id]
+
+
 def split_gem_amount(total: int) -> list[int]:
     remaining = max(0, int(total))
     drops: list[int] = []
@@ -342,6 +455,14 @@ def ensure_world_gem_state(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return gem_drops
 
 
+def ensure_world_seed_state(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    seed_drops = world.setdefault("seed_drops", {})
+    if not isinstance(seed_drops, dict):
+        world["seed_drops"] = {}
+        seed_drops = world["seed_drops"]
+    return seed_drops
+
+
 def serialize_gem_drops(world: dict[str, Any]) -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for drop in ensure_world_gem_state(world).values():
@@ -355,6 +476,27 @@ def serialize_gem_drops(world: dict[str, Any]) -> list[dict[str, Any]]:
                     "x": float(drop.get("x", 0.0)),
                     "y": float(drop.get("y", 0.0)),
                     "value": int(drop.get("value", 0)),
+                }
+            )
+        except Exception:
+            continue
+
+    return payload
+
+
+def serialize_seed_drops(world: dict[str, Any]) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for drop in ensure_world_seed_state(world).values():
+        if not isinstance(drop, dict):
+            continue
+
+        try:
+            payload.append(
+                {
+                    "id": str(drop.get("id", "")),
+                    "x": float(drop.get("x", 0.0)),
+                    "y": float(drop.get("y", 0.0)),
+                    "seedId": int(drop.get("seed_id", -1)),
                 }
             )
         except Exception:
@@ -403,6 +545,49 @@ def parse_world_gem_drops(raw: Any, width: int, height: int) -> dict[str, dict[s
     return parsed
 
 
+def parse_world_seed_drops(raw: Any, width: int, height: int) -> dict[str, dict[str, Any]]:
+    parsed: dict[str, dict[str, Any]] = {}
+    entries: list[Any]
+
+    if isinstance(raw, dict):
+        entries = list(raw.values())
+    elif isinstance(raw, list):
+        entries = raw
+    else:
+        return parsed
+
+    max_x = max(0.0, float(width) - 0.001)
+    max_y = max(0.0, float(height) - 0.001)
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+
+        drop_id = str(entry.get("id") or secrets.token_hex(6)).strip()
+        if not drop_id or drop_id in parsed:
+            continue
+
+        try:
+            x = max(0.0, min(max_x, float(entry.get("x", 0.0))))
+            y = max(0.0, min(max_y, float(entry.get("y", 0.0))))
+            seed_id = int(entry.get("seedId", entry.get("seed_id", -1)))
+        except Exception:
+            continue
+
+        if seed_id < 0:
+            continue
+
+        parsed[drop_id] = {
+            "id": drop_id,
+            "x": x,
+            "y": y,
+            "seed_id": seed_id,
+            "created_at": time.monotonic(),
+        }
+
+    return parsed
+
+
 def spawn_gem_drops(world: dict[str, Any], tile_x: int, tile_y: int, total_amount: int) -> list[dict[str, Any]]:
     values = split_gem_amount(total_amount)
     if not values:
@@ -428,6 +613,27 @@ def spawn_gem_drops(world: dict[str, Any], tile_x: int, tile_y: int, total_amoun
         created.append(drop)
 
     return created
+
+
+def spawn_seed_drop(world: dict[str, Any], tile_x: int, tile_y: int, seed_id: int) -> dict[str, Any] | None:
+    if seed_id < 0:
+        return None
+
+    seed_drops = ensure_world_seed_state(world)
+    drop_id = secrets.token_hex(6)
+    offset_x = random.uniform(-GEM_DROP_SPAWN_RADIUS, GEM_DROP_SPAWN_RADIUS)
+    offset_y = random.uniform(-GEM_DROP_SPAWN_RADIUS, GEM_DROP_SPAWN_RADIUS)
+    local_x = max(GEM_DROP_MIN_IN_TILE, min(GEM_DROP_MAX_IN_TILE, 0.5 + offset_x))
+    local_y = max(GEM_DROP_MIN_IN_TILE, min(GEM_DROP_MAX_IN_TILE, 0.5 + offset_y))
+    drop = {
+        "id": drop_id,
+        "x": float(tile_x + local_x),
+        "y": float(tile_y + local_y),
+        "seed_id": int(seed_id),
+        "created_at": time.monotonic(),
+    }
+    seed_drops[drop_id] = drop
+    return drop
 
 
 def collect_gems_for_player(world: dict[str, Any], player: dict[str, Any]) -> tuple[list[str], int]:
@@ -466,6 +672,44 @@ def collect_gems_for_player(world: dict[str, Any], player: dict[str, Any]) -> tu
             collected_total += value
 
     return collected_ids, collected_total
+
+
+def collect_seed_drops_for_player(world: dict[str, Any], player: dict[str, Any]) -> tuple[list[str], list[int]]:
+    seed_drops = ensure_world_seed_state(world)
+    if not seed_drops:
+        return [], []
+
+    try:
+        player_center_x = float(player.get("x", 0.0)) + 0.36
+        player_center_y = float(player.get("y", 0.0)) + 0.46
+    except Exception:
+        return [], []
+
+    collected_ids: list[str] = []
+    collected_seed_ids: list[int] = []
+    radius_sq = PLAYER_PICKUP_RADIUS * PLAYER_PICKUP_RADIUS
+
+    for drop_id, drop in list(seed_drops.items()):
+        if not isinstance(drop, dict):
+            continue
+
+        try:
+            dx = float(drop.get("x", 0.0)) - player_center_x
+            dy = float(drop.get("y", 0.0)) - player_center_y
+            seed_id = int(drop.get("seed_id", -1))
+        except Exception:
+            continue
+
+        if seed_id < 0:
+            seed_drops.pop(drop_id, None)
+            continue
+
+        if (dx * dx) + (dy * dy) <= radius_sq:
+            seed_drops.pop(drop_id, None)
+            collected_ids.append(str(drop_id))
+            collected_seed_ids.append(seed_id)
+
+    return collected_ids, collected_seed_ids
 
 
 def get_tile_damage_key(x: int, y: int, layer: str) -> str:
@@ -683,6 +927,7 @@ def create_world(name: str) -> dict[str, Any]:
         "players": {},
         "tile_damage": {},
         "gem_drops": {},
+        "seed_drops": {},
     }
 
     enforce_bedrock_under_door(world)
@@ -699,6 +944,7 @@ def save_world(world: dict[str, Any]) -> None:
             "background": world["background"],
             "door": door,
             "gem_drops": serialize_gem_drops(world),
+            "seed_drops": serialize_seed_drops(world),
         }
     )
 
@@ -764,10 +1010,12 @@ def load_world(name: str) -> dict[str, Any]:
             foreground.append(0)
         background = [0 for _ in range(expected)]
         parsed_gem_drops: Any = []
+        parsed_seed_drops: Any = []
     else:
         raw_foreground = parsed_tiles.get("foreground", []) if isinstance(parsed_tiles, dict) else []
         raw_background = parsed_tiles.get("background", []) if isinstance(parsed_tiles, dict) else []
         parsed_gem_drops = parsed_tiles.get("gem_drops", []) if isinstance(parsed_tiles, dict) else []
+        parsed_seed_drops = parsed_tiles.get("seed_drops", []) if isinstance(parsed_tiles, dict) else []
         if isinstance(parsed_tiles, dict):
             parsed_door = sanitize_door(parsed_tiles.get("door"), width, height)
 
@@ -792,6 +1040,7 @@ def load_world(name: str) -> dict[str, Any]:
 
     resolved_door = db_door or parsed_door or default_door(width, height)
     gem_drops = parse_world_gem_drops(parsed_gem_drops, width, height)
+    seed_drops = parse_world_seed_drops(parsed_seed_drops, width, height)
 
     return {
         "name": name,
@@ -804,6 +1053,7 @@ def load_world(name: str) -> dict[str, Any]:
         "players": {},
         "tile_damage": {},
         "gem_drops": gem_drops,
+        "seed_drops": seed_drops,
     }
 
 
@@ -868,7 +1118,9 @@ register_editor_routes(
     app,
     public_dir=PUBLIC_DIR,
     blocks_path=BLOCKS_PATH,
+    seeds_path=SEEDS_PATH,
     load_blocks_payload=load_blocks_payload,
+    load_seeds_payload=load_seeds_payload,
     refresh_block_definitions_if_changed=refresh_block_definitions_if_changed,
 )
 
@@ -1015,6 +1267,7 @@ def bootstrap_payload(authorization: str | None = Header(default=None)) -> dict[
 
     payload = {
         "blocks": blocks_payload,
+        "seeds": load_seeds_payload(),
         "texture47Configs": load_texture47_configs(PUBLIC_DIR, texture47_atlas_ids),
     }
     return JSONResponse(
@@ -1174,6 +1427,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             ],
                             "tileDamage": serialize_tile_damage(world),
                             "gemDrops": serialize_gem_drops(world),
+                            "seedDrops": serialize_seed_drops(world),
                         },
                         "selfId": client_id,
                         "gems": int(world["players"][client_id].get("gems", 0)),
@@ -1267,6 +1521,31 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 "collectorId": client_id,
                             },
                         )
+
+                collected_seed_drop_ids, collected_seed_ids = collect_seed_drops_for_player(world, player)
+                if collected_seed_drop_ids:
+                    await schedule_world_save(world["name"])
+                    seed_counts: dict[int, int] = {}
+                    for seed_id in collected_seed_ids:
+                        seed_counts[seed_id] = seed_counts.get(seed_id, 0) + 1
+
+                    for drop_id in collected_seed_drop_ids:
+                        await broadcast_to_world(
+                            world,
+                            {
+                                "type": "seed_drop_remove",
+                                "id": drop_id,
+                                "collectorId": client_id,
+                            },
+                        )
+
+                    await ws_send(
+                        websocket,
+                        {
+                            "type": "seed_collected",
+                            "drops": [{"seedId": int(seed_id), "count": int(count)} for seed_id, count in sorted(seed_counts.items())],
+                        },
+                    )
                 continue
 
             if msg_type == "set_tile":
@@ -1330,6 +1609,23 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                             "x": float(drop["x"]),
                                             "y": float(drop["y"]),
                                             "value": int(drop["value"]),
+                                        },
+                                    },
+                                )
+
+                        seed_drop_ids = get_block_seed_drop_ids(broken_tile_id)
+                        for seed_drop_id in seed_drop_ids:
+                            seed_drop = spawn_seed_drop(world, x, y, seed_drop_id)
+                            if seed_drop is not None:
+                                await broadcast_to_world(
+                                    world,
+                                    {
+                                        "type": "seed_drop_spawn",
+                                        "drop": {
+                                            "id": str(seed_drop["id"]),
+                                            "x": float(seed_drop["x"]),
+                                            "y": float(seed_drop["y"]),
+                                            "seedId": int(seed_drop["seed_id"]),
                                         },
                                     },
                                 )

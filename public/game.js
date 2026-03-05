@@ -133,6 +133,7 @@ const state = {
   world: null,
   gems: 0,
   gemDrops: new Map(),
+  seedDrops: new Map(),
   players: new Map(),
   me: { x: 8, y: 8 },
   camera: { x: 0, y: 0, zoom: 1 },
@@ -635,6 +636,72 @@ function removeGemDropById(dropId) {
     return;
   }
   state.gemDrops.delete(normalizedId);
+}
+
+function normalizeSeedDrop(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const id = String(entry.id || "").trim();
+  const x = Number(entry.x);
+  const y = Number(entry.y);
+  const seedId = Number(entry.seedId ?? entry.seed_id);
+  if (!id || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(seedId) || seedId < 0) {
+    return null;
+  }
+
+  return {
+    id,
+    x,
+    y,
+    seedId: Math.floor(seedId),
+  };
+}
+
+function applySeedDropSnapshot(drops) {
+  state.seedDrops.clear();
+  for (const entry of drops || []) {
+    const normalized = normalizeSeedDrop(entry);
+    if (!normalized) {
+      continue;
+    }
+    const bob = getGemBobParams(`seed:${normalized.id}`);
+    state.seedDrops.set(normalized.id, {
+      ...normalized,
+      ...bob,
+    });
+  }
+}
+
+function upsertSeedDrop(entry) {
+  const normalized = normalizeSeedDrop(entry);
+  if (!normalized) {
+    return;
+  }
+
+  const existing = state.seedDrops.get(normalized.id);
+  if (existing) {
+    state.seedDrops.set(normalized.id, {
+      ...existing,
+      ...normalized,
+    });
+    return;
+  }
+
+  const bob = getGemBobParams(`seed:${normalized.id}`);
+  state.seedDrops.set(normalized.id, {
+    ...normalized,
+    ...bob,
+  });
+}
+
+function removeSeedDropById(dropId) {
+  const normalizedId = String(dropId || "").trim();
+  if (!normalizedId) {
+    return;
+  }
+  state.seedDrops.delete(normalizedId);
 }
 
 function updateRemotePlayersInterpolation(deltaSeconds) {
@@ -1413,6 +1480,7 @@ function connectSocket() {
       updateGemUi();
       state.players.clear();
       applyGemDropSnapshot(msg.world.gemDrops || []);
+      applySeedDropSnapshot(msg.world.seedDrops || []);
       state.tileDamage.clear();
       for (const damageState of msg.world.tileDamage || []) {
         setTileDamage(damageState);
@@ -1597,6 +1665,16 @@ function connectSocket() {
       updateGemUi();
       return;
     }
+
+    if (msg.type === "seed_drop_spawn") {
+      upsertSeedDrop(msg.drop);
+      return;
+    }
+
+    if (msg.type === "seed_drop_remove") {
+      removeSeedDropById(msg.id);
+      return;
+    }
   });
 
   return new Promise((resolve, reject) => {
@@ -1712,6 +1790,7 @@ function leaveWorld() {
   state.gems = 0;
   updateGemUi();
   state.gemDrops.clear();
+  state.seedDrops.clear();
   state.tileDamage.clear();
   state.players.clear();
   state.velocity.x = 0;
@@ -2057,6 +2136,39 @@ function drawGemDrops() {
   }
 }
 
+function drawSeedDrops() {
+  if (!state.world || state.seedDrops.size === 0) {
+    return;
+  }
+
+  const now = performance.now();
+  for (const drop of state.seedDrops.values()) {
+    const screenX = (drop.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
+    const screenY = (drop.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const bobOffset = Math.sin(now * (drop.bobSpeed || GEM_BOB_BASE_SPEED) + (drop.bobPhase || 0))
+      * (drop.bobAmplitude || GEM_BOB_BASE_AMPLITUDE_PX)
+      * state.camera.zoom;
+    const drawSize = Math.max(8, 12 * state.camera.zoom);
+    const drawX = screenX - drawSize / 2;
+    const drawY = screenY - drawSize / 2 + bobOffset;
+
+    if (
+      drawX + drawSize < -8 ||
+      drawY + drawSize < -8 ||
+      drawX > canvas.width + 8 ||
+      drawY > canvas.height + 8
+    ) {
+      continue;
+    }
+
+    ctx.fillStyle = "#65a30d";
+    ctx.fillRect(drawX, drawY, drawSize, drawSize);
+    ctx.strokeStyle = "#bbf7d0";
+    ctx.lineWidth = Math.max(1, state.camera.zoom);
+    ctx.strokeRect(drawX + 0.5, drawY + 0.5, drawSize - 1, drawSize - 1);
+  }
+}
+
 function drawPlayers() {
   const now = performance.now();
   const playerBoxW = Math.max(0.2, Number(state.collider?.width) || 0.72);
@@ -2208,6 +2320,7 @@ function loop() {
       drawWorld();
       drawDebugGrid();
       drawGemDrops();
+      drawSeedDrops();
       drawDamageOverlays();
       drawPlayers();
       drawDebugHitboxes();

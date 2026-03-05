@@ -1,0 +1,314 @@
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.editorSwitcher {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 60;
+  display: flex;
+  gap: 8px;
+  background: rgba(17, 24, 39, 0.92);
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 6px;
+}
+
+.switchBtn {
+  display: inline-block;
+  text-decoration: none;
+  color: #bfdbfe;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #0f172a;
+}
+
+.switchBtn.active {
+  color: #052e16;
+  border-color: #22c55e;
+  background: #86efac;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 620px) minmax(320px, 1fr);
+  gap: 14px;
+  min-height: 100vh;
+  padding: 64px 14px 14px;
+}
+
+.panel {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.title.small {
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.fieldStack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
+
+label {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  background: #0b1220;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+input[type="number"] {
+  width: 100px;
+}
+
+button {
+  background: #1d4ed8;
+  color: #eff6ff;
+  border: 1px solid #1e40af;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #1f2937;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+.stageTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.stageTable th,
+.stageTable td {
+  border: 1px solid #334155;
+  padding: 6px;
+}
+
+.stageTable th {
+  text-align: left;
+  background: #1f2937;
+}
+
+.treeSection {
+  margin-top: 8px;
+}
+
+.seedOptionsSection {
+  border: 1px solid #374151;
+  border-radius: 10px;
+  background: #0f172a;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.pickerGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.pickerSection {
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: #0b1220;
+  padding: 10px;
+  min-width: 0;
+}
+
+.atlasWrap {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  max-height: 360px;
+  overflow: auto;
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.atlasWrap canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+}
+
+.tiny {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+
+.seedCardList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+
+.seedCard {
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 8px;
+  background: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+}
+
+.seedCard.active {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1px #60a5fa inset;
+}
+
+.addSeedCard {
+  justify-content: center;
+  align-items: center;
+  min-height: 132px;
+  border-style: dashed;
+}
+
+.addSeedPlus {
+  font-size: 28px;
+  line-height: 1;
+  color: #93c5fd;
+}
+
+.seedCardName {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.seedCardPreviews {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.cardPreview,
+.stagePreview {
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #020617;
+  image-rendering: pixelated;
+  display: block;
+  width: 100%;
+}
+
+.cardPreview {
+  grid-column: 1 / -1;
+  height: 76px;
+}
+
+.stagePreview {
+  aspect-ratio: 1 / 1;
+  height: auto;
+}
+
+.seedCardMeta,
+.seedCardTint {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.seedCardTint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tintDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid #475569;
+  background: transparent;
+}
+
+#jsonOutput {
+  width: 100%;
+  min-height: 420px;
+}
+
+.status {
+  margin-top: 8px;
+  min-height: 20px;
+  font-size: 12px;
+  color: #93c5fd;
+}
+
+.links {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.links a {
+  color: #bfdbfe;
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

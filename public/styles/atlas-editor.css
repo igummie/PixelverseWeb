@@ -191,6 +191,35 @@ body {
   resize: vertical;
 }
 
+.seedIdsEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.seedIdsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seedIdsRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.seedIdsAddBtn,
+.seedIdsRemoveBtn {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.seedIdsAddBtn {
+  width: fit-content;
+}
+
 input,
 select,
 button,

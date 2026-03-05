@@ -37,6 +37,11 @@ class SaveBlocksDocumentBody(BaseModel):
     blocks: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class SaveSeedsDataBody(BaseModel):
+    atlases: list[dict[str, Any]] | None = None
+    seeds: list[dict[str, Any]] = Field(default_factory=list)
+
+
 def normalize_name(value: str | None, fallback: str = "") -> str:
     return (value or fallback).strip().lower()
 
@@ -116,6 +121,10 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
         "GEM_CHANCE",
         "GEM_AMOUNT",
         "GEM_AMOUNT_VAR",
+        "SEED_IDS",
+        "SEED_DROP_ID",
+        "SEED_DROP_CHANCE",
+        "SEED_DROPS",
         "PLACEABLE",
         "BREAKABLE",
     ]
@@ -169,6 +178,137 @@ def compact_blocks_payload_for_storage(payload: dict[str, Any]) -> None:
     payload["blocks"] = compacted_blocks
 
 
+def normalize_growth_percent(value: Any, fallback: float = 0.0) -> float:
+    try:
+        numeric = float(value)
+    except Exception:
+        numeric = fallback
+    numeric = max(0.0, min(100.0, numeric))
+    return round(numeric, 4)
+
+
+def sanitize_tree_stage_entry(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    try:
+        stage = int(value.get("STAGE", 0))
+    except Exception:
+        stage = 0
+    if stage <= 0:
+        return None
+
+    atlas_id = normalize_atlas_id_value(value.get("ATLAS_ID"))
+    texture = normalize_atlas_texture_rect(value.get("ATLAS_TEXTURE"))
+
+    output: dict[str, Any] = {
+        "STAGE": stage,
+        "GROWTH_PERCENT": normalize_growth_percent(value.get("GROWTH_PERCENT", 0.0)),
+    }
+    if atlas_id is not None:
+        output["ATLAS_ID"] = atlas_id
+    if texture is not None:
+        output["ATLAS_TEXTURE"] = texture
+
+    return output
+
+
+def normalize_tint_color(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", text):
+        return text.lower()
+
+    if re.fullmatch(r"#[0-9a-fA-F]{8}", text):
+        return text.lower()
+
+    return ""
+
+
+def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    try:
+        seed_id = int(value.get("SEED_ID", -1))
+    except Exception:
+        return None
+    if seed_id < 0:
+        return None
+
+    name = str(value.get("NAME", "")).strip()
+    if not name:
+        name = f"SEED_{seed_id}"
+
+    try:
+        growtime = max(0, int(value.get("GROWTIME", 0)))
+    except Exception:
+        growtime = 0
+
+    try:
+        fruit_min = max(0, int(value.get("FRUIT_MIN", 0)))
+    except Exception:
+        fruit_min = 0
+
+    try:
+        fruit_max = max(0, int(value.get("FRUIT_MAX", fruit_min)))
+    except Exception:
+        fruit_max = fruit_min
+    if fruit_max < fruit_min:
+        fruit_max = fruit_min
+
+    seed_atlas_id = normalize_atlas_id_value(value.get("SEED_ATLAS_ID"))
+    seed_atlas_texture = normalize_atlas_texture_rect(value.get("SEED_ATLAS_TEXTURE"))
+    seed_tint = normalize_tint_color(value.get("SEED_TINT"))
+
+    tree_stages: list[dict[str, Any]] = []
+    tree_name = ""
+    tree_tint = ""
+    raw_tree = value.get("TREE")
+    raw_stages: Any = value.get("TREE_STAGES", [])
+
+    if isinstance(raw_tree, dict):
+        tree_name = str(raw_tree.get("NAME", "")).strip()
+        tree_tint = normalize_tint_color(raw_tree.get("TINT"))
+        if isinstance(raw_tree.get("STAGES"), list):
+            raw_stages = raw_tree.get("STAGES", [])
+
+    if isinstance(raw_stages, list):
+        for raw_stage in raw_stages:
+            stage = sanitize_tree_stage_entry(raw_stage)
+            if stage is not None:
+                tree_stages.append(stage)
+
+    tree_stages.sort(key=lambda entry: int(entry.get("STAGE", 0)))
+
+    output: dict[str, Any] = {
+        "SEED_ID": seed_id,
+        "NAME": name,
+        "GROWTIME": growtime,
+        "FRUIT_MIN": fruit_min,
+        "FRUIT_MAX": fruit_max,
+    }
+
+    if seed_atlas_id is not None:
+        output["SEED_ATLAS_ID"] = seed_atlas_id
+    if seed_atlas_texture is not None:
+        output["SEED_ATLAS_TEXTURE"] = seed_atlas_texture
+    if seed_tint:
+        output["SEED_TINT"] = seed_tint
+    if tree_name or tree_tint or tree_stages:
+        output["TREE"] = {}
+        if tree_name:
+            output["TREE"]["NAME"] = tree_name
+        if tree_tint:
+            output["TREE"]["TINT"] = tree_tint
+        if tree_stages:
+            output["TREE"]["STAGES"] = tree_stages
+
+    return output
+
+
 def load_texture47_configs(public_dir: Path, atlas_ids: set[str]) -> dict[str, dict[str, Any]]:
     configs: dict[str, dict[str, Any]] = {}
     config_dir = public_dir / "assets" / "texture47" / "configs"
@@ -215,7 +355,9 @@ def register_editor_routes(
     *,
     public_dir: Path,
     blocks_path: Path,
+    seeds_path: Path,
     load_blocks_payload: Callable[[], dict[str, Any]],
+    load_seeds_payload: Callable[[], dict[str, Any]],
     refresh_block_definitions_if_changed: Callable[..., None],
 ) -> None:
     @app.post("/api/tools/atlases/upload")
@@ -546,4 +688,83 @@ def register_editor_routes(
             "path": "data/blocks.json",
             "atlasCount": len(atlases),
             "blockCount": len(blocks),
+        }
+
+    @app.get("/api/tools/seeds/editor-data")
+    def get_seeds_editor_data() -> dict[str, Any]:
+        blocks_payload = load_blocks_payload()
+        seeds_payload = load_seeds_payload()
+
+        block_atlases = blocks_payload.get("atlases", []) if isinstance(blocks_payload, dict) else []
+        seed_atlases = seeds_payload.get("atlases", []) if isinstance(seeds_payload, dict) else []
+        blocks = blocks_payload.get("blocks", []) if isinstance(blocks_payload, dict) else []
+        seeds = seeds_payload.get("seeds", []) if isinstance(seeds_payload, dict) else []
+
+        merged_atlases: list[dict[str, Any]] = []
+        seen_atlas_ids: set[str] = set()
+        for source in (block_atlases, seed_atlases):
+            if not isinstance(source, list):
+                continue
+            for atlas in source:
+                if not isinstance(atlas, dict):
+                    continue
+                atlas_id = normalize_atlas_id_value(atlas.get("ATLAS_ID"))
+                if atlas_id is None:
+                    continue
+                key = f"{type(atlas_id).__name__}:{atlas_id}"
+                if key in seen_atlas_ids:
+                    continue
+                seen_atlas_ids.add(key)
+                merged_atlases.append(dict(atlas))
+
+        return {
+            "atlases": merged_atlases,
+            "seedAtlases": seed_atlases if isinstance(seed_atlases, list) else [],
+            "blocks": blocks if isinstance(blocks, list) else [],
+            "seeds": seeds if isinstance(seeds, list) else [],
+        }
+
+    @app.post("/api/tools/seeds/save-data")
+    def save_seeds_data(payload: SaveSeedsDataBody) -> dict[str, Any]:
+        existing = load_seeds_payload()
+        output: dict[str, Any] = {}
+
+        sanitized_seeds: list[dict[str, Any]] = []
+        seen_ids: set[int] = set()
+        for raw_seed in payload.seeds:
+            seed = sanitize_seed_entry(raw_seed)
+            if seed is None:
+                raise HTTPException(status_code=400, detail="Each seed must include a valid non-negative SEED_ID")
+
+            seed_id = int(seed["SEED_ID"])
+            if seed_id in seen_ids:
+                raise HTTPException(status_code=400, detail=f"Duplicate seed id: {seed_id}")
+            seen_ids.add(seed_id)
+            sanitized_seeds.append(seed)
+
+        sanitized_seeds.sort(key=lambda entry: int(entry.get("SEED_ID", 0)))
+        output["seeds"] = sanitized_seeds
+
+        if isinstance(payload.atlases, list):
+            output["atlases"] = [dict(entry) for entry in payload.atlases if isinstance(entry, dict)]
+
+        # Preserve any future top-level metadata except legacy VERSION key.
+        if isinstance(existing, dict):
+            for key, value in existing.items():
+                if key in {"seeds", "atlases", "VERSION"}:
+                    continue
+                output[key] = value
+
+            if "atlases" not in output and isinstance(existing.get("atlases"), list):
+                output["atlases"] = [dict(entry) for entry in existing.get("atlases", []) if isinstance(entry, dict)]
+
+        with seeds_path.open("w", encoding="utf-8") as handle:
+            json.dump(output, handle, indent=2)
+            handle.write("\n")
+
+        return {
+            "ok": True,
+            "path": "data/seeds.json",
+            "atlasCount": len(output.get("atlases", [])) if isinstance(output.get("atlases", []), list) else 0,
+            "seedCount": len(sanitized_seeds),
         }
