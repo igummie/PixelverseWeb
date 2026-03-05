@@ -1,6 +1,50 @@
+import {
+  CAMERA_ZOOM_STEP,
+  CHAT_BUBBLE_LIFETIME_MS,
+  CHAT_DRAWER_HANDLE_PEEK,
+  CHAT_INPUT_PANEL_HEIGHT,
+  CHAT_LOG_DRAWER_HEIGHT,
+  CRACK_ATLAS_COLUMNS,
+  CRACK_ATLAS_ROWS,
+  CRACK_ATLAS_SRC,
+  DEBUG_INFO_REFRESH_MS,
+  DEBUG_PING_INTERVAL_MS,
+  DEFAULT_TEXTURE47_VALID_MASKS,
+  EPSILON,
+  GEM_ATLAS_ID,
+  GEM_BOB_AMPLITUDE_VARIANCE_PX,
+  GEM_BOB_BASE_AMPLITUDE_PX,
+  GEM_BOB_BASE_SPEED,
+  GEM_BOB_SPEED_VARIANCE,
+  GEM_TILE_SIZE,
+  GEM_VALUE_TO_FRAME,
+  GRAVITY,
+  HORIZONTAL_SPEED,
+  JUMP_SPEED,
+  MAX_CAMERA_ZOOM,
+  MAX_CHAT_LOG_LINES,
+  MAX_FALL_SPEED,
+  MIN_CAMERA_ZOOM,
+  REMOTE_PLAYER_INTERP_SPEED,
+  REMOTE_PLAYER_SNAP_DISTANCE,
+  SELF_TELEPORT_SNAP_DISTANCE,
+  TEXTURE47_COLS,
+  TEXTURE47_ROWS,
+  TILE_SIZE,
+} from "./game/constants.js";
+import {
+  clearAuthSession,
+  getGuestDeviceId,
+  isGuestUser,
+  loadAuthSession,
+  saveAuthSession,
+} from "./game/session.js";
+import { getGemDrawSizeForValue, getGemFrameForValue } from "./game/gems.js";
+
 const screens = {
   main: document.getElementById("mainScreen"),
   login: document.getElementById("loginScreen"),
+  loading: document.getElementById("loadingScreen"),
   world: document.getElementById("worldScreen"),
   game: document.getElementById("gameScreen"),
 };
@@ -13,6 +57,7 @@ const guestBtn = document.getElementById("guestBtn");
 const usernameInput = document.getElementById("usernameInput");
 const passwordInput = document.getElementById("passwordInput");
 const loginError = document.getElementById("loginError");
+const loadingStatus = document.getElementById("loadingStatus");
 
 const welcomeText = document.getElementById("welcomeText");
 const worldListEl = document.getElementById("worldList");
@@ -37,6 +82,12 @@ const chatDrawerHandle = document.getElementById("chatDrawerHandle");
 const chatDrawer = document.getElementById("chatDrawer");
 const chatLogPanel = document.getElementById("chatLogPanel");
 const chatLog = document.getElementById("chatLog");
+const worldChatLog = document.getElementById("worldChatLog");
+const worldChatDrawerHandle = document.getElementById("worldChatDrawerHandle");
+const worldChatDrawer = document.getElementById("worldChatDrawer");
+const loadingChatLog = document.getElementById("loadingChatLog");
+const loadingChatDrawerHandle = document.getElementById("loadingChatDrawerHandle");
+const loadingChatDrawer = document.getElementById("loadingChatDrawer");
 const chatInputPanel = document.getElementById("chatInputPanel");
 const chatInput = document.getElementById("chatInput");
 const debugOverlay = document.getElementById("debugOverlay");
@@ -48,51 +99,6 @@ const gameTopbar = document.querySelector(".gameTopbar");
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
-
-const TILE_SIZE = 32;
-const HORIZONTAL_SPEED = 7.5;
-const GRAVITY = 28;
-const JUMP_SPEED = 11;
-const MAX_FALL_SPEED = 24;
-const EPSILON = 0.0001;
-const MIN_CAMERA_ZOOM = 0.5;
-const MAX_CAMERA_ZOOM = 3;
-const CAMERA_ZOOM_STEP = 0.1;
-const REMOTE_PLAYER_INTERP_SPEED = 14;
-const REMOTE_PLAYER_SNAP_DISTANCE = 2.5;
-const SELF_TELEPORT_SNAP_DISTANCE = 0.75;
-const CHAT_BUBBLE_LIFETIME_MS = 4500;
-const MAX_CHAT_LOG_LINES = 180;
-const CHAT_LOG_DRAWER_HEIGHT = 220;
-const CHAT_INPUT_PANEL_HEIGHT = 56;
-const CHAT_DRAWER_HANDLE_PEEK = 16;
-const CRACK_ATLAS_SRC = "/assets/atlases/cracks_atlas.svg";
-const CRACK_ATLAS_COLUMNS = 4;
-const CRACK_ATLAS_ROWS = 1;
-const GEM_ATLAS_ID = "gems";
-const GEM_TILE_SIZE = 16;
-const GEM_BOB_BASE_AMPLITUDE_PX = 1.4;
-const GEM_BOB_AMPLITUDE_VARIANCE_PX = 1.1;
-const GEM_BOB_BASE_SPEED = 0.0015;
-const GEM_BOB_SPEED_VARIANCE = 0.002;
-const DEBUG_PING_INTERVAL_MS = 2000;
-const GEM_VALUE_TO_FRAME = {
-  1: 0,
-  5: 1,
-  10: 2,
-  50: 3,
-  100: 4,
-};
-const AUTH_TOKEN_STORAGE_KEY = "pixelverse_auth_token";
-const AUTH_USER_STORAGE_KEY = "pixelverse_auth_user";
-const GUEST_DEVICE_STORAGE_KEY = "pixelverse_guest_device_id";
-const TEXTURE47_COLS = 8;
-const TEXTURE47_ROWS = 6;
-const DEFAULT_TEXTURE47_VALID_MASKS = [
-  255, 248, 31, 115, 206, 112, 200, 19, 14, 66, 64, 2, 0, 251, 254, 127, 223, 250, 95, 123,
-  222, 219, 126, 94, 91, 218, 122, 90, 24, 16, 8, 114, 83, 82, 202, 78, 74, 120, 216, 88, 27,
-  30, 26, 18, 10, 80, 72, 255,
-];
 
 const state = {
   token: null,
@@ -128,6 +134,19 @@ const state = {
   chatDrawerDragging: false,
   chatDrawerDragStartY: 0,
   chatDrawerDragStartOffsetY: 0,
+  worldChatLogOpen: false,
+  worldChatDrawerHeight: CHAT_LOG_DRAWER_HEIGHT,
+  worldChatDrawerOffsetY: -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK),
+  worldChatDrawerDragging: false,
+  worldChatDrawerDragStartY: 0,
+  worldChatDrawerDragStartOffsetY: 0,
+  loadingChatLogOpen: true,
+  loadingChatDrawerHeight: CHAT_LOG_DRAWER_HEIGHT,
+  loadingChatDrawerOffsetY: 0,
+  loadingChatDrawerDragging: false,
+  loadingChatDrawerDragStartY: 0,
+  loadingChatDrawerDragStartOffsetY: 0,
+  assetsLoaded: false,
   flyEnabled: false,
   noclipEnabled: false,
   debugEnabled: false,
@@ -135,96 +154,9 @@ const state = {
   debugFps: 0,
   debugPingMs: null,
   debugLastFrameAt: 0,
+  debugLastInfoAt: 0,
   pingTimerId: null,
 };
-
-function saveAuthSession() {
-  if (!state.token || !state.user) {
-    return;
-  }
-
-  try {
-    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, state.token);
-    localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(state.user));
-  } catch {
-  }
-}
-
-function clearAuthSession() {
-  try {
-    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
-  } catch {
-  }
-}
-
-function loadAuthSession() {
-  try {
-    const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-    const userRaw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
-    if (!token || !userRaw) {
-      return false;
-    }
-
-    const parsedUser = JSON.parse(userRaw);
-    if (!parsedUser || typeof parsedUser.username !== "string") {
-      return false;
-    }
-
-    state.token = token;
-    state.user = parsedUser;
-    welcomeText.textContent = `Logged in as ${state.user.username}`;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function isGuestUser(user) {
-  if (!user) {
-    return false;
-  }
-
-  const id = Number(user.id);
-  if (Number.isFinite(id) && id < 0) {
-    return true;
-  }
-
-  return String(user.username || "").toLowerCase().startsWith("guest_");
-}
-
-function createGuestDeviceId() {
-  try {
-    if (window.crypto?.randomUUID) {
-      return window.crypto.randomUUID().replaceAll("-", "").toLowerCase();
-    }
-
-    const bytes = new Uint8Array(16);
-    window.crypto?.getRandomValues?.(bytes);
-    const hasEntropy = bytes.some((value) => value !== 0);
-    if (hasEntropy) {
-      return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
-    }
-  } catch {
-  }
-
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 16)}`.toLowerCase();
-}
-
-function getGuestDeviceId() {
-  try {
-    const existing = (localStorage.getItem(GUEST_DEVICE_STORAGE_KEY) || "").trim().toLowerCase();
-    if (/^[a-z0-9_-]{12,128}$/.test(existing)) {
-      return existing;
-    }
-
-    const created = createGuestDeviceId();
-    localStorage.setItem(GUEST_DEVICE_STORAGE_KEY, created);
-    return created;
-  } catch {
-    return createGuestDeviceId();
-  }
-}
 
 function clampCameraZoom(value) {
   return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
@@ -251,10 +183,16 @@ function updateDebugUi() {
   }
 }
 
-function updateDebugInfo() {
+function updateDebugInfo(force = false) {
   if (!state.debugEnabled || !debugInfo) {
     return;
   }
+
+  const now = performance.now();
+  if (!force && now - state.debugLastInfoAt < DEBUG_INFO_REFRESH_MS) {
+    return;
+  }
+  state.debugLastInfoAt = now;
 
   const worldName = state.world?.name || "-";
   const worldW = Number(state.world?.width || 0);
@@ -477,23 +415,25 @@ function appendChatLine(kind, text, username = "") {
 }
 
 function renderChatLog() {
-  if (!chatLog) {
+  const targets = [chatLog, worldChatLog, loadingChatLog].filter(Boolean);
+  if (targets.length === 0) {
     return;
   }
 
-  chatLog.innerHTML = "";
-  for (const line of state.chatLogLines) {
-    const row = document.createElement("div");
-    row.className = `chatLine ${line.kind}`;
-    if (line.kind === "player") {
-      row.innerHTML = `<strong>${escapeHtml(line.username || "player")}</strong>: ${escapeHtml(line.text)}`;
-    } else {
-      row.textContent = line.text;
+  for (const target of targets) {
+    target.innerHTML = "";
+    for (const line of state.chatLogLines) {
+      const row = document.createElement("div");
+      row.className = `chatLine ${line.kind}`;
+      if (line.kind === "player") {
+        row.innerHTML = `<strong>${escapeHtml(line.username || "player")}</strong>: ${escapeHtml(line.text)}`;
+      } else {
+        row.textContent = line.text;
+      }
+      target.appendChild(row);
     }
-    chatLog.appendChild(row);
+    target.scrollTop = target.scrollHeight;
   }
-
-  chatLog.scrollTop = chatLog.scrollHeight;
 }
 
 function getChatDrawerMaxHeight() {
@@ -564,6 +504,58 @@ function setChatInputOpen(open) {
   } else if (chatInput) {
     chatInput.value = "";
   }
+}
+
+function getWorldChatDrawerHiddenOffset() {
+  return -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK);
+}
+
+function applyWorldChatDrawerPosition(nextOffsetY, immediate = false) {
+  const hiddenOffset = getWorldChatDrawerHiddenOffset();
+  state.worldChatDrawerHeight = CHAT_LOG_DRAWER_HEIGHT;
+  state.worldChatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
+
+  if (worldChatDrawer) {
+    if (immediate) {
+      worldChatDrawer.classList.add("dragging");
+    } else {
+      worldChatDrawer.classList.remove("dragging");
+    }
+    worldChatDrawer.style.height = `${CHAT_LOG_DRAWER_HEIGHT}px`;
+    worldChatDrawer.style.transform = `translateY(${state.worldChatDrawerOffsetY}px)`;
+  }
+}
+
+function setWorldChatLogOpen(open) {
+  state.worldChatLogOpen = !!open;
+  const targetOffset = state.worldChatLogOpen ? 0 : getWorldChatDrawerHiddenOffset();
+  applyWorldChatDrawerPosition(targetOffset);
+}
+
+function getLoadingChatDrawerHiddenOffset() {
+  return -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK);
+}
+
+function applyLoadingChatDrawerPosition(nextOffsetY, immediate = false) {
+  const hiddenOffset = getLoadingChatDrawerHiddenOffset();
+  state.loadingChatDrawerHeight = CHAT_LOG_DRAWER_HEIGHT;
+  state.loadingChatDrawerOffsetY = Math.max(hiddenOffset, Math.min(0, nextOffsetY));
+
+  if (loadingChatDrawer) {
+    if (immediate) {
+      loadingChatDrawer.classList.add("dragging");
+    } else {
+      loadingChatDrawer.classList.remove("dragging");
+    }
+    loadingChatDrawer.style.height = `${CHAT_LOG_DRAWER_HEIGHT}px`;
+    loadingChatDrawer.style.transform = `translateY(${state.loadingChatDrawerOffsetY}px)`;
+  }
+}
+
+function setLoadingChatLogOpen(open) {
+  state.loadingChatLogOpen = !!open;
+  const targetOffset = state.loadingChatLogOpen ? 0 : getLoadingChatDrawerHiddenOffset();
+  applyLoadingChatDrawerPosition(targetOffset);
 }
 
 function setPlayerChatBubble(playerId, messageText) {
@@ -1032,7 +1024,7 @@ function loadImage(src) {
   });
 }
 
-async function loadBlockDefinitions() {
+async function loadBlockDefinitions(onAssetProgress = null) {
   const data = await requestJson("/data/blocks.json");
 
   state.blockDefs.clear();
@@ -1040,12 +1032,28 @@ async function loadBlockDefinitions() {
   state.texture47.clear();
   state.crackAtlas = null;
 
+  const texture47AtlasIds = new Set(
+    Array.from(data.blocks || [])
+      .filter((block) => isTexture47Block(block))
+      .map((block) => block.ATLAS_ID),
+  );
+
+  const totalAssets = (data.atlases || []).length + 1 + texture47AtlasIds.size;
+  let loadedAssets = 0;
+  const reportAssetProgress = (label) => {
+    loadedAssets += 1;
+    if (typeof onAssetProgress === "function") {
+      onAssetProgress({ loaded: loadedAssets, total: totalAssets, label: String(label || "") });
+    }
+  };
+
   for (const atlas of data.atlases || []) {
     const image = await loadImage(atlas.SRC);
     state.atlases.set(atlas.ATLAS_ID, {
       ...atlas,
       image,
     });
+    reportAssetProgress(`atlas ${atlas.ATLAS_ID}`);
   }
 
   for (const block of data.blocks || []) {
@@ -1063,13 +1071,9 @@ async function loadBlockDefinitions() {
     };
   } catch {
     state.crackAtlas = null;
+  } finally {
+    reportAssetProgress("cracks atlas");
   }
-
-  const texture47AtlasIds = new Set(
-    Array.from(state.blockDefs.values())
-      .filter((block) => isTexture47Block(block))
-      .map((block) => block.ATLAS_ID),
-  );
 
   for (const atlasId of texture47AtlasIds) {
     try {
@@ -1162,6 +1166,8 @@ async function loadBlockDefinitions() {
       });
     } catch (error) {
       console.warn(`47-tile texture missing for ${atlasId}:`, error.message);
+    } finally {
+      reportAssetProgress(`texture47 ${atlasId}`);
     }
   }
 
@@ -1184,6 +1190,41 @@ async function loadBlockDefinitions() {
     blockSelect.value = String(state.selectedBlockId);
     blockTypeInfo.textContent = placeableBlocks[0].BLOCK_TYPE;
   }
+
+  state.assetsLoaded = true;
+}
+
+function beginLoadingForUser(username) {
+  state.chatLogLines = [];
+  renderChatLog();
+  appendChatLine("system", `attempting to log into ${username}...`);
+  if (loadingStatus) {
+    loadingStatus.textContent = "Preparing assets...";
+  }
+  showScreen("loading");
+  setLoadingChatLogOpen(true);
+}
+
+async function ensureAssetsLoadedWithProgress() {
+  if (state.assetsLoaded) {
+    appendChatLine("system", "loading assets (cached)");
+    return;
+  }
+
+  await loadBlockDefinitions(({ loaded, total }) => {
+    appendChatLine("system", `loading assets (${loaded}/${Math.max(1, total)})`);
+    if (loadingStatus) {
+      loadingStatus.textContent = `Loading assets ${loaded}/${Math.max(1, total)}...`;
+    }
+  });
+}
+
+async function runPostLoginLoadingFlow() {
+  const username = String(state.user?.username || "player");
+  await ensureAssetsLoadedWithProgress();
+  await loadWorldList();
+  appendChatLine("system", `welcome ${username}!`);
+  showScreen("world");
 }
 
 async function auth(action) {
@@ -1197,6 +1238,8 @@ async function auth(action) {
     return;
   }
 
+  beginLoadingForUser(username);
+
   try {
     const data = await requestJson(`/api/auth/${action}`, {
       method: "POST",
@@ -1206,18 +1249,21 @@ async function auth(action) {
     state.token = data.token;
     state.user = data.user;
     welcomeText.textContent = `Logged in as ${state.user.username}`;
-    saveAuthSession();
+    saveAuthSession(state.token, state.user);
 
     passwordInput.value = "";
-    showScreen("world");
-    await loadWorldList();
+    await runPostLoginLoadingFlow();
   } catch (error) {
+    if (screens.loading?.classList.contains("active")) {
+      showScreen("login");
+    }
     loginError.textContent = error.message;
   }
 }
 
 async function authGuest() {
   loginError.textContent = "";
+  beginLoadingForUser("guest");
 
   try {
     const deviceId = getGuestDeviceId();
@@ -1229,13 +1275,15 @@ async function authGuest() {
     state.token = data.token;
     state.user = data.user;
     welcomeText.textContent = `Logged in as ${state.user.username}`;
-    saveAuthSession();
+    saveAuthSession(state.token, state.user);
 
     usernameInput.value = "";
     passwordInput.value = "";
-    showScreen("world");
-    await loadWorldList();
+    await runPostLoginLoadingFlow();
   } catch (error) {
+    if (screens.loading?.classList.contains("active")) {
+      showScreen("login");
+    }
     loginError.textContent = error.message;
   }
 }
@@ -1254,7 +1302,7 @@ async function refreshGuestSessionIfNeeded() {
   state.token = data.token;
   state.user = data.user;
   welcomeText.textContent = `Logged in as ${state.user.username}`;
-  saveAuthSession();
+  saveAuthSession(state.token, state.user);
 }
 
 async function loadWorldList() {
@@ -1382,8 +1430,6 @@ function connectSocket() {
         }
       }
 
-      state.chatLogLines = [];
-      renderChatLog();
       appendChatLine("system", `Joined world ${msg.world.name}`);
       state.flyEnabled = false;
       state.noclipEnabled = false;
@@ -1594,8 +1640,6 @@ function leaveWorld() {
   sendWs({ type: "leave_world" });
   setChatInputOpen(false);
   setChatLogOpen(false);
-  state.chatLogLines = [];
-  renderChatLog();
   state.world = null;
   state.worldRender = null;
   state.gems = 0;
@@ -1615,6 +1659,8 @@ function leaveWorld() {
 
 function logout() {
   leaveWorld();
+  state.chatLogLines = [];
+  renderChatLog();
   state.token = null;
   state.user = null;
   clearAuthSession();
@@ -1736,12 +1782,12 @@ chatToggleBtn?.addEventListener("click", () => {
 debugToggleBtn?.addEventListener("click", () => {
   state.debugEnabled = !state.debugEnabled;
   updateDebugUi();
-  updateDebugInfo();
+  updateDebugInfo(true);
 });
 
 debugGridToggle?.addEventListener("change", () => {
   state.debugGridEnabled = !!debugGridToggle.checked;
-  updateDebugInfo();
+  updateDebugInfo(true);
 });
 
 chatDrawerHandle?.addEventListener("pointerdown", (event) => {
@@ -1790,6 +1836,98 @@ chatDrawerHandle?.addEventListener("pointerup", endChatDrawerDrag);
 chatDrawerHandle?.addEventListener("pointercancel", endChatDrawerDrag);
 
 applyChatDrawerPosition(state.chatDrawerOffsetY);
+
+worldChatDrawerHandle?.addEventListener("pointerdown", (event) => {
+  if (!screens.world.classList.contains("active")) {
+    return;
+  }
+
+  event.preventDefault();
+  state.worldChatDrawerDragging = true;
+  state.worldChatDrawerDragStartY = event.clientY;
+  state.worldChatDrawerDragStartOffsetY = state.worldChatDrawerOffsetY;
+  worldChatDrawerHandle.setPointerCapture?.(event.pointerId);
+  worldChatDrawer?.classList.add("dragging");
+});
+
+worldChatDrawerHandle?.addEventListener("pointermove", (event) => {
+  if (!state.worldChatDrawerDragging) {
+    return;
+  }
+
+  event.preventDefault();
+  const deltaY = event.clientY - state.worldChatDrawerDragStartY;
+  applyWorldChatDrawerPosition(state.worldChatDrawerDragStartOffsetY + deltaY, true);
+});
+
+const endWorldChatDrawerDrag = (event) => {
+  if (!state.worldChatDrawerDragging) {
+    return;
+  }
+
+  state.worldChatDrawerDragging = false;
+  worldChatDrawer?.classList.remove("dragging");
+  worldChatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
+
+  const hiddenOffset = getWorldChatDrawerHiddenOffset();
+  const openThreshold = hiddenOffset * 0.5;
+  if (state.worldChatDrawerOffsetY > openThreshold) {
+    setWorldChatLogOpen(true);
+  } else {
+    setWorldChatLogOpen(false);
+  }
+};
+
+worldChatDrawerHandle?.addEventListener("pointerup", endWorldChatDrawerDrag);
+worldChatDrawerHandle?.addEventListener("pointercancel", endWorldChatDrawerDrag);
+
+applyWorldChatDrawerPosition(state.worldChatDrawerOffsetY);
+
+loadingChatDrawerHandle?.addEventListener("pointerdown", (event) => {
+  if (!screens.loading.classList.contains("active")) {
+    return;
+  }
+
+  event.preventDefault();
+  state.loadingChatDrawerDragging = true;
+  state.loadingChatDrawerDragStartY = event.clientY;
+  state.loadingChatDrawerDragStartOffsetY = state.loadingChatDrawerOffsetY;
+  loadingChatDrawerHandle.setPointerCapture?.(event.pointerId);
+  loadingChatDrawer?.classList.add("dragging");
+});
+
+loadingChatDrawerHandle?.addEventListener("pointermove", (event) => {
+  if (!state.loadingChatDrawerDragging) {
+    return;
+  }
+
+  event.preventDefault();
+  const deltaY = event.clientY - state.loadingChatDrawerDragStartY;
+  applyLoadingChatDrawerPosition(state.loadingChatDrawerDragStartOffsetY + deltaY, true);
+});
+
+const endLoadingChatDrawerDrag = (event) => {
+  if (!state.loadingChatDrawerDragging) {
+    return;
+  }
+
+  state.loadingChatDrawerDragging = false;
+  loadingChatDrawer?.classList.remove("dragging");
+  loadingChatDrawerHandle?.releasePointerCapture?.(event?.pointerId);
+
+  const hiddenOffset = getLoadingChatDrawerHiddenOffset();
+  const openThreshold = hiddenOffset * 0.5;
+  if (state.loadingChatDrawerOffsetY > openThreshold) {
+    setLoadingChatLogOpen(true);
+  } else {
+    setLoadingChatLogOpen(false);
+  }
+};
+
+loadingChatDrawerHandle?.addEventListener("pointerup", endLoadingChatDrawerDrag);
+loadingChatDrawerHandle?.addEventListener("pointercancel", endLoadingChatDrawerDrag);
+
+applyLoadingChatDrawerPosition(state.loadingChatDrawerOffsetY);
 
 chatInput?.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -2082,31 +2220,6 @@ function drawDamageOverlays() {
   }
 }
 
-function getGemFrameForValue(value) {
-  const v = Math.max(1, Math.floor(Number(value) || 1));
-  if (v >= 100) return GEM_VALUE_TO_FRAME[100];
-  if (v >= 50) return GEM_VALUE_TO_FRAME[50];
-  if (v >= 10) return GEM_VALUE_TO_FRAME[10];
-  if (v >= 5) return GEM_VALUE_TO_FRAME[5];
-  return GEM_VALUE_TO_FRAME[1];
-}
-
-function getGemDrawSizeForValue(value, zoom) {
-  const v = Math.max(1, Math.floor(Number(value) || 1));
-  let baseSize = 12;
-  if (v >= 100) {
-    baseSize = 16;
-  } else if (v >= 50) {
-    baseSize = 15;
-  } else if (v >= 10) {
-    baseSize = 14;
-  } else if (v >= 5) {
-    baseSize = 13;
-  }
-
-  return Math.max(8, baseSize * zoom);
-}
-
 function drawGemDrops() {
   if (!state.world || state.gemDrops.size === 0) {
     return;
@@ -2118,11 +2231,12 @@ function drawGemDrops() {
     return;
   }
 
+  const now = performance.now();
   for (const drop of state.gemDrops.values()) {
-    const frame = getGemFrameForValue(drop.value);
+    const frame = getGemFrameForValue(drop.value, GEM_VALUE_TO_FRAME);
     const screenX = (drop.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
     const screenY = (drop.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
-    const bobOffset = Math.sin(performance.now() * (drop.bobSpeed || GEM_BOB_BASE_SPEED) + (drop.bobPhase || 0))
+    const bobOffset = Math.sin(now * (drop.bobSpeed || GEM_BOB_BASE_SPEED) + (drop.bobPhase || 0))
       * (drop.bobAmplitude || GEM_BOB_BASE_AMPLITUDE_PX)
       * state.camera.zoom;
     const drawSize = getGemDrawSizeForValue(drop.value, state.camera.zoom);
@@ -2237,18 +2351,15 @@ function loop() {
 }
 
 (async () => {
-  try {
-    await loadBlockDefinitions();
-  } catch (error) {
-    console.error(error);
-    gameStatus.textContent = "Failed loading block definitions";
-  }
-
-  if (loadAuthSession()) {
+  const existingSession = loadAuthSession();
+  if (existingSession) {
+    state.token = existingSession.token;
+    state.user = existingSession.user;
+    welcomeText.textContent = `Logged in as ${state.user.username}`;
+    beginLoadingForUser(String(state.user?.username || "player"));
     try {
       await refreshGuestSessionIfNeeded();
-      await loadWorldList();
-      showScreen("world");
+      await runPostLoginLoadingFlow();
     } catch {
       clearAuthSession();
       state.token = null;

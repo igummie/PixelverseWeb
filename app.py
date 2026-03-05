@@ -16,7 +16,7 @@ from typing import Any
 
 import jwt
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from modules.chat_commands import process_chat_command
 from modules.worldgen import generate_world_layers
 from pydantic import BaseModel, Field
@@ -914,6 +914,11 @@ def root() -> FileResponse:
     return FileResponse(PUBLIC_DIR / "index.html")
 
 
+@app.get("/favicon.ico")
+def favicon() -> Response:
+    return Response(status_code=204)
+
+
 @app.post("/api/auth/register")
 def register(payload: RegisterBody) -> dict[str, Any]:
     username = normalize_name(payload.username)
@@ -1557,4 +1562,4 @@ def public_files(file_path: str) -> FileResponse:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app:app", host="0.0.0.0", port=PORT)
+    uvicorn.run("app:app", host="0.0.0.0", port=PORT, access_log=False)

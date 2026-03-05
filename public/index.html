@@ -29,6 +29,16 @@
         display: flex;
       }
 
+      #worldScreen {
+        position: relative;
+        overflow: hidden;
+      }
+
+      #loadingScreen {
+        position: relative;
+        overflow: hidden;
+      }
+
       .panel {
         width: min(420px, 100%);
         background: #1f2937;
@@ -298,6 +308,30 @@
         background: #111827;
       }
 
+      .worldHistoryPanel {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #111827;
+        overflow: hidden;
+      }
+
+      .worldHistoryTitle {
+        font-size: 12px;
+        opacity: 0.85;
+        padding: 8px 10px;
+        border-bottom: 1px solid #374151;
+      }
+
+      .worldHistoryLog {
+        height: 160px;
+        padding: 8px 10px;
+      }
+
+      .worldChatOverlayRegion {
+        top: 0;
+        z-index: 20;
+      }
+
       .worldItem {
         width: 100%;
         margin: 4px 0;
@@ -330,7 +364,30 @@
       </div>
     </section>
 
+    <section id="loadingScreen" class="screen">
+      <div id="loadingChatOverlayRegion" class="chatOverlayRegion worldChatOverlayRegion">
+        <div id="loadingChatDrawer" class="chatDrawer">
+          <div id="loadingChatDrawerHandle" class="chatDrawerHandle" title="Drag loading drawer"></div>
+          <div class="chatLogPanel">
+            <div id="loadingChatLog" class="chatLog"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="title">Loading</div>
+        <div id="loadingStatus" class="subtitle">Preparing assets...</div>
+      </div>
+    </section>
+
     <section id="worldScreen" class="screen">
+      <div id="worldChatOverlayRegion" class="chatOverlayRegion worldChatOverlayRegion">
+        <div id="worldChatDrawer" class="chatDrawer">
+          <div id="worldChatDrawerHandle" class="chatDrawerHandle" title="Drag history drawer"></div>
+          <div class="chatLogPanel">
+            <div id="worldChatLog" class="chatLog"></div>
+          </div>
+        </div>
+      </div>
       <div class="panel">
         <div class="title">World Selection</div>
         <div id="welcomeText" class="subtitle"></div>
