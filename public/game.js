@@ -48,6 +48,7 @@ import {
 import { getGemDrawSizeForValue, getGemFrameForValue } from "./game/gems.js";
 import { createHudController } from "./game/hud.js";
 import { createChatDebugController } from "./game/chat_debug.js";
+import { createChatBubblesController } from "./game/chat_bubbles.js";
 import { createPauseMenuController } from "./game/pause_menu.js";
 import { createInputController } from "./game/input_controller.js";
 
@@ -263,6 +264,18 @@ const chatDebug = createChatDebugController({
   },
 });
 
+const chatBubbles = createChatBubblesController({
+  state,
+  ctx,
+  canvas,
+  settings: {
+    TILE_SIZE,
+    CHAT_BUBBLE_FADE_MS,
+    CHAT_BUBBLE_LIFETIME_MS,
+    LEAVE_TEXT_FADE_MS,
+  },
+});
+
 function clampCameraZoom(value) {
   return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
 }
@@ -467,9 +480,7 @@ function initializeRemotePlayerTracking(player) {
   player.netVx = 0;
   player.netVy = 0;
   player.lastNetUpdateAt = performance.now();
-  if (!Array.isArray(player.chatBubbles)) {
-    player.chatBubbles = [];
-  }
+  chatBubbles.ensurePlayerBubbleQueue(player);
 }
 
 function appendChatLine(kind, text, username = "") {
@@ -528,52 +539,12 @@ function setLoadingChatLogOpen(open) {
   hud.setLoadingChatLogOpen(open);
 }
 
-function pushBubbleToQueue(queue, text, lifetimeMs = CHAT_BUBBLE_LIFETIME_MS) {
-  if (!Array.isArray(queue)) {
-    return;
-  }
-
-  const trimmed = String(text || "").trim();
-  if (!trimmed) {
-    return;
-  }
-
-  const now = performance.now();
-  queue.push({
-    text: trimmed,
-    startedAt: now,
-    until: now + Math.max(300, Number(lifetimeMs) || CHAT_BUBBLE_LIFETIME_MS),
-  });
-
-  while (queue.length > 4) {
-    queue.shift();
-  }
-}
-
 function setPlayerChatBubble(playerId, messageText) {
-  const player = state.players.get(playerId);
-  if (!player) {
-    return;
-  }
-
-  if (!Array.isArray(player.chatBubbles)) {
-    player.chatBubbles = [];
-  }
-
-  pushBubbleToQueue(player.chatBubbles, messageText, CHAT_BUBBLE_LIFETIME_MS);
+  chatBubbles.setPlayerChatBubble(playerId, messageText);
 }
 
 function addTransientSystemBubble(x, y, text, durationMs = CHAT_BUBBLE_LIFETIME_MS) {
-  const anchor = {
-    x: Number(x) || 0,
-    y: Number(y) || 0,
-    bubbles: [],
-  };
-
-  pushBubbleToQueue(anchor.bubbles, text, durationMs);
-  if (anchor.bubbles.length > 0) {
-    state.transientSystemBubbles.push(anchor);
-  }
+  chatBubbles.addTransientSystemBubble(x, y, text, durationMs);
 }
 
 function normalizeGemDrop(entry) {
@@ -2090,6 +2061,8 @@ function drawPlayers() {
   const now = performance.now();
   const playerBoxW = Math.max(0.2, Number(state.collider?.width) || 0.72);
   const playerBoxH = Math.max(0.2, Number(state.collider?.height) || 0.92);
+  const previousTextAlign = ctx.textAlign;
+  ctx.textAlign = "center";
   for (const [, player] of state.players) {
     const drawX = Number.isFinite(player.renderX) ? player.renderX : player.x;
     const drawY = Number.isFinite(player.renderY) ? player.renderY : player.y;
@@ -2102,22 +2075,19 @@ function drawPlayers() {
     ctx.fillRect(screenX, screenY, playerDrawW, playerDrawH);
 
     ctx.fillStyle = "#f9fafb";
-    ctx.font = `${Math.max(10, Math.floor(12 * state.camera.zoom))}px system-ui`;
-    ctx.fillText(player.username ?? "player", screenX - 4 * state.camera.zoom, screenY - 6 * state.camera.zoom);
-    drawBubbleStack(
+    ctx.font = `${Math.max(10, Math.floor(12 * state.camera.zoom))}px "Segoe UI", Tahoma, sans-serif`;
+    ctx.fillText(player.username ?? "player", screenX + playerDrawW * 0.5, screenY - 6 * state.camera.zoom);
+    chatBubbles.drawPlayerBubbles(
       {
         x: screenX,
         y: screenY,
         width: playerDrawW,
       },
-      player.chatBubbles,
+      player,
       now,
-      {
-        riseOffsetPx: Math.max(32, Math.floor(40 * state.camera.zoom)),
-        fadeWindowMs: CHAT_BUBBLE_FADE_MS,
-      },
     );
   }
+  ctx.textAlign = previousTextAlign;
 }
 
 function drawDebugHitboxes() {
@@ -2197,103 +2167,9 @@ function drawDebugHitboxes() {
   ctx.restore();
 }
 
-function drawBubbleStack(anchor, queue, now, options = {}) {
-  if (!Array.isArray(queue) || queue.length === 0) {
-    return;
-  }
-
-  const fadeWindowMs = Math.max(60, Number(options.fadeWindowMs) || CHAT_BUBBLE_FADE_MS);
-  const riseOffsetPx = Math.max(8, Number(options.riseOffsetPx) || 32);
-  const fontSize = Math.max(10, Math.floor(12 * state.camera.zoom));
-  const paddingX = Math.max(4, Math.floor(6 * state.camera.zoom));
-  const paddingY = Math.max(2, Math.floor(4 * state.camera.zoom));
-  const gapY = Math.max(2, Math.floor(3 * state.camera.zoom));
-
-  const active = queue.filter((entry) => entry && Number.isFinite(entry.until) && now < entry.until);
-  queue.length = 0;
-  for (const entry of active) {
-    queue.push(entry);
-  }
-
-  if (queue.length === 0) {
-    return;
-  }
-
-  const prepared = [];
-  ctx.font = `${fontSize}px system-ui`;
-  for (const entry of queue) {
-    const text = String(entry.text || "").trim();
-    if (!text) {
-      continue;
-    }
-    const textWidth = Math.ceil(ctx.measureText(text).width);
-    const bubbleW = textWidth + paddingX * 2;
-    const bubbleH = fontSize + paddingY * 2;
-    const remainingMs = Math.max(0, entry.until - now);
-    const bubbleAlpha = Math.max(0, Math.min(1, remainingMs / fadeWindowMs));
-    prepared.push({ text, bubbleW, bubbleH, bubbleAlpha });
-  }
-
-  if (prepared.length === 0) {
-    return;
-  }
-
-  const totalHeight = prepared.reduce((sum, bubble, idx) => {
-    const gap = idx > 0 ? gapY : 0;
-    return sum + gap + bubble.bubbleH;
-  }, 0);
-
-  let cursorY = anchor.y - riseOffsetPx - totalHeight;
-  for (const bubble of prepared) {
-    const bubbleX = anchor.x + (anchor.width - bubble.bubbleW) / 2;
-
-    ctx.fillStyle = `rgba(15, 23, 42, ${0.9 * bubble.bubbleAlpha})`;
-    ctx.fillRect(bubbleX, cursorY, bubble.bubbleW, bubble.bubbleH);
-    ctx.strokeStyle = `rgba(148, 163, 184, ${0.6 * bubble.bubbleAlpha})`;
-    ctx.strokeRect(bubbleX + 0.5, cursorY + 0.5, bubble.bubbleW - 1, bubble.bubbleH - 1);
-
-    ctx.fillStyle = `rgba(248, 250, 252, ${bubble.bubbleAlpha})`;
-    ctx.fillText(bubble.text, bubbleX + paddingX, cursorY + paddingY + fontSize - 1);
-
-    cursorY += bubble.bubbleH + gapY;
-  }
-}
-
 function drawTransientWorldTexts() {
-  if (state.transientSystemBubbles.length === 0) {
-    return;
-  }
-
   const now = performance.now();
-  const nextAnchors = [];
-
-  for (const entry of state.transientSystemBubbles) {
-    if (!entry) {
-      continue;
-    }
-
-    const screenX = (entry.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
-    const screenY = (entry.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
-    drawBubbleStack(
-      {
-        x: screenX,
-        y: screenY,
-        width: 0,
-      },
-      entry.bubbles,
-      now,
-      {
-        riseOffsetPx: Math.max(36, Math.floor(42 * state.camera.zoom)),
-        fadeWindowMs: LEAVE_TEXT_FADE_MS,
-      },
-    );
-
-    if (Array.isArray(entry.bubbles) && entry.bubbles.length > 0) {
-      nextAnchors.push(entry);
-    }
-  }
-
-  state.transientSystemBubbles = nextAnchors;
+  chatBubbles.drawTransientSystemBubbles(now);
 }
 
 zoomOutBtn?.addEventListener("click", () => {
@@ -2326,7 +2202,7 @@ function loop() {
 
     if (!state.world) {
       ctx.fillStyle = "#e5e7eb";
-      ctx.font = "20px system-ui";
+      ctx.font = "20px \"Segoe UI\", Tahoma, sans-serif";
       ctx.fillText("Loading world...", 30, 50);
     } else {
       drawWorld();

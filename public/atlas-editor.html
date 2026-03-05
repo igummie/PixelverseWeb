@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Regular Atlas Editor</title>
+    <link rel="stylesheet" href="/styles/atlas-editor.css" />
+  </head>
+  <body>
+    <div class="editorSwitcher" aria-label="Editor Switcher">
+      <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
+      <a class="switchBtn active" href="/atlas-editor.html">Block Editor</a>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="title">Pixelverse Regular Atlas Editor</div>
+        <div class="subtitle">Assign atlas id + tile to blocks. This edits `public/data/blocks.json`.</div>
+
+        <div class="row">
+          <div class="fieldStack">
+            <label for="atlasSelect">Atlas</label>
+            <select id="atlasSelect"></select>
+          </div>
+          <div class="fieldStack">
+            <label for="tileSizeInput">Tile Size</label>
+            <input id="tileSizeInput" type="number" min="1" value="16" />
+          </div>
+          <button id="loadBtn" class="loadAtlasBtn" type="button">Load Atlas</button>
+        </div>
+
+        <div class="row">
+          <div class="fieldStack">
+            <label for="columnsInput">Columns</label>
+            <input id="columnsInput" type="number" min="1" value="1" />
+          </div>
+          <div class="fieldStack">
+            <label for="rowsInput">Rows</label>
+            <input id="rowsInput" type="number" min="1" value="1" />
+          </div>
+        </div>
+
+        <div id="atlasWrap" class="atlasWrap">
+          <canvas id="atlasCanvas" width="256" height="256"></canvas>
+        </div>
+
+        <div class="atlasControls">
+          <button id="zoomOutBtn" type="button">-</button>
+          <input id="zoomRange" type="range" min="0.25" max="8" step="0.25" value="1" />
+          <button id="zoomInBtn" type="button">+</button>
+          <button id="zoomResetBtn" type="button">1x</button>
+        </div>
+        <div class="tiny" id="zoomInfo">Atlas Zoom: 1.00x</div>
+
+        <div class="tiny" id="selectionInfo">Tile: 0 | XY: 0,0 | Rect: 0,0,16,16</div>
+
+        <div class="row">
+          <select id="blockSelect"></select>
+          <button id="assignBtn" type="button">Assign Tile To Block</button>
+        </div>
+
+        <div class="fieldStack">
+          <label>Selected Block Fields</label>
+          <div id="blockFieldEditor" class="blockFieldEditor"></div>
+        </div>
+
+        <div class="row">
+          <button id="applyFieldEditorBtn" type="button">Queue Field Changes</button>
+          <button id="resetFieldEditorBtn" type="button">Reset Fields</button>
+        </div>
+
+        <div class="fieldStack">
+          <label for="blockDataEditor">Selected Block Data (JSON)</label>
+          <textarea id="blockDataEditor" spellcheck="false"></textarea>
+        </div>
+
+        <div class="row">
+          <button id="applyBlockDataBtn" type="button">Queue Block Data Changes</button>
+          <button id="resetBlockDataBtn" type="button">Reset Editor To Selected Block</button>
+        </div>
+
+        <textarea id="jsonOutput" spellcheck="false"></textarea>
+
+        <div class="row">
+          <button id="copyBtn" type="button">Copy JSON</button>
+          <button id="saveBtn" type="button">Save To blocks.json</button>
+          <button id="reloadBtn" type="button">Reload Data</button>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div class="links">Other tools: <a href="/texture47-editor.html">texture47 editor</a> | <a href="/index.html">game</a></div>
+      </div>
+
+      <div class="panel">
+        <div class="title">Blocks</div>
+        <div class="subtitle">Blue = selected block, amber = pending unsaved assignment.</div>
+        <div id="blockList" class="blockList"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      const atlasSelect = document.getElementById("atlasSelect");
+      const tileSizeInput = document.getElementById("tileSizeInput");
+      const loadBtn = document.getElementById("loadBtn");
+      const columnsInput = document.getElementById("columnsInput");
+      const rowsInput = document.getElementById("rowsInput");
+      const atlasWrap = document.getElementById("atlasWrap");
+      const atlasCanvas = document.getElementById("atlasCanvas");
+      const zoomOutBtn = document.getElementById("zoomOutBtn");
+      const zoomInBtn = document.getElementById("zoomInBtn");
+      const zoomResetBtn = document.getElementById("zoomResetBtn");
+      const zoomRange = document.getElementById("zoomRange");
+      const zoomInfo = document.getElementById("zoomInfo");
+      const selectionInfo = document.getElementById("selectionInfo");
+      const blockSelect = document.getElementById("blockSelect");
+      const assignBtn = document.getElementById("assignBtn");
+      const blockFieldEditor = document.getElementById("blockFieldEditor");
+      const applyFieldEditorBtn = document.getElementById("applyFieldEditorBtn");
+      const resetFieldEditorBtn = document.getElementById("resetFieldEditorBtn");
+      const blockDataEditor = document.getElementById("blockDataEditor");
+      const applyBlockDataBtn = document.getElementById("applyBlockDataBtn");
+      const resetBlockDataBtn = document.getElementById("resetBlockDataBtn");
+      const jsonOutput = document.getElementById("jsonOutput");
+      const copyBtn = document.getElementById("copyBtn");
+      const saveBtn = document.getElementById("saveBtn");
+      const reloadBtn = document.getElementById("reloadBtn");
+      const status = document.getElementById("status");
+      const blockList = document.getElementById("blockList");
+
+      const context = atlasCanvas.getContext("2d");
+      context.imageSmoothingEnabled = false;
+
+      const MIN_ZOOM = 0.25;
+      const MAX_ZOOM = 8;
+      const ZOOM_STEP = 0.25;
+
+      const state = {
+        version: 1,
+        atlases: [],
+        blocks: [],
+        atlasByKey: new Map(),
+        blockById: new Map(),
+        pendingByBlockId: new Map(),
+        pendingBlockDataById: new Map(),
+        selectedAtlasKey: "",
+        selectedBlockId: 0,
+        image: null,
+        atlasZoom: 1,
+        tileSize: 16,
+        columns: 1,
+        rows: 1,
+        tileWidth: 16,
+        tileHeight: 16,
+        selectedTileIndex: 0,
+      };
+
+      function normalizeAtlasIdValue(value) {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          return value;
+        }
+
+        const text = String(value ?? "").trim();
+        if (/^-?[0-9]+$/.test(text)) {
+          return Number(text);
+        }
+        return text;
+      }
+
+      function atlasKey(value) {
+        const normalized = normalizeAtlasIdValue(value);
+        return typeof normalized === "number" ? `n:${normalized}` : `s:${String(normalized)}`;
+      }
+
+      function formatAtlasId(value) {
+        return typeof value === "string" ? `"${value}"` : String(value);
+      }
+
+      function normalizeStatusMessage(message) {
+        if (typeof message === "string") {
+          return message;
+        }
+        try {
+          return JSON.stringify(message);
+        } catch {
+          return String(message);
+        }
+      }
+
+      function setStatus(message, isError = false) {
+        status.textContent = normalizeStatusMessage(message);
+        status.classList.toggle("error", isError);
+      }
+
+      function parsePositiveInt(value, fallback) {
+        const numeric = Number(value);
+        if (!Number.isInteger(numeric) || numeric < 1) {
+          return fallback;
+        }
+        return numeric;
+      }
+
+      function clampZoom(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return 1;
+        }
+        return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, numeric));
+      }
+
+      function setZoom(value) {
+        state.atlasZoom = clampZoom(value);
+        zoomRange.value = String(state.atlasZoom);
+        zoomInfo.textContent = `Atlas Zoom: ${state.atlasZoom.toFixed(2)}x`;
+
+        if (state.image) {
+          atlasCanvas.style.width = `${state.image.width * state.atlasZoom}px`;
+          atlasCanvas.style.height = `${state.image.height * state.atlasZoom}px`;
+        }
+      }
+
+      function getTileCount() {
+        return Math.max(1, state.columns * state.rows);
+      }
+
+      function clampTileSelection() {
+        const maxIndex = Math.max(0, getTileCount() - 1);
+        if (state.selectedTileIndex > maxIndex) {
+          state.selectedTileIndex = maxIndex;
+        }
+      }
+
+      function getCurrentAtlasId() {
+        const atlas = state.atlasByKey.get(state.selectedAtlasKey);
+        return atlas ? atlas.ATLAS_ID : null;
+      }
+
+      function getSelectedTextureRect() {
+        const tileX = state.selectedTileIndex % state.columns;
+        const tileY = Math.floor(state.selectedTileIndex / state.columns);
+        return {
+          x: tileX * state.tileWidth,
+          y: tileY * state.tileHeight,
+          w: state.tileWidth,
+          h: state.tileHeight,
+        };
+      }
+
+      function updateSelectionInfo() {
+        const tileX = state.selectedTileIndex % state.columns;
+        const tileY = Math.floor(state.selectedTileIndex / state.columns);
+        const rect = getSelectedTextureRect();
+        selectionInfo.textContent = `Tile: ${state.selectedTileIndex} | XY: ${tileX},${tileY} | Rect: ${rect.x},${rect.y},${rect.w},${rect.h}`;
+      }
+
+      function deepClone(value) {
+        try {
+          return JSON.parse(JSON.stringify(value));
+        } catch {
+          return null;
+        }
+      }
+
+      function getEffectiveBlock(blockId) {
+        const source = state.blockById.get(Number(blockId));
+        if (!source || typeof source !== "object") {
+          return null;
+        }
+
+        const clone = deepClone(source);
+        if (!clone || typeof clone !== "object") {
+          return null;
+        }
+
+        const pendingData = state.pendingBlockDataById.get(Number(blockId));
+        if (pendingData && typeof pendingData === "object") {
+          Object.assign(clone, deepClone(pendingData));
+        }
+
+        const pendingTexture = state.pendingByBlockId.get(Number(blockId));
+        if (pendingTexture && typeof pendingTexture === "object") {
+          clone.ATLAS_ID = pendingTexture.atlasId;
+          clone.ATLAS_TEXTURE = deepClone(pendingTexture.texture);
+        }
+
+        return clone;
+      }
+
+      async function syncAtlasAndTileFromBlock(blockId) {
+        const block = getEffectiveBlock(blockId);
+        if (!block) {
+          return;
+        }
+
+        const targetAtlasKey = atlasKey(block.ATLAS_ID);
+        if (state.atlasByKey.has(targetAtlasKey)) {
+          const shouldReloadImage = state.selectedAtlasKey !== targetAtlasKey || !state.image;
+          state.selectedAtlasKey = targetAtlasKey;
+          atlasSelect.value = targetAtlasKey;
+          if (shouldReloadImage) {
+            await loadAtlasImage();
+          }
+        }
+
+        const tex = block.ATLAS_TEXTURE && typeof block.ATLAS_TEXTURE === "object"
+          ? block.ATLAS_TEXTURE
+          : null;
+
+        if (!tex || !Number.isFinite(Number(tex.x)) || !Number.isFinite(Number(tex.y))) {
+          renderAtlas();
+          return;
+        }
+
+        const tileX = Math.max(0, Math.floor(Number(tex.x) / Math.max(1, state.tileWidth)));
+        const tileY = Math.max(0, Math.floor(Number(tex.y) / Math.max(1, state.tileHeight)));
+        const nextIndex = tileY * state.columns + tileX;
+        if (nextIndex >= 0 && nextIndex < getTileCount()) {
+          state.selectedTileIndex = nextIndex;
+          updateSelectionInfo();
+          renderAtlas();
+        }
+      }
+
+      function refreshBlockDataEditor() {
+        const block = getEffectiveBlock(state.selectedBlockId);
+        if (!block) {
+          blockDataEditor.value = "";
+          blockFieldEditor.innerHTML = "";
+          return;
+        }
+
+        blockDataEditor.value = JSON.stringify(block, null, 2);
+        renderBlockFieldEditor(block);
+      }
+
+      function renderBlockFieldEditor(block) {
+        blockFieldEditor.innerHTML = "";
+        if (!block || typeof block !== "object") {
+          return;
+        }
+
+        const keys = Object.keys(block);
+        keys.sort((a, b) => {
+          if (a === "ID") return -1;
+          if (b === "ID") return 1;
+          if (a === "NAME") return -1;
+          if (b === "NAME") return 1;
+          return a.localeCompare(b);
+        });
+
+        for (const key of keys) {
+          const value = block[key];
+          const row = document.createElement("div");
+          row.className = "blockFieldRow";
+
+          const label = document.createElement("div");
+          label.className = "blockFieldLabel";
+          label.textContent = key;
+
+          let input = null;
+          if (typeof value === "boolean") {
+            input = document.createElement("select");
+            input.className = "blockFieldInput";
+            input.innerHTML = `<option value="true">true</option><option value="false">false</option>`;
+            input.value = value ? "true" : "false";
+            input.dataset.kind = "boolean";
+          } else if (typeof value === "number") {
+            input = document.createElement("input");
+            input.className = "blockFieldInput";
+            input.type = "number";
+            input.step = "any";
+            input.value = String(value);
+            input.dataset.kind = "number";
+          } else if (typeof value === "string") {
+            input = document.createElement("input");
+            input.className = "blockFieldInput";
+            input.type = "text";
+            input.value = value;
+            input.dataset.kind = "string";
+          } else {
+            input = document.createElement("textarea");
+            input.className = "blockFieldJson";
+            input.value = JSON.stringify(value, null, 2);
+            input.dataset.kind = "json";
+          }
+
+          input.dataset.key = key;
+          if (key === "ID") {
+            input.disabled = true;
+          }
+
+          row.appendChild(label);
+          row.appendChild(input);
+          blockFieldEditor.appendChild(row);
+        }
+      }
+
+      function buildBlockFromFieldEditor() {
+        const blockId = Number(state.selectedBlockId);
+        const base = getEffectiveBlock(blockId) || {};
+        const next = deepClone(base) || {};
+
+        const inputs = blockFieldEditor.querySelectorAll("[data-key]");
+        for (const input of inputs) {
+          const key = input.dataset.key;
+          const kind = input.dataset.kind;
+
+          if (kind === "boolean") {
+            next[key] = input.value === "true";
+            continue;
+          }
+
+          if (kind === "number") {
+            const numeric = Number(input.value);
+            if (!Number.isFinite(numeric)) {
+              throw new Error(`Field ${key} requires a valid number`);
+            }
+            next[key] = numeric;
+            continue;
+          }
+
+          if (kind === "string") {
+            next[key] = String(input.value);
+            continue;
+          }
+
+          if (kind === "json") {
+            next[key] = JSON.parse(String(input.value || "null"));
+          }
+        }
+
+        return next;
+      }
+
+      function applyParsedBlockChanges(blockId, parsed) {
+        state.pendingBlockDataById.set(blockId, parsed);
+
+        const parsedAtlasId = parsed.ATLAS_ID;
+        const parsedTexture = parsed.ATLAS_TEXTURE;
+        if (parsedTexture && typeof parsedTexture === "object") {
+          const x = Number(parsedTexture.x);
+          const y = Number(parsedTexture.y);
+          const w = Number(parsedTexture.w);
+          const h = Number(parsedTexture.h);
+
+          if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+            state.pendingByBlockId.set(blockId, {
+              blockId,
+              atlasId: normalizeAtlasIdValue(parsedAtlasId),
+              texture: {
+                x,
+                y,
+                w,
+                h,
+              },
+            });
+          }
+        }
+
+        syncJsonOutput();
+        refreshBlockDataEditor();
+        renderBlockList();
+      }
+
+      async function selectBlock(blockId) {
+        state.selectedBlockId = Number(blockId);
+        blockSelect.value = String(state.selectedBlockId);
+        await syncAtlasAndTileFromBlock(state.selectedBlockId);
+        refreshBlockDataEditor();
+        renderBlockList();
+      }
+
+      function effectiveBlockAssignment(block) {
+        const effective = getEffectiveBlock(block.ID) || block;
+        const pending = state.pendingByBlockId.get(block.ID);
+        if (pending) {
+          return pending;
+        }
+
+        const texture = effective.ATLAS_TEXTURE && typeof effective.ATLAS_TEXTURE === "object"
+          ? {
+            x: Number(effective.ATLAS_TEXTURE.x) || 0,
+            y: Number(effective.ATLAS_TEXTURE.y) || 0,
+            w: Number(effective.ATLAS_TEXTURE.w) || state.tileWidth,
+            h: Number(effective.ATLAS_TEXTURE.h) || state.tileHeight,
+          }
+          : { x: 0, y: 0, w: state.tileWidth, h: state.tileHeight };
+
+        return {
+          blockId: effective.ID,
+          atlasId: effective.ATLAS_ID,
+          texture,
+        };
+      }
+
+      function renderBlockList() {
+        blockList.innerHTML = "";
+
+        for (const block of state.blocks) {
+          const assignment = effectiveBlockAssignment(block);
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = "blockCard";
+          if (Number(block.ID) === Number(state.selectedBlockId)) {
+            card.classList.add("active");
+          }
+          if (state.pendingByBlockId.has(block.ID) || state.pendingBlockDataById.has(block.ID)) {
+            card.classList.add("pending");
+          }
+
+          const title = document.createElement("div");
+          title.className = "blockName";
+          title.textContent = `${block.ID} - ${block.NAME || "BLOCK"}`;
+
+          const atlasRow = document.createElement("div");
+          atlasRow.className = "tiny";
+          atlasRow.textContent = `ATLAS_ID: ${formatAtlasId(assignment.atlasId)}`;
+
+          const texture = assignment.texture;
+          const textureRow = document.createElement("div");
+          textureRow.className = "tiny";
+          textureRow.textContent = `ATLAS_TEXTURE: x=${texture.x}, y=${texture.y}, w=${texture.w}, h=${texture.h}`;
+
+          card.appendChild(title);
+          card.appendChild(atlasRow);
+          card.appendChild(textureRow);
+
+          card.addEventListener("click", async () => {
+            await selectBlock(block.ID);
+          });
+
+          blockList.appendChild(card);
+        }
+      }
+
+      function renderAtlas() {
+        context.clearRect(0, 0, atlasCanvas.width, atlasCanvas.height);
+
+        if (!state.image) {
+          context.fillStyle = "#0f172a";
+          context.fillRect(0, 0, atlasCanvas.width, atlasCanvas.height);
+          return;
+        }
+
+        atlasCanvas.width = state.image.width;
+        atlasCanvas.height = state.image.height;
+
+        context.drawImage(state.image, 0, 0);
+
+        context.strokeStyle = "rgba(148, 163, 184, 0.45)";
+        context.lineWidth = 1;
+        for (let col = 1; col < state.columns; col += 1) {
+          const x = col * state.tileWidth + 0.5;
+          context.beginPath();
+          context.moveTo(x, 0);
+          context.lineTo(x, atlasCanvas.height);
+          context.stroke();
+        }
+
+        for (let row = 1; row < state.rows; row += 1) {
+          const y = row * state.tileHeight + 0.5;
+          context.beginPath();
+          context.moveTo(0, y);
+          context.lineTo(atlasCanvas.width, y);
+          context.stroke();
+        }
+
+        const tileX = state.selectedTileIndex % state.columns;
+        const tileY = Math.floor(state.selectedTileIndex / state.columns);
+        context.lineWidth = 2;
+        context.strokeStyle = "#22c55e";
+        context.strokeRect(
+          tileX * state.tileWidth + 1,
+          tileY * state.tileHeight + 1,
+          state.tileWidth - 2,
+          state.tileHeight - 2,
+        );
+
+        setZoom(state.atlasZoom);
+      }
+
+      function syncJsonOutput() {
+        const effectiveBlocks = state.blocks
+          .map((block) => getEffectiveBlock(block.ID) || deepClone(block))
+          .filter((block) => block && typeof block === "object");
+
+        const payload = {
+          VERSION: Number.isInteger(state.version) ? state.version : 1,
+          atlases: deepClone(state.atlases) || [],
+          blocks: effectiveBlocks,
+        };
+
+        jsonOutput.value = JSON.stringify(payload, null, 2);
+      }
+
+      async function loadAtlasImage() {
+        const atlas = state.atlasByKey.get(state.selectedAtlasKey);
+        if (!atlas) {
+          state.image = null;
+          renderAtlas();
+          return;
+        }
+
+        const image = new Image();
+        image.src = `${atlas.SRC}?ts=${Date.now()}`;
+
+        try {
+          await image.decode();
+        } catch {
+          setStatus(`Could not load atlas image: ${atlas.SRC}`, true);
+          return;
+        }
+
+        state.image = image;
+        state.tileSize = parsePositiveInt(tileSizeInput.value, parsePositiveInt(atlas.TILE_SIZE, 16));
+        tileSizeInput.value = String(state.tileSize);
+
+        state.columns = Math.max(1, Math.floor(image.width / state.tileSize));
+        state.rows = Math.max(1, Math.floor(image.height / state.tileSize));
+        state.tileWidth = Math.max(1, Math.floor(image.width / state.columns));
+        state.tileHeight = Math.max(1, Math.floor(image.height / state.rows));
+        columnsInput.value = String(state.columns);
+        rowsInput.value = String(state.rows);
+
+        clampTileSelection();
+        updateSelectionInfo();
+        renderAtlas();
+      }
+
+      function renderAtlasOptions() {
+        atlasSelect.innerHTML = "";
+
+        for (const atlas of state.atlases) {
+          const option = document.createElement("option");
+          option.value = atlasKey(atlas.ATLAS_ID);
+          option.textContent = `${formatAtlasId(atlas.ATLAS_ID)} - ${atlas.NAME || "atlas"}`;
+          atlasSelect.appendChild(option);
+        }
+
+        if (state.atlases.length > 0) {
+          state.selectedAtlasKey = atlasSelect.value;
+        } else {
+          state.selectedAtlasKey = "";
+        }
+      }
+
+      function renderBlockOptions() {
+        blockSelect.innerHTML = "";
+
+        for (const block of state.blocks) {
+          const option = document.createElement("option");
+          option.value = String(block.ID);
+          option.textContent = `${block.ID} - ${block.NAME || "BLOCK"}`;
+          blockSelect.appendChild(option);
+        }
+
+        if (state.blocks.length > 0) {
+          state.selectedBlockId = Number(state.blocks[0].ID);
+          blockSelect.value = String(state.selectedBlockId);
+        }
+      }
+
+      async function loadEditorData() {
+        try {
+          let payload = null;
+          let sourceLabel = "tool endpoint";
+
+          const response = await fetch(`/api/tools/blocks/editor-data?ts=${Date.now()}`);
+          if (response.ok) {
+            payload = await response.json();
+          } else {
+            const fallback = await fetch(`/data/blocks.json?ts=${Date.now()}`);
+            if (!fallback.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            payload = await fallback.json();
+            sourceLabel = "blocks.json fallback";
+          }
+
+          state.atlases = Array.isArray(payload?.atlases) ? payload.atlases : [];
+          state.blocks = Array.isArray(payload?.blocks) ? payload.blocks : [];
+          state.version = Number.isInteger(payload?.VERSION) ? payload.VERSION : 1;
+          state.blockById.clear();
+          state.atlasByKey.clear();
+
+          state.atlases.forEach((atlas) => {
+            if (!atlas || typeof atlas !== "object") {
+              return;
+            }
+            state.atlasByKey.set(atlasKey(atlas.ATLAS_ID), atlas);
+          });
+
+          state.blocks.sort((a, b) => Number(a.ID) - Number(b.ID));
+          state.blocks.forEach((block) => {
+            if (!block || typeof block !== "object") {
+              return;
+            }
+            state.blockById.set(Number(block.ID), block);
+          });
+
+          renderAtlasOptions();
+          renderBlockOptions();
+          if (state.blocks.length > 0) {
+            await selectBlock(state.blocks[0].ID);
+          } else {
+            renderBlockList();
+            refreshBlockDataEditor();
+          }
+          syncJsonOutput();
+          if (state.atlases.length === 0) {
+            setStatus("Loaded data, but no atlases were found in blocks.json", true);
+            return;
+          }
+
+          setStatus(`Loaded blocks and atlas data (${sourceLabel})`);
+        } catch (error) {
+          setStatus(`Failed to load editor data: ${error}`, true);
+        }
+      }
+
+      function assignSelectedTileToBlock() {
+        const blockId = Number(blockSelect.value);
+        const atlasId = getCurrentAtlasId();
+        if (!Number.isInteger(blockId) || !state.blockById.has(blockId)) {
+          setStatus("Select a valid block", true);
+          return;
+        }
+
+        if (atlasId == null) {
+          setStatus("Select a valid atlas", true);
+          return;
+        }
+
+        const rect = getSelectedTextureRect();
+        state.pendingByBlockId.set(blockId, {
+          blockId,
+          atlasId,
+          texture: rect,
+        });
+
+        const pendingData = state.pendingBlockDataById.get(blockId);
+        if (pendingData && typeof pendingData === "object") {
+          pendingData.ATLAS_ID = atlasId;
+          pendingData.ATLAS_TEXTURE = deepClone(rect);
+          state.pendingBlockDataById.set(blockId, pendingData);
+        }
+
+        syncJsonOutput();
+        refreshBlockDataEditor();
+        renderBlockList();
+        setStatus(`Queued update for block ${blockId}: ATLAS_ID ${formatAtlasId(atlasId)} @ tile ${state.selectedTileIndex}`);
+      }
+
+      function queueBlockDataChanges() {
+        const blockId = Number(state.selectedBlockId);
+        if (!Number.isInteger(blockId) || !state.blockById.has(blockId)) {
+          setStatus("Select a valid block", true);
+          return;
+        }
+
+        let parsed = null;
+        try {
+          parsed = JSON.parse(blockDataEditor.value);
+        } catch {
+          setStatus("Block data JSON is invalid", true);
+          return;
+        }
+
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          setStatus("Block data must be a JSON object", true);
+          return;
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(parsed, "ID")) {
+          parsed.ID = blockId;
+        }
+
+        const parsedId = Number(parsed.ID);
+        if (!Number.isInteger(parsedId) || parsedId !== blockId) {
+          setStatus(`Block data ID must stay ${blockId}`, true);
+          return;
+        }
+
+        applyParsedBlockChanges(blockId, parsed);
+        setStatus(`Queued block data changes for block ${blockId}`);
+      }
+
+      function queueBlockFieldChanges() {
+        const blockId = Number(state.selectedBlockId);
+        if (!Number.isInteger(blockId) || !state.blockById.has(blockId)) {
+          setStatus("Select a valid block", true);
+          return;
+        }
+
+        let parsed = null;
+        try {
+          parsed = buildBlockFromFieldEditor();
+        } catch (error) {
+          setStatus(error?.message || "Invalid field value", true);
+          return;
+        }
+
+        const parsedId = Number(parsed.ID);
+        if (!Number.isInteger(parsedId) || parsedId !== blockId) {
+          setStatus(`Block data ID must stay ${blockId}`, true);
+          return;
+        }
+
+        applyParsedBlockChanges(blockId, parsed);
+        setStatus(`Queued field changes for block ${blockId}`);
+      }
+
+      function resetBlockDataEditorToSelected() {
+        refreshBlockDataEditor();
+        setStatus(`Reset block data editor for block ${state.selectedBlockId}`);
+      }
+
+      function resetBlockFieldEditorToSelected() {
+        refreshBlockDataEditor();
+        setStatus(`Reset field editor for block ${state.selectedBlockId}`);
+      }
+
+      async function savePendingUpdates() {
+        const updates = Array.from(state.pendingByBlockId.values()).map((entry) => ({
+          blockId: entry.blockId,
+          atlasId: entry.atlasId,
+          texture: entry.texture,
+        }));
+
+        const blocks = Array.from(state.pendingBlockDataById.values())
+          .map((entry) => deepClone(entry))
+          .filter((entry) => entry && typeof entry === "object");
+
+        if (updates.length === 0 && blocks.length === 0) {
+          setStatus("No pending updates to save");
+          return;
+        }
+
+        try {
+          if (updates.length > 0) {
+            const response = await fetch("/api/tools/blocks/save-textures", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              cache: "no-store",
+              body: JSON.stringify({ updates }),
+            });
+
+            let payload = null;
+            try {
+              payload = await response.json();
+            } catch {
+            }
+
+            if (!response.ok) {
+              if (response.status === 404) {
+                setStatus("Save API not available on current server. Restart backend to enable atlas editor save routes.", true);
+                return;
+              }
+              setStatus(payload?.detail || "Texture save failed", true);
+              return;
+            }
+          }
+
+          if (blocks.length > 0) {
+            const response = await fetch("/api/tools/blocks/save-data", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              cache: "no-store",
+              body: JSON.stringify({ blocks }),
+            });
+
+            let payload = null;
+            try {
+              payload = await response.json();
+            } catch {
+            }
+
+            if (!response.ok) {
+              if (response.status === 404) {
+                setStatus("Block data save API not available on current server. Restart backend to enable block-data editing saves.", true);
+                return;
+              }
+              setStatus(payload?.detail || "Block data save failed", true);
+              return;
+            }
+          }
+
+          state.pendingByBlockId.clear();
+          state.pendingBlockDataById.clear();
+          syncJsonOutput();
+          await loadEditorData();
+          setStatus(`Saved ${updates.length} texture updates and ${blocks.length} block data updates`);
+        } catch {
+          setStatus("Could not reach server for save", true);
+        }
+      }
+
+      loadBtn.addEventListener("click", async () => {
+        state.selectedAtlasKey = atlasSelect.value;
+        await loadAtlasImage();
+      });
+
+      atlasSelect.addEventListener("change", () => {
+        state.selectedAtlasKey = atlasSelect.value;
+      });
+
+      columnsInput.addEventListener("change", () => {
+        state.columns = parsePositiveInt(columnsInput.value, state.columns);
+        if (state.image) {
+          state.tileWidth = Math.max(1, Math.floor(state.image.width / state.columns));
+        }
+        clampTileSelection();
+        updateSelectionInfo();
+        renderAtlas();
+      });
+
+      rowsInput.addEventListener("change", () => {
+        state.rows = parsePositiveInt(rowsInput.value, state.rows);
+        if (state.image) {
+          state.tileHeight = Math.max(1, Math.floor(state.image.height / state.rows));
+        }
+        clampTileSelection();
+        updateSelectionInfo();
+        renderAtlas();
+      });
+
+      zoomRange.addEventListener("input", () => {
+        setZoom(zoomRange.value);
+      });
+
+      zoomOutBtn.addEventListener("click", () => {
+        setZoom(state.atlasZoom - ZOOM_STEP);
+      });
+
+      zoomInBtn.addEventListener("click", () => {
+        setZoom(state.atlasZoom + ZOOM_STEP);
+      });
+
+      zoomResetBtn.addEventListener("click", () => {
+        setZoom(1);
+      });
+
+      atlasCanvas.addEventListener("click", (event) => {
+        if (!state.image) {
+          return;
+        }
+
+        const bounds = atlasCanvas.getBoundingClientRect();
+        const x = Math.floor((event.clientX - bounds.left) * (atlasCanvas.width / bounds.width));
+        const y = Math.floor((event.clientY - bounds.top) * (atlasCanvas.height / bounds.height));
+
+        const tileX = Math.floor(x / state.tileWidth);
+        const tileY = Math.floor(y / state.tileHeight);
+        const index = tileY * state.columns + tileX;
+
+        if (index >= 0 && index < getTileCount()) {
+          state.selectedTileIndex = index;
+          updateSelectionInfo();
+          renderAtlas();
+        }
+      });
+
+      blockSelect.addEventListener("change", async () => {
+        await selectBlock(blockSelect.value);
+      });
+
+      assignBtn.addEventListener("click", () => {
+        assignSelectedTileToBlock();
+      });
+
+      applyBlockDataBtn.addEventListener("click", () => {
+        queueBlockDataChanges();
+      });
+
+      applyFieldEditorBtn.addEventListener("click", () => {
+        queueBlockFieldChanges();
+      });
+
+      resetFieldEditorBtn.addEventListener("click", () => {
+        resetBlockFieldEditorToSelected();
+      });
+
+      resetBlockDataBtn.addEventListener("click", () => {
+        resetBlockDataEditorToSelected();
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(jsonOutput.value);
+          setStatus("Copied JSON to clipboard");
+        } catch {
+          setStatus("Clipboard copy failed", true);
+        }
+      });
+
+      saveBtn.addEventListener("click", async () => {
+        await savePendingUpdates();
+      });
+
+      reloadBtn.addEventListener("click", async () => {
+        await loadEditorData();
+      });
+
+      setZoom(1);
+      updateSelectionInfo();
+      syncJsonOutput();
+      loadEditorData();
+
+      window.addEventListener("resize", () => {
+        setZoom(state.atlasZoom);
+      });
+    </script>
+  </body>
+</html>

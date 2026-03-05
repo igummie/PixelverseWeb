@@ -1,0 +1,237 @@
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.editorSwitcher {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 60;
+  display: flex;
+  gap: 8px;
+  background: rgba(17, 24, 39, 0.92);
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 6px;
+}
+
+.switchBtn {
+  display: inline-block;
+  text-decoration: none;
+  color: #bfdbfe;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #0f172a;
+}
+
+.switchBtn.active {
+  color: #052e16;
+  border-color: #22c55e;
+  background: #86efac;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 16px;
+  min-height: 100vh;
+  padding: 64px 16px 16px;
+  box-sizing: border-box;
+}
+
+.panel {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row > * {
+  flex: 1;
+}
+
+.fieldStack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.loadAtlasBtn {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 96px;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+
+.blockFieldEditor {
+  border: 1px solid #374151;
+  border-radius: 8px;
+  background: #0f172a;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.blockFieldRow {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.blockFieldLabel {
+  font-size: 12px;
+  color: #cbd5e1;
+  word-break: break-word;
+}
+
+.blockFieldInput,
+.blockFieldJson {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.blockFieldJson {
+  min-height: 72px;
+  resize: vertical;
+}
+
+input,
+select,
+button,
+textarea {
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid #4b5563;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+button {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.atlasWrap {
+  border: 1px solid #374151;
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 360px;
+  background: #0f172a;
+}
+
+#atlasCanvas {
+  image-rendering: pixelated;
+  display: block;
+  cursor: pointer;
+}
+
+.atlasControls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.atlasControls input[type="range"] {
+  flex: 1;
+}
+
+.blockList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+
+.blockCard {
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 8px;
+  background: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.blockCard.active {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1px #60a5fa inset;
+}
+
+.blockCard.pending {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px #f59e0b inset;
+}
+
+.blockName {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tiny {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.status {
+  min-height: 20px;
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+.error {
+  color: #fca5a5;
+}
+
+.links {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.links a {
+  color: #93c5fd;
+}
+
+@media (max-width: 1200px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -4,9 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Texture47 Editor</title>
-    <link rel="stylesheet" href="/styles/texture47-editor.css" />
+    <link rel="stylesheet" href="/styles/texture47-editor.css?v=2" />
   </head>
   <body>
+    <div class="editorSwitcher" aria-label="Editor Switcher">
+      <a class="switchBtn active" href="/texture47-editor.html">Texture47 Editor</a>
+      <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
+    </div>
+
     <div class="pageControls">
       <label for="variantDetailsToggle">Show Variant Details</label>
       <input id="variantDetailsToggle" type="checkbox" />
@@ -114,7 +119,7 @@
         </div>
 
         <div id="status" class="status"></div>
-        <div class="links">Back to game: <a href="/index.html">index.html</a></div>
+        <div class="links">Other tools: <a href="/atlas-editor.html">regular atlas editor</a> | <a href="/index.html">game</a></div>
       </div>
 
       <div class="panel">

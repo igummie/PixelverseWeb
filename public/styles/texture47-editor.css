@@ -9,6 +9,37 @@
         color: #e5e7eb;
       }
 
+      .editorSwitcher {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 60;
+        display: flex;
+        gap: 8px;
+        background: rgba(17, 24, 39, 0.92);
+        border: 1px solid #374151;
+        border-radius: 10px;
+        padding: 6px;
+      }
+
+      .switchBtn {
+        display: inline-block;
+        text-decoration: none;
+        color: #bfdbfe;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        background: #0f172a;
+      }
+
+      .switchBtn.active {
+        color: #052e16;
+        border-color: #22c55e;
+        background: #86efac;
+      }
+
       .pageControls {
         position: fixed;
         top: 10px;
@@ -34,7 +65,7 @@
         grid-template-columns: 420px 1fr;
         gap: 16px;
         min-height: 100vh;
-        padding: 16px;
+        padding: 64px 16px 16px;
         box-sizing: border-box;
       }
 

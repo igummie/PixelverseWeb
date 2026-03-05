@@ -20,7 +20,12 @@
       "NAME": "AIR",
       "BLOCK_TYPE": "BACKGROUND",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 0, "y": 0, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 0,
       "GEM_CHANCE": 0.0,
       "GEM_AMOUNT": 0,
@@ -32,7 +37,12 @@
       "NAME": "DIRT",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": "dirt",
-      "ATLAS_TEXTURE": { "x": 16, "y": 0, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 16,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 2,
       "GEM_CHANCE": 0.2,
       "GEM_AMOUNT": 1,
@@ -44,7 +54,12 @@
       "NAME": "BEDROCK",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 32, "y": 0, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 32,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 9999,
       "GEM_CHANCE": 0.0,
       "GEM_AMOUNT": 0,
@@ -57,7 +72,12 @@
       "NAME": "STONE",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 48, "y": 0, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 48,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 4,
       "GEM_CHANCE": 0.45,
       "GEM_AMOUNT": 5,
@@ -69,7 +89,12 @@
       "NAME": "SAND",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": "sand",
-      "ATLAS_TEXTURE": { "x": 64, "y": 0, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 2,
       "GEM_CHANCE": 0.15,
       "GEM_AMOUNT": 1,
@@ -81,7 +106,12 @@
       "NAME": "GREEN_BLOCK",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 80, "y": 0, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 80,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.12,
       "GEM_AMOUNT": 1,
@@ -93,7 +123,12 @@
       "NAME": "BLUE_BLOCK",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 96, "y": 0, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 96,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.12,
       "GEM_AMOUNT": 1,
@@ -105,7 +140,12 @@
       "NAME": "YELLOW_BLOCK",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 112, "y": 0, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 112,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.12,
       "GEM_AMOUNT": 1,
@@ -117,7 +157,12 @@
       "NAME": "PURPLE_BLOCK",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 0, "y": 16, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 0,
+        "y": 16,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.12,
       "GEM_AMOUNT": 1,
@@ -129,7 +174,12 @@
       "NAME": "CAVE_BACKGROUND",
       "BLOCK_TYPE": "BACKGROUND",
       "ATLAS_ID": "cave_background",
-      "ATLAS_TEXTURE": { "x": 16, "y": 16, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 16,
+        "y": 16,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 2,
       "GEM_CHANCE": 0.08,
       "GEM_AMOUNT": 1,
@@ -141,7 +191,12 @@
       "NAME": "METAL_PLATFORM",
       "BLOCK_TYPE": "PLATFORM",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 32, "y": 16, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 32,
+        "y": 16,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 5,
       "GEM_CHANCE": 0.35,
       "GEM_AMOUNT": 10,
@@ -153,7 +208,12 @@
       "NAME": "DEV_BLOCK",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": "dev",
-      "ATLAS_TEXTURE": { "x": 48, "y": 16, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 48,
+        "y": 16,
+        "w": 16,
+        "h": 16
+      },
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.5,
       "GEM_AMOUNT": 50,
@@ -165,7 +225,12 @@
       "NAME": "WORLD_DOOR",
       "BLOCK_TYPE": "BACKGROUND",
       "ATLAS_ID": 0,
-      "ATLAS_TEXTURE": { "x": 16, "y": 32, "w": 16, "h": 16 },
+      "ATLAS_TEXTURE": {
+        "x": 16,
+        "y": 32,
+        "w": 16,
+        "h": 16
+      },
       "PLACEABLE": false,
       "TOUGHNESS": 9999,
       "GEM_CHANCE": 0.0,

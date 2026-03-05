@@ -115,6 +115,56 @@ def normalize_name(value: str | None, fallback: str = "") -> str:
     return (value or fallback).strip().lower()
 
 
+def normalize_atlas_id_value(value: Any) -> int | str | None:
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+
+    if re.fullmatch(r"-?[0-9]+", text):
+        try:
+            return int(text)
+        except Exception:
+            return None
+
+    lowered = text.lower()
+    if re.fullmatch(r"[a-z0-9_-]+", lowered):
+        return lowered
+
+    return None
+
+
+def normalize_atlas_texture_rect(value: Any) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
+
+    try:
+        x = int(value.get("x", 0))
+        y = int(value.get("y", 0))
+        w = int(value.get("w", 0))
+        h = int(value.get("h", 0))
+    except Exception:
+        return None
+
+    if x < 0 or y < 0 or w <= 0 or h <= 0:
+        return None
+
+    return {
+        "x": x,
+        "y": y,
+        "w": w,
+        "h": h,
+    }
+
+
 def get_user_gems(user_id: int) -> int:
     if user_id <= 0:
         return 0
@@ -890,6 +940,20 @@ class SaveTexture47ConfigBody(BaseModel):
     maskVariants: dict[str, list[Any]] = Field(default_factory=dict)
 
 
+class SaveRegularAtlasTextureEntry(BaseModel):
+    blockId: int = Field(ge=0)
+    atlasId: Any
+    texture: dict[str, Any] = Field(default_factory=dict)
+
+
+class SaveRegularAtlasTexturesBody(BaseModel):
+    updates: list[SaveRegularAtlasTextureEntry] = Field(default_factory=list)
+
+
+class SaveBlocksDataBody(BaseModel):
+    blocks: list[dict[str, Any]] = Field(default_factory=list)
+
+
 world_cache: dict[str, dict[str, Any]] = {}
 save_tasks: dict[str, asyncio.Task[Any]] = {}
 
@@ -1190,6 +1254,148 @@ def list_texture47_atlases() -> dict[str, Any]:
 
     return {
         "atlases": atlases,
+    }
+
+
+@app.get("/api/tools/blocks/editor-data")
+def get_blocks_editor_data() -> dict[str, Any]:
+    payload = load_blocks_payload()
+    atlases = payload.get("atlases", [])
+    blocks = payload.get("blocks", [])
+
+    return {
+        "atlases": atlases if isinstance(atlases, list) else [],
+        "blocks": blocks if isinstance(blocks, list) else [],
+    }
+
+
+@app.post("/api/tools/blocks/save-textures")
+def save_regular_atlas_textures(payload: SaveRegularAtlasTexturesBody) -> dict[str, Any]:
+    try:
+        with BLOCKS_PATH.open("r", encoding="utf-8") as handle:
+            raw = json.load(handle)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Failed to read blocks.json: {error}")
+
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=500, detail="Invalid blocks.json payload")
+
+    atlases = raw.get("atlases", [])
+    blocks = raw.get("blocks", [])
+    if not isinstance(atlases, list) or not isinstance(blocks, list):
+        raise HTTPException(status_code=500, detail="Invalid blocks.json structure")
+
+    allowed_atlas_ids = {
+        normalized
+        for atlas in atlases
+        for normalized in [normalize_atlas_id_value(atlas.get("ATLAS_ID") if isinstance(atlas, dict) else None)]
+        if normalized is not None
+    }
+
+    block_index_by_id: dict[int, int] = {}
+    for index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            continue
+        try:
+            block_id = int(block.get("ID"))
+        except Exception:
+            continue
+        block_index_by_id[block_id] = index
+
+    updated_block_ids: list[int] = []
+    for update in payload.updates:
+        block_id = int(update.blockId)
+        atlas_id = normalize_atlas_id_value(update.atlasId)
+        texture_rect = normalize_atlas_texture_rect(update.texture)
+
+        if block_id not in block_index_by_id:
+            raise HTTPException(status_code=400, detail=f"Unknown block id: {block_id}")
+
+        if atlas_id is None:
+            raise HTTPException(status_code=400, detail=f"Invalid atlas id for block {block_id}")
+
+        if allowed_atlas_ids and atlas_id not in allowed_atlas_ids:
+            raise HTTPException(status_code=400, detail=f"Atlas id {atlas_id!r} is not defined in blocks.json atlases")
+
+        if texture_rect is None:
+            raise HTTPException(status_code=400, detail=f"Invalid texture rect for block {block_id}")
+
+        block = blocks[block_index_by_id[block_id]]
+        if not isinstance(block, dict):
+            raise HTTPException(status_code=500, detail=f"Invalid block payload for id {block_id}")
+
+        block["ATLAS_ID"] = atlas_id
+        block["ATLAS_TEXTURE"] = texture_rect
+        updated_block_ids.append(block_id)
+
+    with BLOCKS_PATH.open("w", encoding="utf-8") as handle:
+        json.dump(raw, handle, indent=2)
+        handle.write("\n")
+
+    refresh_block_definitions_if_changed(force=True)
+
+    return {
+        "ok": True,
+        "path": "data/blocks.json",
+        "updatedBlockIds": updated_block_ids,
+        "updatedCount": len(updated_block_ids),
+    }
+
+
+@app.post("/api/tools/blocks/save-data")
+def save_blocks_data(payload: SaveBlocksDataBody) -> dict[str, Any]:
+    try:
+        with BLOCKS_PATH.open("r", encoding="utf-8") as handle:
+            raw = json.load(handle)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Failed to read blocks.json: {error}")
+
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=500, detail="Invalid blocks.json payload")
+
+    blocks = raw.get("blocks", [])
+    if not isinstance(blocks, list):
+        raise HTTPException(status_code=500, detail="Invalid blocks.json structure")
+
+    block_index_by_id: dict[int, int] = {}
+    for index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            continue
+        try:
+            block_id = int(block.get("ID"))
+        except Exception:
+            continue
+        block_index_by_id[block_id] = index
+
+    updated_block_ids: list[int] = []
+    for edited_block in payload.blocks:
+        if not isinstance(edited_block, dict):
+            raise HTTPException(status_code=400, detail="Each block must be an object")
+
+        try:
+            block_id = int(edited_block.get("ID"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Edited block is missing a valid ID")
+
+        if block_id not in block_index_by_id:
+            raise HTTPException(status_code=400, detail=f"Unknown block id: {block_id}")
+
+        # Preserve canonical integer ID value.
+        edited_block["ID"] = block_id
+        blocks[block_index_by_id[block_id]] = edited_block
+        updated_block_ids.append(block_id)
+
+    with BLOCKS_PATH.open("w", encoding="utf-8") as handle:
+        json.dump(raw, handle, indent=2)
+        handle.write("\n")
+
+    refresh_block_definitions_if_changed(force=True)
+
+    return {
+        "ok": True,
+        "path": "data/blocks.json",
+        "updatedBlockIds": updated_block_ids,
+        "updatedCount": len(updated_block_ids),
     }
 
 
