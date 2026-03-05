@@ -69,6 +69,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
       `camera: ${state.camera.x.toFixed(2)}, ${state.camera.y.toFixed(2)}  zoom: ${state.camera.zoom.toFixed(2)}x`,
       `mouse(world): ${mouseWorldX.toFixed(2)}, ${mouseWorldY.toFixed(2)}`,
       `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}`,
+      `net sim: ${Math.round(state.netSimPingMs || 0)}ms +/-${Math.round(state.netSimJitterMs || 0)}ms  loss ${Math.round(state.netSimLossPercent || 0)}%`,
       `drops: ${state.gemDrops.size}  damageTiles: ${state.tileDamage.size}`,
     ].join("\n");
   }

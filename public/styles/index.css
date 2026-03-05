@@ -279,6 +279,31 @@
         word-break: break-word;
       }
 
+      .debugNetSim {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      .debugNetSim.hidden {
+        display: none;
+      }
+
+      .debugNetField {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 11px;
+        opacity: 0.95;
+      }
+
+      .debugNetField input {
+        padding: 4px 6px;
+        font-size: 11px;
+        border-radius: 6px;
+      }
+
       #chatInput {
         width: 100%;
         margin: 8px 12px;

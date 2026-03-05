@@ -1372,7 +1372,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 player["x"] = x
                 player["y"] = y
 
-                await broadcast_to_world(world, {"type": "player_moved", "id": client_id, "x": x, "y": y})
+                await broadcast_to_world(
+                    world,
+                    {"type": "player_moved", "id": client_id, "x": x, "y": y},
+                    except_client_id=client_id,
+                )
 
                 collected_ids, collected_total = collect_gems_for_player(world, player)
                 if collected_total > 0:
@@ -1619,6 +1623,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 "id": teleport_player_id,
                                 "x": teleport_x,
                                 "y": teleport_y,
+                                "teleport": True,
                             },
                         )
 

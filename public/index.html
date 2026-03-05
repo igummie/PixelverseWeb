@@ -91,9 +91,27 @@
         <div id="debugOverlay" class="debugOverlay hidden">
           <div class="debugHead">
             <strong>Debug</strong>
+            <label class="debugGridToggle" for="debugPingToolsToggle">
+              <input id="debugPingToolsToggle" type="checkbox" checked />
+              Ping Tools
+            </label>
             <label class="debugGridToggle" for="debugGridToggle">
               <input id="debugGridToggle" type="checkbox" />
               Grid
+            </label>
+          </div>
+          <div id="debugNetSimPanel" class="debugNetSim">
+            <label class="debugNetField" for="debugSimPingInput">
+              Ping
+              <input id="debugSimPingInput" type="number" min="0" max="2000" step="10" value="0" />
+            </label>
+            <label class="debugNetField" for="debugSimJitterInput">
+              Jitter
+              <input id="debugSimJitterInput" type="number" min="0" max="1000" step="5" value="0" />
+            </label>
+            <label class="debugNetField" for="debugSimLossInput">
+              Loss %
+              <input id="debugSimLossInput" type="number" min="0" max="50" step="1" value="0" />
             </label>
           </div>
           <pre id="debugInfo" class="debugInfo"></pre>
