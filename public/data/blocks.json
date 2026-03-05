@@ -27,22 +27,15 @@
         "h": 16
       },
       "TOUGHNESS": 0,
-      "GEM_CHANCE": 0.0,
+      "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
-      "GEM_AMOUNT_VAR": 0,
-      "PLACEABLE": false
+      "GEM_AMOUNT_VAR": 0
     },
     {
       "ID": 1,
       "NAME": "DIRT",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": "dirt",
-      "ATLAS_TEXTURE": {
-        "x": 16,
-        "y": 0,
-        "w": 16,
-        "h": 16
-      },
       "TOUGHNESS": 2,
       "GEM_CHANCE": 0.2,
       "GEM_AMOUNT": 1,
@@ -61,7 +54,7 @@
         "h": 16
       },
       "TOUGHNESS": 9999,
-      "GEM_CHANCE": 0.0,
+      "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
       "PLACEABLE": true,
@@ -89,12 +82,6 @@
       "NAME": "SAND",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": "sand",
-      "ATLAS_TEXTURE": {
-        "x": 64,
-        "y": 0,
-        "w": 16,
-        "h": 16
-      },
       "TOUGHNESS": 2,
       "GEM_CHANCE": 0.15,
       "GEM_AMOUNT": 1,
@@ -174,12 +161,6 @@
       "NAME": "CAVE_BACKGROUND",
       "BLOCK_TYPE": "BACKGROUND",
       "ATLAS_ID": "cave_background",
-      "ATLAS_TEXTURE": {
-        "x": 16,
-        "y": 16,
-        "w": 16,
-        "h": 16
-      },
       "TOUGHNESS": 2,
       "GEM_CHANCE": 0.08,
       "GEM_AMOUNT": 1,
@@ -208,12 +189,6 @@
       "NAME": "DEV_BLOCK",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": "dev",
-      "ATLAS_TEXTURE": {
-        "x": 48,
-        "y": 16,
-        "w": 16,
-        "h": 16
-      },
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.5,
       "GEM_AMOUNT": 50,
@@ -231,9 +206,8 @@
         "w": 16,
         "h": 16
       },
-      "PLACEABLE": false,
       "TOUGHNESS": 9999,
-      "GEM_CHANCE": 0.0,
+      "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
       "BREAKABLE": false
