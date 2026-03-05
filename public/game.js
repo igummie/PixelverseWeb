@@ -141,7 +141,9 @@ const state = {
   mouse: { x: 0, y: 0 },
   lastMoveSentAt: 0,
   blockDefs: new Map(),
+  seedDefs: new Map(),
   atlases: new Map(),
+  seedDropSpriteCache: new Map(),
   texture47: new Map(),
   selectedBlockId: 1,
   velocity: { x: 0, y: 0 },
@@ -1081,12 +1083,15 @@ async function loadBlockDefinitions(onAssetProgress = null) {
     },
   });
   const data = bootstrap?.blocks || { atlases: [], blocks: [] };
+  const seedsPayload = bootstrap?.seeds || { seeds: [], atlases: [] };
   const texture47Configs = bootstrap?.texture47Configs && typeof bootstrap.texture47Configs === "object"
     ? bootstrap.texture47Configs
     : {};
 
   state.blockDefs.clear();
+  state.seedDefs.clear();
   state.atlases.clear();
+  state.seedDropSpriteCache.clear();
   state.texture47.clear();
   state.crackAtlas = null;
 
@@ -1096,7 +1101,28 @@ async function loadBlockDefinitions(onAssetProgress = null) {
       .map((block) => block.ATLAS_ID),
   );
 
-  const totalAssets = (data.atlases || []).length + 1 + texture47AtlasIds.size;
+  const atlasSpecs = [];
+  const seenAtlasIds = new Set();
+
+  for (const atlas of data.atlases || []) {
+    const atlasId = atlas?.ATLAS_ID;
+    if (atlasId == null || seenAtlasIds.has(atlasId)) {
+      continue;
+    }
+    seenAtlasIds.add(atlasId);
+    atlasSpecs.push(atlas);
+  }
+
+  for (const atlas of seedsPayload.atlases || []) {
+    const atlasId = atlas?.ATLAS_ID;
+    if (atlasId == null || seenAtlasIds.has(atlasId)) {
+      continue;
+    }
+    seenAtlasIds.add(atlasId);
+    atlasSpecs.push(atlas);
+  }
+
+  const totalAssets = atlasSpecs.length + 1 + texture47AtlasIds.size;
   let loadedAssets = 0;
   const reportAssetProgress = (label) => {
     loadedAssets += 1;
@@ -1105,7 +1131,7 @@ async function loadBlockDefinitions(onAssetProgress = null) {
     }
   };
 
-  for (const atlas of data.atlases || []) {
+  for (const atlas of atlasSpecs) {
     const image = await loadImage(atlas.SRC);
     state.atlases.set(atlas.ATLAS_ID, {
       ...atlas,
@@ -1116,6 +1142,14 @@ async function loadBlockDefinitions(onAssetProgress = null) {
 
   for (const block of data.blocks || []) {
     state.blockDefs.set(block.ID, block);
+  }
+
+  for (const seed of seedsPayload.seeds || []) {
+    const seedId = Number(seed?.SEED_ID);
+    if (!Number.isFinite(seedId) || seedId < 0) {
+      continue;
+    }
+    state.seedDefs.set(Math.floor(seedId), seed);
   }
 
   try {
@@ -1245,6 +1279,78 @@ async function loadBlockDefinitions(onAssetProgress = null) {
   }
 
   state.assetsLoaded = true;
+}
+
+function normalizeSeedTint(value) {
+  const text = String(value ?? "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{8}$/.test(text)) {
+    return text.toLowerCase();
+  }
+  return "";
+}
+
+function buildTintedSeedSprite(image, texture, tintHex) {
+  const width = Math.max(1, Math.floor(Number(texture?.w) || TILE_SIZE));
+  const height = Math.max(1, Math.floor(Number(texture?.h) || TILE_SIZE));
+  const sourceX = Math.floor(Number(texture?.x) || 0);
+  const sourceY = Math.floor(Number(texture?.y) || 0);
+
+  const spriteCanvas = document.createElement("canvas");
+  spriteCanvas.width = width;
+  spriteCanvas.height = height;
+  const spriteCtx = spriteCanvas.getContext("2d");
+  spriteCtx.imageSmoothingEnabled = false;
+  spriteCtx.clearRect(0, 0, width, height);
+  spriteCtx.drawImage(image, sourceX, sourceY, width, height, 0, 0, width, height);
+
+  const tintColor = normalizeSeedTint(tintHex);
+  if (!tintColor) {
+    return spriteCanvas;
+  }
+
+  spriteCtx.globalCompositeOperation = "source-atop";
+  spriteCtx.globalAlpha = 0.35;
+  spriteCtx.fillStyle = tintColor;
+  spriteCtx.fillRect(0, 0, width, height);
+  spriteCtx.globalAlpha = 1;
+  spriteCtx.globalCompositeOperation = "source-over";
+
+  return spriteCanvas;
+}
+
+function getSeedDropSprite(seedId) {
+  const normalizedSeedId = Number(seedId);
+  if (!Number.isFinite(normalizedSeedId) || normalizedSeedId < 0) {
+    return null;
+  }
+
+  const seed = state.seedDefs.get(Math.floor(normalizedSeedId));
+  if (!seed || typeof seed !== "object") {
+    return null;
+  }
+
+  const atlasId = seed.SEED_ATLAS_ID;
+  const texture = seed.SEED_ATLAS_TEXTURE;
+  const atlas = state.atlases.get(atlasId);
+  const image = atlas?.image;
+  if (!image || !texture || typeof texture !== "object") {
+    return null;
+  }
+
+  const cacheKey = JSON.stringify({
+    seedId: Math.floor(normalizedSeedId),
+    atlasId,
+    texture,
+    tint: seed.SEED_TINT || "",
+  });
+  const cached = state.seedDropSpriteCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const sprite = buildTintedSeedSprite(image, texture, seed.SEED_TINT);
+  state.seedDropSpriteCache.set(cacheKey, sprite);
+  return sprite;
 }
 
 function beginLoadingForUser(username) {
@@ -2143,29 +2249,34 @@ function drawSeedDrops() {
 
   const now = performance.now();
   for (const drop of state.seedDrops.values()) {
+    const sprite = getSeedDropSprite(drop.seedId);
+    if (!sprite) {
+      continue;
+    }
+
     const screenX = (drop.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
     const screenY = (drop.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
     const bobOffset = Math.sin(now * (drop.bobSpeed || GEM_BOB_BASE_SPEED) + (drop.bobPhase || 0))
       * (drop.bobAmplitude || GEM_BOB_BASE_AMPLITUDE_PX)
       * state.camera.zoom;
+    const baseSize = Math.max(sprite.width, sprite.height, 1);
     const drawSize = Math.max(8, 12 * state.camera.zoom);
-    const drawX = screenX - drawSize / 2;
-    const drawY = screenY - drawSize / 2 + bobOffset;
+    const scale = drawSize / baseSize;
+    const drawWidth = sprite.width * scale;
+    const drawHeight = sprite.height * scale;
+    const drawX = screenX - drawWidth / 2;
+    const drawY = screenY - drawHeight / 2 + bobOffset;
 
     if (
-      drawX + drawSize < -8 ||
-      drawY + drawSize < -8 ||
+      drawX + drawWidth < -8 ||
+      drawY + drawHeight < -8 ||
       drawX > canvas.width + 8 ||
       drawY > canvas.height + 8
     ) {
       continue;
     }
 
-    ctx.fillStyle = "#65a30d";
-    ctx.fillRect(drawX, drawY, drawSize, drawSize);
-    ctx.strokeStyle = "#bbf7d0";
-    ctx.lineWidth = Math.max(1, state.camera.zoom);
-    ctx.strokeRect(drawX + 0.5, drawY + 0.5, drawSize - 1, drawSize - 1);
+    ctx.drawImage(sprite, drawX, drawY, drawWidth, drawHeight);
   }
 }
 
