@@ -156,6 +156,8 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":!PORT! .*LISTENING"')
 goto menu
 
 :stop_server_silent
+:: Notify server to broadcast update message to clients before stopping.
+powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:!PORT!/internal/prepare_restart' -Method POST -TimeoutSec 2 } catch { }" >nul 2>&1
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":!PORT! .*LISTENING"') do (
 	taskkill /PID %%P /T /F >nul 2>&1
 )

@@ -235,7 +235,22 @@ const state = {
   },
   bundleFingerprint: "",
   reloadInProgress: false,
+  reloadOnReconnect: false,
 };
+
+// Remove any `bundleReload` query param after a forced reload to keep the URL clean.
+(function cleanBundleReloadParam() {
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("bundleReload")) {
+      url.searchParams.delete("bundleReload");
+      const newUrl = `${url.pathname}${url.search || ""}${url.hash || ""}`;
+      window.history.replaceState(null, "", newUrl);
+    }
+  } catch (e) {
+    // ignore
+  }
+})();
 
 const worldDrops = createWorldDropsController({
   state,
@@ -521,6 +536,12 @@ function resetReconnectState() {
 }
 
 async function repullGameBundle() {
+  // If the server explicitly asked clients to reload on reconnect, treat
+  // that as a bundle update so the reconnect flow forces a page reload.
+  if (state.reloadOnReconnect) {
+    state.reloadOnReconnect = false;
+    return true;
+  }
   try {
     const response = await fetch(`/build/game.bundle.js?t=${Date.now()}`, {
       cache: "no-store",
@@ -555,8 +576,14 @@ function forceHardReloadForBundleUpdate() {
   }
 
   state.reloadInProgress = true;
-  const separator = window.location.search ? "&" : "?";
-  window.location.replace(`${window.location.pathname}${window.location.search}${separator}bundleReload=${Date.now()}`);
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("bundleReload", String(Date.now()));
+    window.location.replace(url.toString());
+  } catch (e) {
+    const separator = window.location.search ? "&" : "?";
+    window.location.replace(`${window.location.pathname}${window.location.search}${separator}bundleReload=${Date.now()}`);
+  }
 }
 
 function clearActiveWorldRuntimeState() {
@@ -1811,6 +1838,32 @@ function handleSocketMessage(msg) {
     const messageText = String(msg.message || "").trim();
     if (messageText) {
       appendChatLine("system", messageText);
+    }
+    return;
+  }
+
+  if (msg.type === "server_update") {
+    const messageText = String(msg.message || "Server is updating. Disconnecting...");
+    appendChatLine("system", messageText);
+    state.reloadOnReconnect = true;
+    try {
+      if (state.ws) {
+        state.ws.close();
+      }
+    } catch (e) {
+      // ignore
+    }
+    // Ensure the message is visible to the player in the appropriate drawer.
+    try {
+      if (screens.loading && screens.loading.classList.contains("active")) {
+        setLoadingChatLogOpen(true);
+      } else if (screens.world && screens.world.classList.contains("active")) {
+        setWorldChatLogOpen(true);
+      } else {
+        setChatLogOpen(true);
+      }
+    } catch (e) {
+      // ignore
     }
     return;
   }

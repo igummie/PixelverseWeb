@@ -1385,6 +1385,43 @@ def favicon() -> Response:
     return Response(status_code=204)
 
 
+@app.post("/internal/prepare_restart")
+async def prepare_restart() -> JSONResponse:
+    """Notify all connected clients that the server is updating, then close sockets.
+
+    This endpoint is intended to be called by local administration tooling (start.bat)
+    prior to killing the process so clients receive a graceful notice and will
+    refetch client resources when they reconnect.
+    """
+    payload = {
+        "type": "server_update",
+        "message": "Server is updating. You will be disconnected and should reload when reconnecting.",
+    }
+
+    # Broadcast to all players in every world
+    for world in list(world_cache.values()):
+        try:
+            await broadcast_to_world(world, payload)
+        except Exception:
+            pass
+
+    # Also notify any connected client sockets that aren't yet in a world
+    for client_id, client in list(clients.items()):
+        try:
+            await ws_send(client["ws"], payload)
+        except Exception:
+            pass
+
+    # Close sockets to ensure clients enter reconnect flow promptly.
+    for client_id, client in list(clients.items()):
+        try:
+            await client["ws"].close()
+        except Exception:
+            pass
+
+    return JSONResponse({"status": "ok"})
+
+
 @app.post("/api/auth/register")
 def register(payload: RegisterBody) -> dict[str, Any]:
     username = normalize_name(payload.username)

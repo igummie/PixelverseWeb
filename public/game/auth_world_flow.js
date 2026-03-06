@@ -67,6 +67,16 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     await loadWorldList();
     appendChatLine("system", `welcome ${username}!`);
     showScreen("world");
+
+    // if we have a remembered world (from before reload), auto-enter it at the door
+    try {
+      const last = sessionStorage.getItem("lastWorld");
+      if (last && state.token) {
+        sessionStorage.removeItem("lastWorld");
+        appendChatLine("system", `continuing in world ${last}...`);
+        await enterWorld(last);
+      }
+    } catch {}
   }
 
   async function auth(action) {
@@ -213,6 +223,10 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     const ok = sendWs({ type: "join_world", world: worldName, token: state.token });
     if (!ok) {
       worldError.textContent = "Socket not connected.";
+    } else {
+      try {
+        sessionStorage.setItem("lastWorld", worldName);
+      } catch {}
     }
   }
 
@@ -224,6 +238,9 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     if (leavingWorldName) {
       appendChatLine("system", `You left world ${leavingWorldName}`);
     }
+    try {
+      sessionStorage.removeItem("lastWorld");
+    } catch {}
     clearActiveWorldRuntimeState();
     showScreen("world");
     loadWorldList();
