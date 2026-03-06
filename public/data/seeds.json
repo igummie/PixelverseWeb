@@ -10,7 +10,7 @@
         {
           "ITEM_TYPE": "seed",
           "ITEM_ID": 12,
-          "CHANCE": 0.7,
+          "CHANCE": 0.2,
           "MIN": 1,
           "MAX": 1
         },
@@ -97,7 +97,7 @@
         {
           "ITEM_TYPE": "seed",
           "ITEM_ID": 13,
-          "CHANCE": 0.7,
+          "CHANCE": 0.2,
           "MIN": 1,
           "MAX": 1
         }
@@ -178,7 +178,7 @@
         {
           "ITEM_TYPE": "seed",
           "ITEM_ID": 14,
-          "CHANCE": 0.7,
+          "CHANCE": 0.2,
           "MIN": 1,
           "MAX": 1
         }
