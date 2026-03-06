@@ -201,7 +201,15 @@
       "GEM_CHANCE": 0.08,
       "GEM_AMOUNT": 1,
       "GEM_AMOUNT_VAR": 0,
-      "PLACEABLE": true
+      "SEED_IDS": [
+        {
+          "ID": 14,
+          "CHANCE": 0.3
+        }
+      ],
+      "PLACEABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 0.2
     },
     {
       "ITEM_ID": 10,
