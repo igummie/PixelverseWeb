@@ -2161,9 +2161,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             continue
                         placement_consumes_inventory = True
 
-                    if get_planted_tree_at(world, x, y) is not None:
-                        continue
-
                     if tile not in BLOCKS_BY_ID:
                         continue
 
@@ -2173,6 +2170,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     # Platforms share the foreground layer with solid blocks.
                     # Only explicit BACKGROUND blocks are placed in background.
                     place_in_background = block_type == "BACKGROUND"
+
+                    # Allow placing background blocks behind planted trees,
+                    # but prevent foreground placement on top of trees.
+                    if get_planted_tree_at(world, x, y) is not None and not place_in_background:
+                        continue
 
                     if place_in_background:
                         if world["background"][index] == 0:
