@@ -1339,24 +1339,24 @@
         if (!source || typeof source !== "object") {
           return null;
         }
-
-        const clone = deepClone(source);
-        if (!clone || typeof clone !== "object") {
-          return null;
-        }
-
         const pendingData = state.pendingBlockDataById.get(Number(blockId));
-        if (pendingData && typeof pendingData === "object") {
-          Object.assign(clone, deepClone(pendingData));
+
+        // Pending block data is a full block snapshot, not a patch. Use it as the
+        // source of truth so removed keys (like ANIM_FRAMES) stay removed.
+        const baseBlock = pendingData && typeof pendingData === "object"
+          ? deepClone(pendingData)
+          : deepClone(source);
+        if (!baseBlock || typeof baseBlock !== "object") {
+          return null;
         }
 
         const pendingTexture = state.pendingByBlockId.get(Number(blockId));
         if (pendingTexture && typeof pendingTexture === "object") {
-          clone.ATLAS_ID = pendingTexture.atlasId;
-          clone.ATLAS_TEXTURE = deepClone(pendingTexture.texture);
+          baseBlock.ATLAS_ID = pendingTexture.atlasId;
+          baseBlock.ATLAS_TEXTURE = deepClone(pendingTexture.texture);
         }
 
-        return clone;
+        return baseBlock;
       }
 
       async function syncAtlasAndTileFromBlock(blockId) {

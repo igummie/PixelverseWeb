@@ -70,17 +70,7 @@
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
       "PLACEABLE": true,
-      "BREAKABLE": false,
-      "ANIM_FIRST_SECONDS": 1,
-      "ANIM_FRAMES": [
-        {
-          "x": 48,
-          "y": 0,
-          "w": 16,
-          "h": 16,
-          "seconds": 1
-        }
-      ]
+      "BREAKABLE": false
     },
     {
       "ID": 3,
