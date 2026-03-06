@@ -62,6 +62,21 @@ def normalize_name(value: str | None, fallback: str = "") -> str:
     return (value or fallback).strip().lower()
 
 
+def resolve_item_id(value: Any, *keys: str, default: int = -1) -> int:
+    if isinstance(value, dict):
+        for key in keys:
+            if key not in value:
+                continue
+            try:
+                return int(value.get(key))
+            except Exception:
+                continue
+    try:
+        return int(default)
+    except Exception:
+        return -1
+
+
 def sanitize_asset_filename(filename: str) -> str:
     name = Path(filename or "").name
     if not name:
@@ -138,7 +153,13 @@ def normalize_atlas_texture_rect(value: Any) -> dict[str, int] | None:
 
 def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
     compacted: dict[str, Any] = {}
+    block_item_id = resolve_item_id(block, "ITEM_ID", "ID", default=-1)
+    if block_item_id < 0:
+        block_item_id = 0
+
     key_order = [
+        "ITEM_ID",
+        "ITEM_TYPE",
         "ID",
         "NAME",
         "BLOCK_TYPE",
@@ -171,6 +192,12 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
     normalized_values: dict[str, Any] = {}
     for key, value in block.items():
         next_value = value
+        if key in {"ITEM_ID", "ID"}:
+            next_value = int(block_item_id)
+
+        if key == "ITEM_TYPE":
+            next_value = normalize_item_type(value, "block")
+
         if key == "ATLAS_ID":
             next_value = atlas_id_value
 
@@ -187,6 +214,10 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
             continue
 
         normalized_values[key] = next_value
+
+    normalized_values["ITEM_ID"] = int(block_item_id)
+    normalized_values["ID"] = int(block_item_id)
+    normalized_values["ITEM_TYPE"] = "block"
 
     if texture47_id is not None:
         normalized_values["TEXTURE47_ID"] = texture47_id
@@ -259,12 +290,9 @@ def sanitize_seed_drop_entry(value: Any) -> dict[str, Any] | None:
             return None
         if seed_id < 0:
             return None
-        return {"SEED_ID": seed_id, "CHANCE": 1.0, "COUNT": 1}
+        return {"ITEM_ID": seed_id, "SEED_ID": seed_id, "CHANCE": 1.0, "COUNT": 1}
 
-    try:
-        seed_id = int(value.get("SEED_ID", value.get("ID", value.get("id", -1))))
-    except Exception:
-        seed_id = -1
+    seed_id = resolve_item_id(value, "ITEM_ID", "SEED_ID", "ID", "id", default=-1)
     if seed_id < 0:
         return None
 
@@ -293,6 +321,7 @@ def sanitize_seed_drop_entry(value: Any) -> dict[str, Any] | None:
     max_count = max(min_count, max_count)
 
     output: dict[str, Any] = {
+        "ITEM_ID": seed_id,
         "SEED_ID": seed_id,
         "CHANCE": round(chance, 4),
     }
@@ -390,10 +419,7 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
 
-    try:
-        seed_id = int(value.get("SEED_ID", -1))
-    except Exception:
-        return None
+    seed_id = resolve_item_id(value, "ITEM_ID", "SEED_ID", "ID", default=-1)
     if seed_id < 0:
         return None
 
@@ -451,6 +477,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     tree_stages.sort(key=lambda entry: int(entry.get("STAGE", 0)))
 
     output: dict[str, Any] = {
+        "ITEM_ID": seed_id,
+        "ITEM_TYPE": "seed",
         "SEED_ID": seed_id,
         "NAME": name,
         "GROWTIME": growtime,
@@ -669,10 +697,13 @@ def register_editor_routes(
         payload = load_blocks_payload()
         atlases = payload.get("atlases", [])
         blocks = payload.get("blocks", [])
+        seeds_payload = load_seeds_payload()
+        seeds = seeds_payload.get("seeds", []) if isinstance(seeds_payload, dict) else []
 
         return {
             "atlases": atlases if isinstance(atlases, list) else [],
             "blocks": blocks if isinstance(blocks, list) else [],
+            "seeds": seeds if isinstance(seeds, list) else [],
         }
 
     @app.post("/api/tools/blocks/save-textures")
@@ -702,9 +733,8 @@ def register_editor_routes(
         for index, block in enumerate(blocks):
             if not isinstance(block, dict):
                 continue
-            try:
-                block_id = int(block.get("ID"))
-            except Exception:
+            block_id = resolve_item_id(block, "ITEM_ID", "ID", default=-1)
+            if block_id < 0:
                 continue
             block_index_by_id[block_id] = index
 
@@ -768,9 +798,8 @@ def register_editor_routes(
         for index, block in enumerate(blocks):
             if not isinstance(block, dict):
                 continue
-            try:
-                block_id = int(block.get("ID"))
-            except Exception:
+            block_id = resolve_item_id(block, "ITEM_ID", "ID", default=-1)
+            if block_id < 0:
                 continue
             block_index_by_id[block_id] = index
 
@@ -780,11 +809,13 @@ def register_editor_routes(
                 raise HTTPException(status_code=400, detail="Each block must be an object")
 
             try:
-                block_id = int(edited_block.get("ID"))
+                block_id = int(edited_block.get("ITEM_ID", edited_block.get("ID")))
             except Exception:
                 raise HTTPException(status_code=400, detail="Edited block is missing a valid ID")
 
+            edited_block["ITEM_ID"] = block_id
             edited_block["ID"] = block_id
+            edited_block["ITEM_TYPE"] = "block"
 
             compacted = compact_block_for_storage(edited_block)
             if block_id not in block_index_by_id:
@@ -838,7 +869,7 @@ def register_editor_routes(
                 raise HTTPException(status_code=400, detail="Each block must be an object")
 
             try:
-                block_id = int(block.get("ID"))
+                block_id = int(block.get("ITEM_ID", block.get("ID")))
             except Exception:
                 raise HTTPException(status_code=400, detail="Each block must contain a valid integer ID")
 
@@ -850,7 +881,9 @@ def register_editor_routes(
             seen_block_ids.add(block_id)
 
             next_block = dict(block)
+            next_block["ITEM_ID"] = block_id
             next_block["ID"] = block_id
+            next_block["ITEM_TYPE"] = "block"
             blocks.append(compact_block_for_storage(next_block))
 
         output = {
@@ -919,13 +952,13 @@ def register_editor_routes(
             if seed is None:
                 raise HTTPException(status_code=400, detail="Each seed must include a valid non-negative SEED_ID")
 
-            seed_id = int(seed["SEED_ID"])
+            seed_id = int(seed.get("ITEM_ID", seed.get("SEED_ID", -1)))
             if seed_id in seen_ids:
                 raise HTTPException(status_code=400, detail=f"Duplicate seed id: {seed_id}")
             seen_ids.add(seed_id)
             sanitized_seeds.append(seed)
 
-        sanitized_seeds.sort(key=lambda entry: int(entry.get("SEED_ID", 0)))
+        sanitized_seeds.sort(key=lambda entry: int(entry.get("ITEM_ID", entry.get("SEED_ID", 0))))
         output["seeds"] = sanitized_seeds
 
         if isinstance(payload.atlases, list):

@@ -107,26 +107,37 @@ def load_seeds_payload() -> dict[str, Any]:
     return output
 
 
-def get_seed_definition(seed_id: int) -> dict[str, Any] | None:
-    if seed_id < 0:
+def get_item_definition(item_id: int, item_type: str = "seed") -> dict[str, Any] | None:
+    """Return a definition for *item_id* of *item_type*.
+
+    Currently only "seed" and "block" are supported; seeds are looked up
+    by scanning the seeds payload (respecting both ITEM_ID and legacy
+    SEED_ID), while blocks are retrieved from the in-memory catalog.
+    """
+    if item_id < 0:
+        return None
+    itype = normalize_item_type(item_type, "seed")
+
+    if itype == "seed":
+        payload = load_seeds_payload()
+        seeds = payload.get("seeds", []) if isinstance(payload, dict) else []
+        if not isinstance(seeds, list):
+            return None
+
+        for seed in seeds:
+            if not isinstance(seed, dict):
+                continue
+            try:
+                current_id = int(seed.get("ITEM_ID", seed.get("SEED_ID", -1)))
+            except Exception:
+                current_id = -1
+            if current_id == item_id:
+                return seed
         return None
 
-    payload = load_seeds_payload()
-    seeds = payload.get("seeds", []) if isinstance(payload, dict) else []
-    if not isinstance(seeds, list):
-        return None
-
-    for seed in seeds:
-        if not isinstance(seed, dict):
-            continue
-
-        try:
-            current_id = int(seed.get("SEED_ID", -1))
-        except Exception:
-            current_id = -1
-
-        if current_id == seed_id:
-            return seed
+    if itype == "block":
+        # BLOCKS_BY_ID is maintained during catalog sync
+        return BLOCKS_BY_ID.get(item_id)
 
     return None
 
@@ -210,7 +221,7 @@ def get_block_seed_drop_ids(tile_id: int) -> list[int]:
                     chance = 0.2
 
                 try:
-                    seed_id = int(entry.get("ID", entry.get("SEED_ID", entry.get("id", -1))))
+                    seed_id = int(entry.get("ITEM_ID", entry.get("ID", entry.get("SEED_ID", entry.get("id", -1)))))
                 except Exception:
                     seed_id = -1
             else:
@@ -245,7 +256,7 @@ def get_block_seed_drop_ids(tile_id: int) -> list[int]:
                 continue
 
             try:
-                seed_id = int(entry.get("SEED_ID", -1))
+                seed_id = int(entry.get("ITEM_ID", entry.get("SEED_ID", -1)))
             except Exception:
                 seed_id = -1
 
@@ -266,7 +277,7 @@ def get_block_seed_drop_ids(tile_id: int) -> list[int]:
         return []
 
     try:
-        seed_id = int(block.get("SEED_DROP_ID", -1))
+        seed_id = int(block.get("SEED_DROP_ID", block.get("ITEM_DROP_ID", -1)))
     except Exception:
         seed_id = -1
 
@@ -287,7 +298,7 @@ def _clamp_chance(raw_value: Any, default: float = 0.0) -> float:
 def _resolve_drop_entry_seed_id(raw_entry: Any) -> int:
     try:
         if isinstance(raw_entry, dict):
-            return int(raw_entry.get("ID", raw_entry.get("SEED_ID", raw_entry.get("id", -1))))
+            return int(raw_entry.get("ITEM_ID", raw_entry.get("ID", raw_entry.get("SEED_ID", raw_entry.get("id", -1)))))
         return int(raw_entry)
     except Exception:
         return -1
@@ -376,7 +387,7 @@ def get_tree_item_drops(tree: dict[str, Any], now_ms: int) -> list[dict[str, Any
     if seed_id < 0:
         return []
 
-    seed = get_seed_definition(seed_id)
+    seed = get_item_definition(seed_id, "seed")
     if not isinstance(seed, dict):
         return []
 
@@ -506,7 +517,7 @@ def place_planted_tree(world: dict[str, Any], x: int, y: int, seed_id: int, plan
     if seed_id < 0:
         return None
 
-    if get_seed_definition(seed_id) is None:
+    if get_item_definition(seed_id, "seed") is None:
         return None
 
     tree = {
@@ -580,6 +591,7 @@ def serialize_planted_trees(world: dict[str, Any]) -> list[dict[str, Any]]:
                     "id": str(tree.get("id", "")),
                     "x": int(tree.get("x", 0)),
                     "y": int(tree.get("y", 0)),
+                    "itemId": int(tree.get("seed_id", -1)),
                     "seedId": int(tree.get("seed_id", -1)),
                     "plantedAtMs": int(tree.get("planted_at_ms", 0)),
                 }
@@ -695,7 +707,7 @@ def parse_world_planted_trees(raw: Any, width: int, height: int) -> dict[str, di
         try:
             x = int(entry.get("x", -1))
             y = int(entry.get("y", -1))
-            seed_id = int(entry.get("seedId", entry.get("seed_id", -1)))
+            seed_id = int(entry.get("itemId", entry.get("item_id", entry.get("seedId", entry.get("seed_id", -1)))))
             planted_at_ms = int(entry.get("plantedAtMs", entry.get("planted_at_ms", 0)))
         except Exception:
             continue
@@ -1490,7 +1502,9 @@ def bootstrap_payload(authorization: str | None = Header(default=None)) -> dict[
     return JSONResponse(
         payload,
         headers={
-            "Cache-Control": "private, max-age=3600",
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
         },
     )
 
@@ -1923,7 +1937,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 index = y * world["width"] + x
                 action = str(msg.get("action", "place")).lower()
+                player = world["players"].get(client_id)
+                if not isinstance(player, dict):
+                    continue
+                creative_action = bool(msg.get("creative", False))
                 changed_tiles: set[tuple[int, int]] = set()
+                placement_consumes_inventory = False
+                placement_inventory: dict[str, int] | None = None
+                placement_inventory_key = ""
+                placement_inventory_count = 0
 
                 updated = False
                 target_layer = "foreground"
@@ -1940,12 +1962,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             if tree_item_id < 0:
                                 continue
 
-                            tree_seed_drop = spawn_item_drop(
+                            tree_seed_drop = spawn_item_drop_nearby(
                                 world,
                                 x,
                                 y,
                                 tree_item_id,
                                 item_type=tree_item_type,
+                                allow_tile_stack=True,
                             )
                             if tree_seed_drop is not None:
                                 await broadcast_to_world(
@@ -2021,7 +2044,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                         seed_drop_ids = get_block_seed_drop_ids(broken_tile_id)
                         for seed_drop_id in seed_drop_ids:
-                            seed_drop = spawn_item_drop(
+                            seed_drop = spawn_item_drop_nearby(
                                 world,
                                 x,
                                 y,
@@ -2045,7 +2068,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                         self_drop_ids = get_block_self_drop_seed_ids(broken_tile_id)
                         for self_drop_id in self_drop_ids:
-                            self_drop = spawn_item_drop(
+                            self_drop = spawn_item_drop_nearby(
                                 world,
                                 x,
                                 y,
@@ -2083,6 +2106,23 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     tile = max(0, tile)
                     if tile <= 0:
                         continue
+
+                    if not creative_action:
+                        place_item_type = normalize_item_type(msg.get("itemType", msg.get("item_type", "block")), "block")
+                        try:
+                            place_item_id = int(msg.get("itemId", msg.get("item_id", tile)))
+                        except Exception:
+                            place_item_id = -1
+
+                        if place_item_type != "block" or place_item_id != tile:
+                            continue
+
+                        placement_inventory = normalize_inventory(player.get("inventory", {}))
+                        placement_inventory_key = make_inventory_key("block", tile)
+                        placement_inventory_count = int(placement_inventory.get(placement_inventory_key, 0))
+                        if placement_inventory_count <= 0:
+                            continue
+                        placement_consumes_inventory = True
 
                     if get_planted_tree_at(world, x, y) is not None:
                         continue
@@ -2139,6 +2179,27 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if not updated:
                     continue
 
+                if placement_consumes_inventory and placement_inventory is not None and placement_inventory_key:
+                    next_block_count = placement_inventory_count - 1
+                    if next_block_count <= 0:
+                        placement_inventory.pop(placement_inventory_key, None)
+                    else:
+                        placement_inventory[placement_inventory_key] = next_block_count
+                    player["inventory"] = placement_inventory
+
+                    if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
+                        await asyncio.to_thread(set_user_inventory, int(client["user_id"]), placement_inventory)
+                    elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
+                        await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), placement_inventory)
+
+                    await ws_send(
+                        websocket,
+                        {
+                            "type": "inventory_update",
+                            "inventory": inventory_to_client_payload(placement_inventory),
+                        },
+                    )
+
                 if not changed_tiles:
                     changed_tiles.add((x, y))
 
@@ -2175,7 +2236,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 try:
                     x = int(msg.get("x"))
                     y = int(msg.get("y"))
-                    seed_id = int(msg.get("seedId", msg.get("seed_id", -1)))
+                    seed_id = int(msg.get("itemId", msg.get("item_id", msg.get("seedId", msg.get("seed_id", -1)))))
                 except Exception:
                     continue
 
@@ -2185,18 +2246,23 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if seed_id < 0:
                     continue
 
-                if get_seed_definition(seed_id) is None:
+                if get_item_definition(seed_id, "seed") is None:
                     continue
 
                 player = world["players"].get(client_id)
                 if not isinstance(player, dict):
                     continue
+                creative_planting = bool(msg.get("creative", False))
 
-                inventory = normalize_inventory(player.get("inventory", {}))
-                seed_inventory_key = make_inventory_key("seed", seed_id)
-                current_seed_count = int(inventory.get(seed_inventory_key, 0))
-                if current_seed_count <= 0:
-                    continue
+                inventory: dict[str, int] | None = None
+                seed_inventory_key = ""
+                current_seed_count = 0
+                if not creative_planting:
+                    inventory = normalize_inventory(player.get("inventory", {}))
+                    seed_inventory_key = make_inventory_key("seed", seed_id)
+                    current_seed_count = int(inventory.get(seed_inventory_key, 0))
+                    if current_seed_count <= 0:
+                        continue
 
                 index = y * world["width"] + x
                 # Planting must happen in an empty foreground tile (background is allowed).
@@ -2230,26 +2296,28 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if planted_tree is None:
                     continue
 
-                next_seed_count = current_seed_count - 1
-                if next_seed_count <= 0:
-                    inventory.pop(seed_inventory_key, None)
-                else:
-                    inventory[seed_inventory_key] = next_seed_count
-                player["inventory"] = inventory
+                if not creative_planting and inventory is not None and seed_inventory_key:
+                    next_seed_count = current_seed_count - 1
+                    if next_seed_count <= 0:
+                        inventory.pop(seed_inventory_key, None)
+                    else:
+                        inventory[seed_inventory_key] = next_seed_count
+                    player["inventory"] = inventory
 
-                if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
-                    await asyncio.to_thread(set_user_inventory, int(client["user_id"]), inventory)
-                elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
-                    await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
+                    if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
+                        await asyncio.to_thread(set_user_inventory, int(client["user_id"]), inventory)
+                    elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
+                        await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
 
                 await schedule_world_save(world["name"])
-                await ws_send(
-                    websocket,
-                    {
-                        "type": "inventory_update",
-                        "inventory": inventory_to_client_payload(inventory),
-                    },
-                )
+                if not creative_planting and inventory is not None:
+                    await ws_send(
+                        websocket,
+                        {
+                            "type": "inventory_update",
+                            "inventory": inventory_to_client_payload(inventory),
+                        },
+                    )
                 await broadcast_to_world(
                     world,
                     {
@@ -2258,6 +2326,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "id": str(planted_tree.get("id", "")),
                             "x": int(planted_tree.get("x", x)),
                             "y": int(planted_tree.get("y", y)),
+                            "itemId": int(planted_tree.get("seed_id", seed_id)),
                             "seedId": int(planted_tree.get("seed_id", seed_id)),
                             "plantedAtMs": int(planted_tree.get("planted_at_ms", 0)),
                         },

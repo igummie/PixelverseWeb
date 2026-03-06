@@ -1,0 +1,324 @@
+:root {
+  --bg-deep: #0e1222;
+  --bg-mid: #161f3a;
+  --panel: rgba(13, 20, 40, 0.85);
+  --panel-border: rgba(162, 179, 255, 0.25);
+  --ink: #edf2ff;
+  --ink-soft: #b4c1ec;
+  --accent: #4f7cff;
+  --accent-2: #34d399;
+  --warn: #fecaca;
+  --warn-bg: rgba(127, 29, 29, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Trebuchet MS", "Segoe Print", "Lucida Sans Unicode", sans-serif;
+  color: var(--ink);
+  min-height: 100vh;
+  padding: 14px;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(79, 124, 255, 0.28), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(52, 211, 153, 0.2), transparent 62%),
+    linear-gradient(160deg, var(--bg-deep) 0%, var(--bg-mid) 100%);
+}
+
+.editorSwitcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.switchBtn {
+  text-decoration: none;
+  color: #d7e4ff;
+  border: 1px solid rgba(162, 179, 255, 0.35);
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: rgba(18, 28, 54, 0.75);
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.switchBtn:hover {
+  transform: translateY(-1px);
+  background: rgba(34, 50, 88, 0.85);
+}
+
+.switchBtn.active {
+  background: linear-gradient(90deg, #2f5cf0, #3f83ff);
+  color: #f8fbff;
+  border-color: #6997ff;
+}
+
+.panel {
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 10px 28px rgba(4, 9, 24, 0.34);
+}
+
+.hero {
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f2f6ff;
+}
+
+.subtitle {
+  margin-top: 4px;
+  margin-bottom: 10px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.warning {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 10px;
+  padding: 9px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 1px solid rgba(151, 181, 255, 0.45);
+  border-radius: 10px;
+  padding: 9px 13px;
+  background: linear-gradient(180deg, #25386d, #1c2b56);
+  color: #edf3ff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover {
+  background: linear-gradient(180deg, #2f4a8f, #23356a);
+}
+
+.status {
+  margin-top: 8px;
+  min-height: 20px;
+  color: #9ec5ff;
+  font-size: 12px;
+}
+
+.status.error {
+  color: #fecaca;
+}
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.itemCard {
+  border: 1px solid rgba(136, 160, 233, 0.35);
+  background: linear-gradient(180deg, rgba(31, 44, 83, 0.95), rgba(20, 30, 59, 0.95));
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  transition: transform 130ms ease, border-color 130ms ease;
+}
+
+.itemCard:hover {
+  transform: translateY(-2px);
+  border-color: #8bb0ff;
+}
+
+.itemCard.seed {
+  background: linear-gradient(180deg, rgba(20, 60, 52, 0.9), rgba(15, 45, 40, 0.9));
+}
+
+.itemPreview {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  border: 1px solid rgba(155, 179, 255, 0.45);
+  background: #111827;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+.itemMeta {
+  min-width: 0;
+}
+
+.pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  color: #c8dbff;
+  border: 1px solid rgba(160, 184, 255, 0.45);
+  background: rgba(29, 51, 100, 0.7);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-bottom: 6px;
+}
+
+.pill.seed {
+  color: #c7f8e7;
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(16, 68, 55, 0.75);
+}
+
+.itemName {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f2f6ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemIds {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #b8c8ef;
+}
+
+.itemIds.changed {
+  color: #f9d67a;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 18, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  z-index: 60;
+}
+
+.modalBackdrop[hidden] {
+  display: none !important;
+}
+
+.buttonLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(151, 181, 255, 0.45);
+  border-radius: 10px;
+  padding: 9px 13px;
+  background: linear-gradient(180deg, #25386d, #1c2b56);
+  color: #edf3ff;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.buttonLink:hover {
+  background: linear-gradient(180deg, #2f4a8f, #23356a);
+}
+
+.modalCard {
+  width: min(560px, 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(154, 178, 255, 0.5);
+  background: linear-gradient(180deg, #152143, #111b37);
+  padding: 12px;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modalBody {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.modalPreview {
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  border: 1px solid rgba(158, 185, 255, 0.45);
+  background: #111827;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+.modalFields {
+  flex: 1;
+  min-width: 0;
+}
+
+.fieldLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: #c0cfef;
+  font-size: 13px;
+}
+
+.fieldLine strong {
+  color: #f1f6ff;
+}
+
+.fieldStack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #b6c7ec;
+}
+
+input[type="number"] {
+  width: 100%;
+  border: 1px solid rgba(155, 182, 255, 0.4);
+  border-radius: 8px;
+  background: #10193a;
+  color: #e9f0ff;
+  padding: 7px;
+}
+
+.tiny {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #a6b7de;
+}
+
+.tiny.error {
+  color: #fecaca;
+}
+
+@media (max-width: 640px) {
+  .cardsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .modalBody {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -6,6 +6,8 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     debugInfo,
     debugGridToggle,
     debugHitboxesToggle,
+    debugCreativeToggle,
+    creativeHudControls,
     gameTopbar,
     chatDrawer,
     chatInputPanel,
@@ -47,6 +49,14 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     if (debugHitboxesToggle) {
       debugHitboxesToggle.checked = !!state.debugHitboxesEnabled;
     }
+    if (debugCreativeToggle) {
+      debugCreativeToggle.checked = !!state.creativeEnabled;
+    }
+    if (Array.isArray(creativeHudControls)) {
+      for (const control of creativeHudControls) {
+        control?.classList.toggle("hidden", !state.creativeEnabled);
+      }
+    }
   }
 
   function updateDebugInfo(force = false) {
@@ -73,6 +83,9 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
       hoveredTileX >= 0 && hoveredTileX < worldW && hoveredTileY >= 0 && hoveredTileY < worldH;
     const hoverTileText = hoverTileInBounds ? `${hoveredTileX}, ${hoveredTileY}` : "out";
     const pingText = Number.isFinite(state.debugPingMs) ? `${Math.round(state.debugPingMs)}ms` : "--";
+    const gemDropCount = Number(state.gemDrops?.size || 0);
+    const itemDropCount = Number(state.seedDrops?.size || 0);
+    const totalDropCount = gemDropCount + itemDropCount;
 
     debugInfo.textContent = [
       `world: ${worldName} (${worldW}x${worldH})`,
@@ -81,8 +94,8 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
       `vel: ${state.velocity.x.toFixed(3)}, ${state.velocity.y.toFixed(3)}  onGround: ${state.onGround}`,
       `camera: ${state.camera.x.toFixed(2)}, ${state.camera.y.toFixed(2)}  zoom: ${state.camera.zoom.toFixed(2)}x`,
       `mouse(tile): ${hoverTileText}`,
-      `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}  hitboxes: ${state.debugHitboxesEnabled ? "on" : "off"}`,
-      `drops: ${state.gemDrops.size}  damageTiles: ${state.tileDamage.size}`,
+      `fps: ${state.debugFps.toFixed(1)}  ping: ${pingText}  grid: ${state.debugGridEnabled ? "on" : "off"}  hitboxes: ${state.debugHitboxesEnabled ? "on" : "off"}  creative: ${state.creativeEnabled ? "on" : "off"}`,
+      `drops: ${totalDropCount} (gems ${gemDropCount}, items ${itemDropCount})  damageTiles: ${state.tileDamage.size}`,
     ].join("\n");
   }
 

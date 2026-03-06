@@ -91,7 +91,9 @@ const worldError = document.getElementById("worldError");
 const gameStatus = document.getElementById("gameStatus");
 const gemCount = document.getElementById("gemCount");
 const blockSelect = document.getElementById("blockSelect");
-const seedSelectHud = document.getElementById("seedSelectHud");
+const itemSelectHud = document.getElementById("itemSelectHud");
+const blockHudControl = document.getElementById("blockHudControl");
+const seedHudControl = document.getElementById("seedHudControl"); // remains named for CSS
 const blockTypeInfo = document.getElementById("blockTypeInfo");
 const zoomOutBtn = document.getElementById("zoomOutBtn");
 const zoomInBtn = document.getElementById("zoomInBtn");
@@ -119,6 +121,7 @@ const debugOverlay = document.getElementById("debugOverlay");
 const debugInfo = document.getElementById("debugInfo");
 const debugGridToggle = document.getElementById("debugGridToggle");
 const debugHitboxesToggle = document.getElementById("debugHitboxesToggle");
+const debugCreativeToggle = document.getElementById("debugCreativeToggle");
 const debugPingToolsToggle = document.getElementById("debugPingToolsToggle");
 const debugNetSimPanel = document.getElementById("debugNetSimPanel");
 const debugNetSimStats = document.getElementById("debugNetSimStats");
@@ -166,9 +169,10 @@ const state = {
   seedDropSpriteCache: new Map(),
   treeSpriteCache: new Map(),
   texture47: new Map(),
-  selectedBlockId: 1,
-  selectedSeedId: -1,
+  // unified selection; we used to track block vs seed id separately
+  selectedItemId: -1,
   selectedItemType: "seed",
+  selectedMissingSinceMs: 0,
   velocity: { x: 0, y: 0 },
   collider: { width: 0.72, height: 0.92 },
   onGround: false,
@@ -208,6 +212,8 @@ const state = {
   debugEnabled: false,
   debugGridEnabled: false,
   debugHitboxesEnabled: false,
+  creativeEnabled: false,
+  creativePlaceType: "block",
   debugFps: 0,
   debugPingMs: null,
   netSimPingMs: 0,
@@ -227,6 +233,8 @@ const state = {
     attempt: 0,
     timerId: null,
   },
+  bundleFingerprint: "",
+  reloadInProgress: false,
 };
 
 const worldDrops = createWorldDropsController({
@@ -278,7 +286,7 @@ const assetsLoader = createAssetsLoaderController({
     DEFAULT_TEXTURE47_VALID_MASKS,
   },
   elements: {
-    seedSelectHud,
+    itemSelectHud,
     blockSelect,
     blockTypeInfo,
   },
@@ -336,6 +344,7 @@ const authWorldFlow = createAuthWorldFlowController({
     renderChatLog,
     showScreen,
     setLoadingChatLogOpen,
+    repullGameBundle,
     loadBlockDefinitions: assetsLoader.loadBlockDefinitions,
     requestJson,
     saveAuthSession,
@@ -362,6 +371,8 @@ const hud = createHudController({
     debugInfo,
     debugGridToggle,
     debugHitboxesToggle,
+    debugCreativeToggle,
+    creativeHudControls: [blockHudControl, seedHudControl, blockTypeInfo],
     gameTopbar,
     chatDrawer,
     chatInputPanel,
@@ -401,6 +412,7 @@ const chatDebug = createChatDebugController({
     chatInput,
     debugGridToggle,
     debugHitboxesToggle,
+    debugCreativeToggle,
     debugPingToolsToggle,
     debugNetSimPanel,
     debugNetSimStats,
@@ -510,10 +522,41 @@ function resetReconnectState() {
 
 async function repullGameBundle() {
   try {
-    await fetch(`/build/game.bundle.js?t=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(`/build/game.bundle.js?t=${Date.now()}`, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
+    });
+
+    const fingerprint = [
+      response.headers.get("etag") || "",
+      response.headers.get("last-modified") || "",
+      response.headers.get("content-length") || "",
+    ].join("|");
+
+    const hadFingerprint = Boolean(state.bundleFingerprint);
+    const changed = hadFingerprint && fingerprint && state.bundleFingerprint !== fingerprint;
+    if (fingerprint) {
+      state.bundleFingerprint = fingerprint;
+    }
+
+    return changed;
   } catch {
     // Ignore bundle prefetch failures during reconnect.
+    return false;
   }
+}
+
+function forceHardReloadForBundleUpdate() {
+  if (state.reloadInProgress) {
+    return;
+  }
+
+  state.reloadInProgress = true;
+  const separator = window.location.search ? "&" : "?";
+  window.location.replace(`${window.location.pathname}${window.location.search}${separator}bundleReload=${Date.now()}`);
 }
 
 function clearActiveWorldRuntimeState() {
@@ -527,7 +570,7 @@ function clearActiveWorldRuntimeState() {
   state.gems = 0;
   updateGemUi();
   state.inventorySeeds.clear();
-  state.selectedSeedId = -1;
+  state.selectedItemId = -1;
   state.selectedItemType = "seed";
   renderInventoryDrawer();
   state.gemDrops.clear();
@@ -557,7 +600,12 @@ async function performReconnectAttempt() {
     return false;
   }
 
-  await repullGameBundle();
+  const bundleUpdated = await repullGameBundle();
+  if (bundleUpdated) {
+    appendChatLine("system", "New client update detected. Reloading...");
+    forceHardReloadForBundleUpdate();
+    return true;
+  }
 
   try {
     await connectSocket();
@@ -656,7 +704,31 @@ const inputController = createInputController({
     sendWs,
     pauseMenu,
     getChatInputValue: () => chatInput?.value || "",
-    getSelectedSeedId: () => (state.selectedItemType === "seed" ? state.selectedSeedId : -1),
+    getSelectedInventoryItem: () => {
+      const itemId = Number(state.selectedItemId);
+      if (!Number.isFinite(itemId) || itemId < 0) {
+        return null;
+      }
+      return {
+        itemType: normalizeItemType(state.selectedItemType || "seed", "seed"),
+        itemId: Math.floor(itemId),
+      };
+    },
+    getCreativePlacement: () => {
+      if (!state.creativeEnabled) {
+        return null;
+      }
+
+      const itemId = Number(state.selectedItemId);
+      if (!Number.isFinite(itemId) || itemId < 0) {
+        return null;
+      }
+      return {
+        itemType: normalizeItemType(state.selectedItemType || "seed", "seed"),
+        itemId: Math.floor(itemId),
+      };
+    },
+    isCreativeEnabled: () => !!state.creativeEnabled,
     dropSelectedInventorySeed,
   },
 });
@@ -1051,6 +1123,42 @@ async function loadBlockDefinitions(onAssetProgress = null) {
   await assetsLoader.loadBlockDefinitions(onAssetProgress);
 }
 
+let definitionsReloadPromise = null;
+let lastDefinitionsReloadAtMs = 0;
+
+function maybeRefreshDefinitionsForItem(itemId, itemType) {
+  const normalizedItemId = Math.floor(Number(itemId));
+  if (!Number.isFinite(normalizedItemId) || normalizedItemId < 0) {
+    return;
+  }
+
+  const normalizedItemType = normalizeItemType(itemType, "seed");
+  if (normalizedItemType === "seed") {
+    if (state.seedDefs.has(normalizedItemId)) {
+      return;
+    }
+  } else if (normalizedItemType === "block") {
+    if (state.blockDefs.has(normalizedItemId)) {
+      return;
+    }
+  } else {
+    return;
+  }
+
+  // Throttle reloads so repeated drops with unknown IDs do not spam bootstrap requests.
+  const now = Date.now();
+  if (definitionsReloadPromise || now - lastDefinitionsReloadAtMs < 1200) {
+    return;
+  }
+
+  lastDefinitionsReloadAtMs = now;
+  definitionsReloadPromise = loadBlockDefinitions().catch(() => {
+    // Keep gameplay flowing; next drop/update can retry if this refresh fails.
+  }).finally(() => {
+    definitionsReloadPromise = null;
+  });
+}
+
 function getSeedDropSprite(seedId) {
   return assetsLoader.getSeedDropSprite(seedId);
 }
@@ -1148,47 +1256,60 @@ function getInventoryEntriesSorted() {
 }
 
 function getSelectedInventoryKey() {
-  if (!Number.isFinite(Number(state.selectedSeedId)) || Number(state.selectedSeedId) < 0) {
+  if (!Number.isFinite(Number(state.selectedItemId)) || state.selectedItemId < 0) {
     return "";
   }
   const type = normalizeItemType(state.selectedItemType || "seed", "seed");
-  return `${type}:${Math.floor(Number(state.selectedSeedId))}`;
+  return `${type}:${Math.floor(Number(state.selectedItemId))}`;
 }
 
-function setSelectedSeed(seedId, itemType = "seed") {
-  const numericSeedId = Number(seedId);
+function setSelectedItem(itemId, itemType = "seed") {
+  const numeric = Number(itemId);
   const normalizedType = normalizeItemType(itemType, "seed");
-  if (!Number.isFinite(numericSeedId) || numericSeedId < 0) {
-    state.selectedSeedId = -1;
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    state.selectedItemId = -1;
     state.selectedItemType = "seed";
-    if (seedSelectHud) {
-      seedSelectHud.value = "";
+    state.selectedMissingSinceMs = 0;
+    if (itemSelectHud) {
+      itemSelectHud.value = "";
     }
     renderInventoryDrawer();
     return;
   }
 
-  state.selectedSeedId = Math.floor(numericSeedId);
+  state.selectedItemId = Math.floor(numeric);
   state.selectedItemType = normalizedType;
-  if (seedSelectHud) {
-    seedSelectHud.value = normalizedType === "seed" ? String(state.selectedSeedId) : "";
+  state.selectedMissingSinceMs = 0;
+  if (itemSelectHud) {
+    itemSelectHud.value = normalizedType === "seed" ? String(state.selectedItemId) : "";
   }
   renderInventoryDrawer();
 }
 
-function ensureSelectedSeedStillValid() {
+function ensureSelectedItemStillValid() {
+  if (state.selectedItemId < 0) {
+    state.selectedMissingSinceMs = 0;
+    return;
+  }
+
   const selectedKey = getSelectedInventoryKey();
   if (selectedKey && Number(state.inventorySeeds.get(selectedKey) || 0) > 0) {
+    state.selectedMissingSinceMs = 0;
     return;
   }
 
-  const first = getInventoryEntriesSorted()[0];
-  if (!first) {
-    setSelectedSeed(-1);
+  const now = Date.now();
+  if (!state.selectedMissingSinceMs) {
+    state.selectedMissingSinceMs = now;
     return;
   }
 
-  setSelectedSeed(first.itemId, first.itemType);
+  if (now - state.selectedMissingSinceMs < 450) {
+    return;
+  }
+
+  // Do not auto-switch to a different item when the current one is depleted.
+  setSelectedItem(-1);
 }
 
 function renderInventoryDrawer() {
@@ -1239,18 +1360,18 @@ function renderInventoryDrawer() {
       : getItemDisplayName(entry.itemId, entry.itemType);
     slot.title = `${itemName} x${entry.count}`;
     slot.addEventListener("click", () => {
-      setSelectedSeed(entry.itemId, entry.itemType);
+      setSelectedItem(entry.itemId, entry.itemType);
     });
     inventoryGrid.appendChild(slot);
   }
 
   if (inventorySelectedInfo) {
-    if (state.selectedSeedId < 0) {
+    if (state.selectedItemId < 0) {
       inventorySelectedInfo.textContent = "Selected: none";
     } else {
       const selectedKey = getSelectedInventoryKey();
       const selectedCount = Number(state.inventorySeeds.get(selectedKey) || 0);
-      const selectedItemName = getItemDisplayName(state.selectedSeedId, state.selectedItemType);
+      const selectedItemName = getItemDisplayName(state.selectedItemId, state.selectedItemType);
       inventorySelectedInfo.textContent = `Selected: ${selectedItemName} x${Math.max(0, selectedCount)}`;
     }
   }
@@ -1261,7 +1382,7 @@ function dropSelectedInventorySeed(count = 1) {
     return;
   }
 
-  const itemId = Number(state.selectedSeedId);
+  const itemId = Number(state.selectedItemId);
   if (!Number.isFinite(itemId) || itemId < 0) {
     return;
   }
@@ -1277,7 +1398,7 @@ function dropSelectedInventorySeed(count = 1) {
 
 function applyInventorySnapshot(payload) {
   state.inventorySeeds = normalizeInventoryPayload(payload);
-  ensureSelectedSeedStillValid();
+  ensureSelectedItemStillValid();
   renderInventoryDrawer();
 }
 
@@ -1724,6 +1845,10 @@ function handleSocketMessage(msg) {
   }
 
   if (msg.type === "seed_drop_spawn") {
+    const rawDrop = msg.drop || {};
+    const dropItemId = Number(rawDrop.itemId ?? rawDrop.item_id ?? rawDrop.seedId ?? rawDrop.seed_id);
+    const dropItemType = rawDrop.itemType ?? rawDrop.item_type ?? "seed";
+    maybeRefreshDefinitionsForItem(dropItemId, dropItemType);
     upsertSeedDrop(msg.drop);
     return;
   }
@@ -1751,6 +1876,16 @@ function handleSocketMessage(msg) {
   }
 
   if (msg.type === "inventory_update") {
+    const incomingItems = Array.isArray(msg.inventory) ? msg.inventory : [];
+    for (const entry of incomingItems) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+
+      const itemId = Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id);
+      const itemType = entry.itemType ?? entry.item_type ?? "seed";
+      maybeRefreshDefinitionsForItem(itemId, itemType);
+    }
     applyInventorySnapshot(msg.inventory || []);
     return;
   }
@@ -1795,17 +1930,23 @@ joinWorldBtn.addEventListener("click", () => enterWorld());
 refreshWorldsBtn.addEventListener("click", loadWorldList);
 logoutBtn.addEventListener("click", logout);
 blockSelect.addEventListener("change", () => {
-  const nextBlockId = Number(blockSelect.value);
-  if (!Number.isNaN(nextBlockId)) {
-    state.selectedBlockId = nextBlockId;
-    const block = state.blockDefs.get(nextBlockId);
+  const nextId = Number(blockSelect.value);
+  if (!Number.isNaN(nextId)) {
+    setSelectedItem(nextId, "block");
+    if (state.creativeEnabled) {
+      state.creativePlaceType = "block";
+    }
+    const block = state.blockDefs.get(nextId);
     blockTypeInfo.textContent = block?.BLOCK_TYPE || "UNKNOWN";
   }
 });
 
-seedSelectHud?.addEventListener("change", () => {
-  const nextSeedId = Number(seedSelectHud.value);
-  setSelectedSeed(Number.isFinite(nextSeedId) ? Math.floor(nextSeedId) : -1, "seed");
+itemSelectHud?.addEventListener("change", () => {
+  const nextId = Number(itemSelectHud.value);
+  if (state.creativeEnabled) {
+    state.creativePlaceType = "seed";
+  }
+  setSelectedItem(Number.isFinite(nextId) ? Math.floor(nextId) : -1, "seed");
 });
 
 passwordInput.addEventListener("keydown", (event) => {

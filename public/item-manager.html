@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixelverse Item Manager</title>
+    <link rel="stylesheet" href="/styles/item-manager.css" />
+  </head>
+  <body>
+    <div class="editorSwitcher" aria-label="Editor Switcher">
+      <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
+      <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
+      <a class="switchBtn" href="/seed-editor.html">Seed Editor</a>
+      <a class="switchBtn active" href="/item-manager.html">Item Manager</a>
+    </div>
+
+    <div class="hero panel">
+      <div class="title">Global Item Manager</div>
+      <div class="subtitle">Manage ITEM_ID across all item types (currently blocks + seeds).</div>
+      <div class="warning">
+        This remaps references inside blocks.json and seeds.json (drop tables, fruit drops, tree drops)
+        and will remove legacy "ID"/"SEED_ID" fields in favor of a single <code>ITEM_ID</code>.
+        World and inventory save data are not migrated here.
+      </div>
+
+      <div class="row">
+        <button id="reloadBtn" type="button">Reload</button>
+        <button id="autoReindexBtn" type="button">Auto Reindex</button>
+        <button id="saveBtn" type="button">Save All</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="panel">
+      <div class="title">Items</div>
+      <div class="subtitle">Click a card to edit ITEM_ID.</div>
+      <div id="cardsGrid" class="cardsGrid"></div>
+    </div>
+
+    <div id="editModal" class="modalBackdrop" hidden>
+      <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+        <div class="modalHeader">
+          <div id="editModalTitle" class="title">Edit Item</div>
+          <button id="closeModalBtn" type="button">Close</button>
+        </div>
+
+        <div class="modalBody">
+          <canvas id="modalPreview" width="80" height="80" class="modalPreview"></canvas>
+          <div class="modalFields">
+            <div class="fieldLine"><span>Type</span><strong id="modalType"></strong></div>
+            <div class="fieldLine"><span>Name</span><strong id="modalName"></strong></div>
+            <div class="fieldLine"><span>Current ID</span><strong id="modalCurrentId"></strong></div>
+            <label class="fieldStack" for="modalNextIdInput">
+              <span>New ITEM_ID</span>
+              <input id="modalNextIdInput" type="number" min="0" step="1" />
+            </label>
+            <div id="modalValidation" class="tiny"></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="applyModalBtn" type="button">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const reloadBtn = document.getElementById("reloadBtn");
+      const autoReindexBtn = document.getElementById("autoReindexBtn");
+      const saveBtn = document.getElementById("saveBtn");
+      const status = document.getElementById("status");
+      const cardsGrid = document.getElementById("cardsGrid");
+      const editModal = document.getElementById("editModal");
+      const closeModalBtn = document.getElementById("closeModalBtn");
+      const modalPreview = document.getElementById("modalPreview");
+      const modalType = document.getElementById("modalType");
+      const modalName = document.getElementById("modalName");
+      const modalCurrentId = document.getElementById("modalCurrentId");
+      const modalNextIdInput = document.getElementById("modalNextIdInput");
+      const modalValidation = document.getElementById("modalValidation");
+      const applyModalBtn = document.getElementById("applyModalBtn");
+
+      const state = {
+        blocks: [],
+        seeds: [],
+        seedAtlases: [],
+        mergedAtlases: [],
+        rows: [],
+        atlasByKey: new Map(),
+        atlasImageCache: new Map(),
+        activeModalIndex: -1,
+      };
+
+      function setStatus(message, isError = false) {
+        status.textContent = String(message || "");
+        status.classList.toggle("error", !!isError);
+      }
+
+      function clone(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function normalizeType(value, fallback = "seed") {
+        const text = String(value || fallback).trim().toLowerCase();
+        if (["seed", "block", "furniture", "clothes"].includes(text)) {
+          return text;
+        }
+        return fallback;
+      }
+
+      function atlasLookupKey(value) {
+        return `${typeof value}:${String(value)}`;
+      }
+
+      function normalizeBlock(block) {
+        const itemId = Math.max(0, Number.parseInt(block?.ITEM_ID ?? block?.ID ?? -1, 10) || 0);
+        const next = clone(block || {});
+        next.ITEM_ID = itemId;
+        // legacy "ID" is no longer used; remove it so save output only contains ITEM_ID
+        delete next.ID;
+        next.ITEM_TYPE = "block";
+        return next;
+      }
+
+      function normalizeSeed(seed) {
+        const itemId = Math.max(0, Number.parseInt(seed?.ITEM_ID ?? seed?.SEED_ID ?? -1, 10) || 0);
+        const next = clone(seed || {});
+        next.ITEM_ID = itemId;
+        // drop the old SEED_ID field; we rely solely on ITEM_ID now
+        delete next.SEED_ID;
+        next.ITEM_TYPE = "seed";
+        return next;
+      }
+
+      function seedTexture(seed) {
+        const texture = seed?.SEED_ATLAS_TEXTURE;
+        if (!texture || typeof texture !== "object") {
+          return null;
+        }
+        const x = Math.floor(Number(texture.x) || 0);
+        const y = Math.floor(Number(texture.y) || 0);
+        const w = Math.max(1, Math.floor(Number(texture.w) || 16));
+        const h = Math.max(1, Math.floor(Number(texture.h) || 16));
+        return { x, y, w, h };
+      }
+
+      function blockTexture(block) {
+        const texture = block?.ATLAS_TEXTURE;
+        if (!texture || typeof texture !== "object") {
+          return null;
+        }
+        const x = Math.floor(Number(texture.x) || 0);
+        const y = Math.floor(Number(texture.y) || 0);
+        const w = Math.max(1, Math.floor(Number(texture.w) || 16));
+        const h = Math.max(1, Math.floor(Number(texture.h) || 16));
+        return { x, y, w, h };
+      }
+
+      function buildRows() {
+        const rows = [];
+
+        for (const block of state.blocks) {
+          const id = Number(block.ITEM_ID);
+          rows.push({
+            key: `block:${id}`,
+            itemType: "block",
+            name: String(block.NAME || `BLOCK_${id}`),
+            currentId: id,
+            nextId: id,
+            source: block,
+          });
+        }
+
+        for (const seed of state.seeds) {
+          const id = Number(seed.ITEM_ID);
+          rows.push({
+            key: `seed:${id}`,
+            itemType: "seed",
+            name: String(seed.NAME || `SEED_${id}`),
+            currentId: id,
+            nextId: id,
+            source: seed,
+          });
+        }
+
+        rows.sort((a, b) => {
+          if (a.currentId !== b.currentId) return a.currentId - b.currentId;
+          return a.itemType.localeCompare(b.itemType);
+        });
+
+        state.rows = rows;
+      }
+
+      function drawPreviewPlaceholder(canvas, label = "?") {
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#111827";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "#334155";
+        ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+        ctx.fillStyle = "#93c5fd";
+        ctx.font = "12px 'Courier New', monospace";
+        ctx.fillText(label, Math.max(6, canvas.width / 2 - 8), canvas.height / 2 + 4);
+      }
+
+      async function getAtlasImage(atlasId) {
+        const key = atlasLookupKey(atlasId);
+        if (state.atlasImageCache.has(key)) {
+          return state.atlasImageCache.get(key);
+        }
+
+        const atlas = state.atlasByKey.get(key);
+        if (!atlas || !atlas.SRC) {
+          state.atlasImageCache.set(key, null);
+          return null;
+        }
+
+        const image = new Image();
+        image.src = `${atlas.SRC}?ts=${Date.now()}`;
+        try {
+          await image.decode();
+          state.atlasImageCache.set(key, image);
+          return image;
+        } catch {
+          state.atlasImageCache.set(key, null);
+          return null;
+        }
+      }
+
+      async function drawTexturePreview(canvas, atlasId, texture, placeholderLabel = "?") {
+        if (!texture) {
+          drawPreviewPlaceholder(canvas, placeholderLabel);
+          return;
+        }
+
+        const image = await getAtlasImage(atlasId);
+        if (!image) {
+          drawPreviewPlaceholder(canvas, placeholderLabel);
+          return;
+        }
+
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#111827";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.drawImage(
+          image,
+          texture.x,
+          texture.y,
+          texture.w,
+          texture.h,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        );
+      }
+
+      async function drawRowPreview(canvas, row) {
+        if (!row || !row.source) {
+          drawPreviewPlaceholder(canvas, "?");
+          return;
+        }
+
+        if (row.itemType === "seed") {
+          const seed = row.source;
+          await drawTexturePreview(canvas, seed.SEED_ATLAS_ID, seedTexture(seed), "S");
+          return;
+        }
+
+        const block = row.source;
+        const blockTex = blockTexture(block);
+        if (blockTex) {
+          await drawTexturePreview(canvas, block.ATLAS_ID, blockTex, "B");
+          return;
+        }
+
+        const texture47Id = String(block.TEXTURE47_ID || block.ATLAS_ID || "").trim().toLowerCase();
+        if (texture47Id) {
+          const tempAtlas = {
+            SRC: `/assets/texture47/${texture47Id}.png`,
+          };
+          const key = atlasLookupKey(`t47:${texture47Id}`);
+          if (!state.atlasByKey.has(key)) {
+            state.atlasByKey.set(key, tempAtlas);
+          }
+          await drawTexturePreview(canvas, `t47:${texture47Id}`, { x: 0, y: 0, w: 16, h: 16 }, "47");
+          return;
+        }
+
+        drawPreviewPlaceholder(canvas, "B");
+      }
+
+      function openModal(index) {
+        const row = state.rows[index];
+        if (!row) {
+          return;
+        }
+
+        state.activeModalIndex = index;
+        modalType.textContent = row.itemType;
+        modalName.textContent = row.name;
+        modalCurrentId.textContent = String(row.currentId);
+        modalNextIdInput.value = String(row.nextId);
+        modalValidation.textContent = "";
+        editModal.hidden = false;
+        drawRowPreview(modalPreview, row);
+      }
+
+      function closeModal() {
+        state.activeModalIndex = -1;
+        editModal.hidden = true;
+      }
+
+      function validateCandidateForRow(rowIndex, candidateId) {
+        if (!Number.isInteger(candidateId) || candidateId < 0) {
+          return "ITEM_ID must be a non-negative integer.";
+        }
+
+        for (let i = 0; i < state.rows.length; i += 1) {
+          if (i === rowIndex) {
+            continue;
+          }
+          if (state.rows[i].nextId === candidateId) {
+            return `ITEM_ID ${candidateId} is already used by ${state.rows[i].itemType} ${state.rows[i].name}.`;
+          }
+        }
+
+        return "";
+      }
+
+      function renderCards() {
+        cardsGrid.innerHTML = "";
+
+        state.rows.forEach((row, index) => {
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = `itemCard ${row.itemType}`;
+          card.addEventListener("click", () => {
+            openModal(index);
+          });
+
+          const preview = document.createElement("canvas");
+          preview.width = 64;
+          preview.height = 64;
+          preview.className = "itemPreview";
+
+          const meta = document.createElement("div");
+          meta.className = "itemMeta";
+
+          const typeTag = document.createElement("div");
+          typeTag.className = `pill ${row.itemType}`;
+          typeTag.textContent = row.itemType;
+
+          const name = document.createElement("div");
+          name.className = "itemName";
+          name.textContent = row.name;
+
+          const ids = document.createElement("div");
+          ids.className = "itemIds";
+          ids.textContent = `ID ${row.currentId} -> ${row.nextId}`;
+          if (row.currentId !== row.nextId) {
+            ids.classList.add("changed");
+          }
+
+          meta.append(typeTag, name, ids);
+          card.append(preview, meta);
+          cardsGrid.appendChild(card);
+          drawRowPreview(preview, row);
+        });
+      }
+
+      function remapSeedIdInEntry(entry, seedIdMap) {
+        if (!entry || typeof entry !== "object") {
+          return;
+        }
+        // read any legacy field but map into ITEM_ID only
+        const raw = Number.parseInt(entry.ITEM_ID ?? entry.SEED_ID ?? entry.ID ?? entry.id, 10);
+        if (!Number.isInteger(raw) || raw < 0) {
+          return;
+        }
+        const mapped = seedIdMap.get(raw) ?? raw;
+        entry.ITEM_ID = mapped;
+        // remove legacy properties so saved output is clean
+        delete entry.SEED_ID;
+        delete entry.ID;
+      }
+
+      function remapBlockReferences(blocks, seedIdMap) {
+        for (const block of blocks) {
+          if (!block || typeof block !== "object") {
+            continue;
+          }
+
+          if (Array.isArray(block.SEED_IDS)) {
+            for (const entry of block.SEED_IDS) {
+              if (entry && typeof entry === "object") {
+                remapSeedIdInEntry(entry, seedIdMap);
+              }
+            }
+          }
+
+          if (Array.isArray(block.SEED_DROPS)) {
+            for (const entry of block.SEED_DROPS) {
+              if (entry && typeof entry === "object") {
+                remapSeedIdInEntry(entry, seedIdMap);
+              }
+            }
+          }
+
+          if (Number.isInteger(Number(block.SEED_DROP_ID))) {
+            const oldSeedId = Number.parseInt(block.SEED_DROP_ID, 10);
+            block.SEED_DROP_ID = seedIdMap.get(oldSeedId) ?? oldSeedId;
+          }
+
+          if (Number.isInteger(Number(block.ITEM_DROP_ID))) {
+            const oldSeedId = Number.parseInt(block.ITEM_DROP_ID, 10);
+            block.ITEM_DROP_ID = seedIdMap.get(oldSeedId) ?? oldSeedId;
+          }
+        }
+      }
+
+      function remapSeedReferences(seeds, blockIdMap, seedIdMap) {
+        for (const seed of seeds) {
+          if (!seed || typeof seed !== "object") {
+            continue;
+          }
+
+          const remapFruitDrops = (rows) => {
+            if (!Array.isArray(rows)) {
+              return;
+            }
+            for (const entry of rows) {
+              if (!entry || typeof entry !== "object") {
+                continue;
+              }
+              const itemType = normalizeType(entry.ITEM_TYPE ?? entry.item_type ?? entry.TYPE ?? entry.type, "seed");
+              const oldItemId = Number.parseInt(entry.ITEM_ID ?? entry.item_id ?? entry.SEED_ID ?? entry.ID ?? entry.id, 10);
+              if (!Number.isInteger(oldItemId) || oldItemId < 0) {
+                continue;
+              }
+
+              let mapped = oldItemId;
+              if (itemType === "block") {
+                mapped = blockIdMap.get(oldItemId) ?? oldItemId;
+              } else if (itemType === "seed") {
+                mapped = seedIdMap.get(oldItemId) ?? oldItemId;
+              }
+
+              entry.ITEM_TYPE = itemType;
+              entry.ITEM_ID = mapped;
+              delete entry.SEED_ID;
+              delete entry.ID;
+            }
+          };
+
+          if (Array.isArray(seed.FRUIT_DROPS)) {
+            remapFruitDrops(seed.FRUIT_DROPS);
+          }
+
+          const tree = seed.TREE;
+          if (tree && typeof tree === "object") {
+            if (Array.isArray(tree.DROPS)) {
+              for (const entry of tree.DROPS) {
+                if (entry && typeof entry === "object") {
+                  remapSeedIdInEntry(entry, seedIdMap);
+                }
+              }
+            }
+
+            if (Array.isArray(tree.FRUIT_DROPS)) {
+              remapFruitDrops(tree.FRUIT_DROPS);
+            }
+          }
+
+          if (Array.isArray(seed.TREE_DROPS)) {
+            for (const entry of seed.TREE_DROPS) {
+              if (entry && typeof entry === "object") {
+                remapSeedIdInEntry(entry, seedIdMap);
+              }
+            }
+          }
+        }
+      }
+
+      function validateNextIds() {
+        const seen = new Set();
+        for (const row of state.rows) {
+          if (!Number.isInteger(row.nextId) || row.nextId < 0) {
+            return `Invalid ITEM_ID for ${row.itemType} ${row.name}`;
+          }
+
+          const key = String(row.nextId);
+          if (seen.has(key)) {
+            return `Duplicate ITEM_ID ${row.nextId}`;
+          }
+          seen.add(key);
+        }
+
+        return "";
+      }
+
+      async function loadData() {
+        setStatus("Loading item data...");
+        try {
+          const res = await fetch(`/api/tools/seeds/editor-data?ts=${Date.now()}`, { cache: "no-store" });
+          if (!res.ok) {
+            throw new Error(`Failed to load editor data (${res.status})`);
+          }
+
+          const payload = await res.json();
+          const rawBlocks = Array.isArray(payload?.blocks) ? payload.blocks : [];
+          const rawSeeds = Array.isArray(payload?.seeds) ? payload.seeds : [];
+          const mergedAtlases = Array.isArray(payload?.atlases) ? payload.atlases : [];
+
+          state.blocks = rawBlocks.map((block) => normalizeBlock(block));
+          state.seeds = rawSeeds.map((seed) => normalizeSeed(seed));
+          state.seedAtlases = Array.isArray(payload?.seedAtlases)
+            ? payload.seedAtlases.filter((entry) => entry && typeof entry === "object")
+            : [];
+          state.mergedAtlases = mergedAtlases.filter((entry) => entry && typeof entry === "object");
+          state.atlasByKey = new Map();
+          state.atlasImageCache = new Map();
+          for (const atlas of state.mergedAtlases) {
+            state.atlasByKey.set(atlasLookupKey(atlas.ATLAS_ID), atlas);
+          }
+
+          buildRows();
+          renderCards();
+          setStatus(`Loaded ${state.rows.length} items.`);
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      }
+
+      function autoReindex() {
+        const sorted = [...state.rows].sort((a, b) => {
+          if (a.currentId !== b.currentId) return a.currentId - b.currentId;
+          return a.itemType.localeCompare(b.itemType);
+        });
+
+        let nextId = 1;
+        for (const row of sorted) {
+          row.nextId = nextId;
+          nextId += 1;
+        }
+
+        renderCards();
+        setStatus("Assigned sequential ITEM_ID values.");
+      }
+
+      async function saveAll() {
+        const validationError = validateNextIds();
+        if (validationError) {
+          setStatus(validationError, true);
+          return;
+        }
+
+        setStatus("Saving all item definitions...");
+
+        try {
+          const nextBlocks = state.blocks.map((block) => clone(block));
+          const nextSeeds = state.seeds.map((seed) => clone(seed));
+
+          const blockIdMap = new Map();
+          const seedIdMap = new Map();
+
+          for (const row of state.rows) {
+            if (row.itemType === "block") {
+              blockIdMap.set(row.currentId, row.nextId);
+            } else if (row.itemType === "seed") {
+              seedIdMap.set(row.currentId, row.nextId);
+            }
+          }
+
+          for (const block of nextBlocks) {
+            const oldId = Number(block.ITEM_ID ?? block.ID);
+            const mapped = blockIdMap.get(oldId) ?? oldId;
+            block.ITEM_ID = mapped;
+            // legacy field is no longer emitted
+            delete block.ID;
+            block.ITEM_TYPE = "block";
+          }
+
+          for (const seed of nextSeeds) {
+            const oldId = Number(seed.ITEM_ID ?? seed.SEED_ID);
+            const mapped = seedIdMap.get(oldId) ?? oldId;
+            seed.ITEM_ID = mapped;
+            delete seed.SEED_ID;
+            seed.ITEM_TYPE = "seed";
+          }
+
+          remapBlockReferences(nextBlocks, seedIdMap);
+          remapSeedReferences(nextSeeds, blockIdMap, seedIdMap);
+
+          nextBlocks.sort((a, b) => Number(a.ITEM_ID) - Number(b.ITEM_ID));
+          nextSeeds.sort((a, b) => Number(a.ITEM_ID) - Number(b.ITEM_ID));
+
+          const blocksSaveRes = await fetch("/api/tools/blocks/save-data", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ blocks: nextBlocks }),
+          });
+          const blocksSaveData = await blocksSaveRes.json().catch(() => ({}));
+          if (!blocksSaveRes.ok) {
+            throw new Error(blocksSaveData?.detail || `Failed to save blocks (${blocksSaveRes.status})`);
+          }
+
+          const seedsSaveRes = await fetch("/api/tools/seeds/save-data", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              atlases: state.seedAtlases,
+              seeds: nextSeeds,
+            }),
+          });
+          const seedsSaveData = await seedsSaveRes.json().catch(() => ({}));
+          if (!seedsSaveRes.ok) {
+            throw new Error(seedsSaveData?.detail || `Failed to save seeds (${seedsSaveRes.status})`);
+          }
+
+          state.blocks = nextBlocks;
+          state.seeds = nextSeeds;
+          buildRows();
+          renderCards();
+          setStatus("Saved blocks + seeds with updated ITEM_ID mappings.");
+        } catch (error) {
+          setStatus(String(error?.message || error), true);
+        }
+      }
+
+      modalNextIdInput.addEventListener("input", () => {
+        if (state.activeModalIndex < 0) {
+          return;
+        }
+        const parsed = Number.parseInt(modalNextIdInput.value, 10);
+        const row = state.rows[state.activeModalIndex];
+        if (!row) {
+          return;
+        }
+
+        const message = validateCandidateForRow(state.activeModalIndex, parsed);
+        modalValidation.textContent = message;
+        modalValidation.classList.toggle("error", Boolean(message));
+      });
+
+      applyModalBtn.addEventListener("click", () => {
+        if (state.activeModalIndex < 0) {
+          return;
+        }
+        const row = state.rows[state.activeModalIndex];
+        if (!row) {
+          return;
+        }
+
+        const parsed = Number.parseInt(modalNextIdInput.value, 10);
+        const message = validateCandidateForRow(state.activeModalIndex, parsed);
+        if (message) {
+          modalValidation.textContent = message;
+          modalValidation.classList.add("error");
+          return;
+        }
+
+        row.nextId = parsed;
+        closeModal();
+        renderCards();
+      });
+
+      closeModalBtn.addEventListener("click", () => {
+        closeModal();
+      });
+
+      editModal.addEventListener("click", (event) => {
+        if (event.target === editModal) {
+          closeModal();
+        }
+      });
+
+      reloadBtn.addEventListener("click", async () => {
+        await loadData();
+      });
+
+      autoReindexBtn.addEventListener("click", () => {
+        autoReindex();
+      });
+
+      saveBtn.addEventListener("click", async () => {
+        await saveAll();
+      });
+
+      loadData();
+    </script>
+  </body>
+</html>

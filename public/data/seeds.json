@@ -1,7 +1,9 @@
 {
   "seeds": [
     {
-      "SEED_ID": 1,
+      "ITEM_ID": 12,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 12,
       "NAME": "Dirt Seed",
       "GROWTIME": 60,
       "FRUIT_DROPS": [

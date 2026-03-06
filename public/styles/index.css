@@ -129,6 +129,16 @@
         z-index: 5;
       }
 
+      .creativeHudControl {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
       .spacer {
         margin-left: auto;
         font-size: 12px;

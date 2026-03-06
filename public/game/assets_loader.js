@@ -10,7 +10,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
   } = settings;
 
   const {
-    seedSelectHud,
+    itemSelectHud,
     blockSelect,
     blockTypeInfo,
   } = elements;
@@ -100,6 +100,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
 
   async function loadBlockDefinitions(onAssetProgress = null) {
     const bootstrap = await requestJson("/api/bootstrap", {
+      cache: "no-store",
       headers: {
         Authorization: `Bearer ${state.token}`,
       },
@@ -184,38 +185,52 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     }
 
     for (const block of data.blocks || []) {
-      state.blockDefs.set(block.ID, block);
-      const blockId = Number(block?.ID);
+      const blockId = Number(block?.ITEM_ID ?? block?.ID);
+      if (!Number.isFinite(blockId) || blockId < 0) {
+        continue;
+      }
+      const normalizedBlockId = Math.floor(blockId);
+      block.ITEM_ID = normalizedBlockId;
+      block.ID = normalizedBlockId;
+      block.ITEM_TYPE = "block";
+      state.blockDefs.set(normalizedBlockId, block);
       if (blockHasRegularAnimation(block) && Number.isInteger(blockId)) {
-        state.animatedBlockIds.add(blockId);
+        state.animatedBlockIds.add(normalizedBlockId);
       }
     }
 
     for (const seed of seedsPayload.seeds || []) {
-      const seedId = Number(seed?.SEED_ID);
+      const seedId = Number(seed?.ITEM_ID ?? seed?.SEED_ID);
       if (!Number.isFinite(seedId) || seedId < 0) {
         continue;
       }
-      state.seedDefs.set(Math.floor(seedId), seed);
+      const normalizedSeedId = Math.floor(seedId);
+      seed.ITEM_ID = normalizedSeedId;
+      // legacy field only kept for backwards compatibility; not used elsewhere
+      delete seed.SEED_ID;
+      seed.ITEM_TYPE = "seed";
+      state.seedDefs.set(normalizedSeedId, seed);
     }
 
-    if (seedSelectHud) {
-      seedSelectHud.innerHTML = "";
-      const sortedSeeds = Array.from(state.seedDefs.values()).sort((a, b) => Number(a.SEED_ID || 0) - Number(b.SEED_ID || 0));
+    if (itemSelectHud) {
+      itemSelectHud.innerHTML = "";
+      const sortedSeeds = Array.from(state.seedDefs.values()).sort((a, b) => Number(a.ITEM_ID || 0) - Number(b.ITEM_ID || 0));
       for (const seed of sortedSeeds) {
         const option = document.createElement("option");
-        const seedId = Math.floor(Number(seed.SEED_ID) || 0);
+        const seedId = Math.floor(Number(seed.ITEM_ID) || 0);
         option.value = String(seedId);
         option.textContent = `${seedId} - ${String(seed.NAME || `SEED_${seedId}`)}`;
-        seedSelectHud.appendChild(option);
+        itemSelectHud.appendChild(option);
       }
 
       if (sortedSeeds.length > 0) {
-        const firstSeedId = Math.floor(Number(sortedSeeds[0].SEED_ID) || 0);
-        state.selectedSeedId = firstSeedId;
-        seedSelectHud.value = String(firstSeedId);
+        const firstSeedId = Math.floor(Number(sortedSeeds[0].ITEM_ID) || 0);
+        state.selectedItemId = firstSeedId;
+        state.selectedItemType = "seed";
+        itemSelectHud.value = String(firstSeedId);
       } else {
-        state.selectedSeedId = -1;
+        state.selectedItemId = -1;
+        state.selectedItemType = "seed";
       }
     }
 
@@ -354,8 +369,9 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     }
 
     if (placeableBlocks.length > 0) {
-      state.selectedBlockId = placeableBlocks[0].ID;
-      blockSelect.value = String(state.selectedBlockId);
+      state.selectedItemId = placeableBlocks[0].ID;
+      state.selectedItemType = "block";
+      blockSelect.value = String(placeableBlocks[0].ID);
       blockTypeInfo.textContent = placeableBlocks[0].BLOCK_TYPE;
     }
 
@@ -494,11 +510,21 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     const normalizedItemType = String(itemType || "").trim().toLowerCase();
 
     if (normalizedItemType === "block") {
-      return getBlockDropSprite(normalizedItemId);
+      const blockSprite = getBlockDropSprite(normalizedItemId);
+      if (blockSprite) {
+        return blockSprite;
+      }
+      // Be tolerant of stale/legacy type tags where a seed is labeled as block.
+      return getSeedDropSprite(normalizedItemId);
     }
 
     if (normalizedItemType === "seed") {
-      return getSeedDropSprite(normalizedItemId);
+      const seedSprite = getSeedDropSprite(normalizedItemId);
+      if (seedSprite) {
+        return seedSprite;
+      }
+      // Be tolerant of stale/legacy type tags where a block is labeled as seed.
+      return getBlockDropSprite(normalizedItemId);
     }
 
     // Prefer seed visuals for legacy SEED_IDS compatibility when IDs overlap.

@@ -16,6 +16,8 @@
   ],
   "blocks": [
     {
+      "ITEM_ID": 0,
+      "ITEM_TYPE": "block",
       "ID": 0,
       "NAME": "AIR",
       "BLOCK_TYPE": "BACKGROUND",
@@ -32,12 +34,14 @@
       "GEM_AMOUNT_VAR": 0,
       "SEED_IDS": [
         {
-          "ID": 1,
-          "CHANCE": 0.2
+          "ID": 12,
+          "CHANCE": 1
         }
       ]
     },
     {
+      "ITEM_ID": 1,
+      "ITEM_TYPE": "block",
       "ID": 1,
       "NAME": "DIRT",
       "BLOCK_TYPE": "SOLID",
@@ -48,7 +52,7 @@
       "GEM_AMOUNT_VAR": 1,
       "SEED_IDS": [
         {
-          "ID": 1,
+          "ID": 12,
           "CHANCE": 0.2
         }
       ],
@@ -57,6 +61,8 @@
       "DROP_SELF_CHANCE": 0.2
     },
     {
+      "ITEM_ID": 2,
+      "ITEM_TYPE": "block",
       "ID": 2,
       "NAME": "BEDROCK",
       "BLOCK_TYPE": "SOLID",
@@ -75,6 +81,8 @@
       "BREAKABLE": false
     },
     {
+      "ITEM_ID": 3,
+      "ITEM_TYPE": "block",
       "ID": 3,
       "NAME": "STONE",
       "BLOCK_TYPE": "SOLID",
@@ -92,6 +100,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 4,
+      "ITEM_TYPE": "block",
       "ID": 4,
       "NAME": "SAND",
       "BLOCK_TYPE": "SOLID",
@@ -103,6 +113,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 5,
+      "ITEM_TYPE": "block",
       "ID": 5,
       "NAME": "GREEN_BLOCK",
       "BLOCK_TYPE": "SOLID",
@@ -120,6 +132,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 6,
+      "ITEM_TYPE": "block",
       "ID": 6,
       "NAME": "BLUE_BLOCK",
       "BLOCK_TYPE": "SOLID",
@@ -137,6 +151,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 7,
+      "ITEM_TYPE": "block",
       "ID": 7,
       "NAME": "YELLOW_BLOCK",
       "BLOCK_TYPE": "SOLID",
@@ -154,6 +170,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 8,
+      "ITEM_TYPE": "block",
       "ID": 8,
       "NAME": "PURPLE_BLOCK",
       "BLOCK_TYPE": "SOLID",
@@ -171,6 +189,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 9,
+      "ITEM_TYPE": "block",
       "ID": 9,
       "NAME": "CAVE_BACKGROUND",
       "BLOCK_TYPE": "BACKGROUND",
@@ -182,6 +202,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 10,
+      "ITEM_TYPE": "block",
       "ID": 10,
       "NAME": "METAL_PLATFORM",
       "BLOCK_TYPE": "PLATFORM",
@@ -199,6 +221,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 11,
+      "ITEM_TYPE": "block",
       "ID": 11,
       "NAME": "DEV_BLOCK",
       "BLOCK_TYPE": "SOLID",
@@ -210,6 +234,8 @@
       "PLACEABLE": true
     },
     {
+      "ITEM_ID": 17,
+      "ITEM_TYPE": "block",
       "ID": 17,
       "NAME": "WORLD_DOOR",
       "BLOCK_TYPE": "BACKGROUND",

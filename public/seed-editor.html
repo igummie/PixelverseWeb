@@ -11,6 +11,7 @@
       <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
       <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
       <a class="switchBtn active" href="/seed-editor.html">Seed Editor</a>
+      <a class="switchBtn" href="/item-manager.html">Item Manager</a>
     </div>
 
     <div class="layout">
@@ -32,7 +33,7 @@
 
           <div class="row">
             <div class="fieldStack">
-              <label for="seedIdInput">SEED_ID</label>
+              <label for="seedIdInput">ITEM_ID</label>
               <input id="seedIdInput" type="number" min="0" step="1" />
             </div>
             <div class="fieldStack" style="min-width: 220px">
@@ -161,7 +162,7 @@
         </div>
 
         <div id="status" class="status"></div>
-        <div class="links">Other tools: <a href="/atlas-editor.html">block editor</a> | <a href="/texture47-editor.html">texture47 editor</a> | <a href="/index.html">game</a></div>
+        <div class="links">Other tools: <a href="/atlas-editor.html">block editor</a> | <a href="/texture47-editor.html">texture47 editor</a> | <a href="/item-manager.html">item manager</a> | <a href="/index.html">game</a></div>
       </div>
 
       <div class="panel">
@@ -223,6 +224,7 @@
         pickerAtlases: [],
         seedAtlases: [],
         seeds: [],
+        usedBlockItemIds: new Set(),
         selectedIndex: -1,
         atlasImageCache: {},
         seedPicker: {
@@ -272,7 +274,7 @@
               continue;
             }
 
-            const rawItemId = entry.ITEM_ID ?? entry.item_id ?? entry.ID ?? entry.SEED_ID ?? entry.id;
+            const rawItemId = entry.ITEM_ID ?? entry.item_id ?? entry.ID ?? entry.SEED_ID ?? entry.id; // support legacy SEED_ID but map into itemId
             const itemId = Math.max(0, Number.parseInt(rawItemId, 10) || 0);
             const itemType = normalizeItemType(entry.ITEM_TYPE ?? entry.item_type ?? entry.TYPE ?? entry.type ?? "seed");
             const chanceRaw = Number.parseFloat(String(entry.CHANCE ?? entry.chance ?? "1"));
@@ -421,19 +423,19 @@
           };
         }
 
-        return {
-          SEED_ID: Math.max(0, Number.parseInt(seed?.SEED_ID ?? 0, 10) || 0),
-          NAME: String(seed?.NAME ?? "").trim() || `SEED_${seed?.SEED_ID ?? 0}`,
-          GROWTIME: Math.max(0, Number.parseInt(seed?.GROWTIME ?? 3600, 10) || 3600),
-          FRUIT_DROPS: normalizeFruitDrops(
-            seed?.FRUIT_DROPS,
-            seed?.SEED_ID ?? 0,
-          ),
-          SEED_TINT: normalizeTint(seed?.SEED_TINT ?? ""),
-          SEED_ATLAS_ID: normalizeAtlasId(seed?.SEED_ATLAS_ID ?? ""),
-          SEED_ATLAS_TEXTURE: {
-            x: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.x ?? 0, 10) || 0),
-            y: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.y ?? 0, 10) || 0),
+        {
+          const itemId = Math.max(0, Number.parseInt(seed?.ITEM_ID ?? seed?.SEED_ID ?? 0, 10) || 0);
+          return {
+            ITEM_ID: itemId,
+            ITEM_TYPE: "seed",
+            NAME: String(seed?.NAME ?? "").trim() || `SEED_${itemId}`,
+            GROWTIME: Math.max(0, Number.parseInt(seed?.GROWTIME ?? 3600, 10) || 3600),
+            FRUIT_DROPS: normalizeFruitDrops(seed?.FRUIT_DROPS, itemId),
+            SEED_TINT: normalizeTint(seed?.SEED_TINT ?? ""),
+            SEED_ATLAS_ID: normalizeAtlasId(seed?.SEED_ATLAS_ID ?? ""),
+            SEED_ATLAS_TEXTURE: {
+              x: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.x ?? 0, 10) || 0),
+              y: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.y ?? 0, 10) || 0),
             w: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.w ?? 16, 10) || 16),
             h: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.h ?? 16, 10) || 16),
           },
@@ -455,7 +457,7 @@
           const seed = state.seeds[i];
           const option = document.createElement("option");
           option.value = String(i);
-          option.textContent = `${seed.SEED_ID} - ${seed.NAME}`;
+          option.textContent = `${seed.ITEM_ID} - ${seed.NAME}`;
           seedSelect.append(option);
         }
 
@@ -593,7 +595,7 @@
           btn.disabled = false;
         }
 
-        seedIdInput.value = String(seed.SEED_ID);
+        seedIdInput.value = String(seed.ITEM_ID);
         seedNameInput.value = seed.NAME;
         growtimeInput.value = String(seed.GROWTIME);
         buildFruitDropsEditor(seed);
@@ -689,7 +691,7 @@
 
           const title = document.createElement("div");
           title.className = "seedCardName";
-          title.textContent = `${seed.SEED_ID} - ${seed.NAME}`;
+          title.textContent = `${seed.ITEM_ID} - ${seed.NAME}`;
           card.append(title);
 
           const previews = document.createElement("div");
@@ -741,13 +743,18 @@
 
       function createSeedEntry() {
         applyCurrentSeedFields();
-        const used = new Set(state.seeds.map((seed) => seed.SEED_ID));
+        const used = new Set([
+          ...state.usedBlockItemIds,
+          ...state.seeds.map((seed) => Math.max(0, Number.parseInt(seed.ITEM_ID || 0, 10) || 0)),
+        ]);
         let nextId = 1;
         while (used.has(nextId)) nextId += 1;
 
         state.seeds.push(
           ensureSeed({
-            SEED_ID: nextId,
+            ITEM_ID: nextId,
+            ITEM_TYPE: "seed",
+            ITEM_ID: nextId,
             NAME: `SEED_${nextId}`,
             GROWTIME: 3600,
             FRUIT_DROPS: [
@@ -766,8 +773,11 @@
       function applyCurrentSeedFields() {
         const seed = state.seeds[state.selectedIndex];
         if (!seed) return;
-        seed.SEED_ID = Math.max(0, Number.parseInt(seedIdInput.value, 10) || 0);
-        seed.NAME = String(seedNameInput.value || "").trim() || `SEED_${seed.SEED_ID}`;
+        const itemId = Math.max(0, Number.parseInt(seedIdInput.value, 10) || 0);
+        seed.ITEM_ID = itemId;
+        seed.ITEM_TYPE = "seed";
+        seed.ITEM_ID = itemId;
+        seed.NAME = String(seedNameInput.value || "").trim() || `SEED_${seed.ITEM_ID}`;
         seed.GROWTIME = Math.max(0, Number.parseInt(growtimeInput.value, 10) || 0);
         seed.FRUIT_DROPS = readFruitDropsFromEditor();
         seed.SEED_TINT = normalizeTint(seedTintInput.value);
@@ -852,9 +862,15 @@
           state.seedAtlases = Array.isArray(payload.seedAtlases)
             ? payload.seedAtlases.filter((entry) => entry && typeof entry === "object")
             : [];
+          const blocks = Array.isArray(payload.blocks) ? payload.blocks : [];
+          state.usedBlockItemIds = new Set(
+            blocks
+              .map((block) => Number(block?.ITEM_ID ?? block?.ID))
+              .filter((value) => Number.isInteger(value) && value >= 0),
+          );
           const rawSeeds = Array.isArray(payload.seeds) ? payload.seeds : [];
           state.seeds = rawSeeds.map((seed) => ensureSeed(seed));
-          state.seeds.sort((a, b) => a.SEED_ID - b.SEED_ID);
+          state.seeds.sort((a, b) => Number(a.ITEM_ID || 0) - Number(b.ITEM_ID || 0));
           state.selectedIndex = state.seeds.length ? 0 : -1;
 
           renderFromSelected();
@@ -994,7 +1010,7 @@
       addFruitDropBtn?.addEventListener("click", () => {
         const seed = state.seeds[state.selectedIndex];
         if (!seed) return;
-        const selectedSeedId = Math.max(0, Number.parseInt(seed.SEED_ID, 10) || 0);
+        const selectedSeedId = Math.max(0, Number.parseInt(seed.ITEM_ID || 0, 10) || 0);
         const nextRows = Array.isArray(seed.FRUIT_DROPS) ? [...seed.FRUIT_DROPS] : [];
         nextRows.push({ ITEM_TYPE: "seed", ITEM_ID: selectedSeedId, CHANCE: 1, MIN: 1, MAX: 1 });
         seed.FRUIT_DROPS = normalizeFruitDrops(nextRows, selectedSeedId);

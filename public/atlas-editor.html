@@ -11,6 +11,7 @@
       <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
       <a class="switchBtn active" href="/atlas-editor.html">Block Editor</a>
       <a class="switchBtn" href="/seed-editor.html">Seed Editor</a>
+      <a class="switchBtn" href="/item-manager.html">Item Manager</a>
     </div>
 
     <div class="layout">
@@ -89,12 +90,12 @@
           <button id="copyBtn" type="button">Copy JSON</button>
           <button id="saveBtn" type="button">Save To blocks.json</button>
           <button id="cleanJsonBtn" type="button">Clean JSON</button>
-          <button id="reorderBlocksBtn" type="button">Reorder Blocks & IDs</button>
+          <button id="reorderBlocksBtn" type="button">Open Item Manager</button>
           <button id="reloadBtn" type="button">Reload Data</button>
         </div>
 
         <div id="status" class="status"></div>
-        <div class="links">Other tools: <a href="/texture47-editor.html">texture47 editor</a> | <a href="/seed-editor.html">seed editor</a> | <a href="/index.html">game</a></div>
+        <div class="links">Other tools: <a href="/texture47-editor.html">texture47 editor</a> | <a href="/seed-editor.html">seed editor</a> | <a href="/item-manager.html">item manager</a> | <a href="/index.html">game</a></div>
       </div>
 
       <div class="panel">
@@ -113,7 +114,7 @@
 
         <div class="modalGrid">
           <div class="fieldStack">
-            <label for="createBlockIdInput">ID</label>
+            <label for="createBlockIdInput">ITEM_ID</label>
             <input id="createBlockIdInput" type="number" min="0" step="1" />
           </div>
           <div class="fieldStack">
@@ -210,25 +211,11 @@
           <button id="closeSaveWarningBtn" type="button">Cancel</button>
         </div>
         <div class="dangerText">
-          Saving with reordered IDs is a game-changing decision.
-          It can alter existing worlds and player inventories that reference block IDs.
+          Saving structural ID edits is a game-changing decision.
+          It can alter existing worlds and player inventories that reference item IDs.
         </div>
         <div class="row">
           <button id="confirmSaveWarningBtn" type="button">I Understand, Save</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="reorderModal" class="modalBackdrop" hidden>
-      <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="reorderTitle">
-        <div class="modalHeader">
-          <div id="reorderTitle" class="title">Reorder Blocks & IDs</div>
-          <button id="closeReorderBtn" type="button">Close</button>
-        </div>
-        <div class="subtitle">Drag rows to reorder. Edit IDs directly. If an ID exists, you can swap.</div>
-        <div id="reorderList" class="reorderList"></div>
-        <div class="row">
-          <button id="applyReorderBtn" type="button">Apply Reorder</button>
         </div>
       </div>
     </div>
@@ -325,10 +312,6 @@
       const saveWarningModal = document.getElementById("saveWarningModal");
       const closeSaveWarningBtn = document.getElementById("closeSaveWarningBtn");
       const confirmSaveWarningBtn = document.getElementById("confirmSaveWarningBtn");
-      const reorderModal = document.getElementById("reorderModal");
-      const closeReorderBtn = document.getElementById("closeReorderBtn");
-      const reorderList = document.getElementById("reorderList");
-      const applyReorderBtn = document.getElementById("applyReorderBtn");
       const createAtlasModal = document.getElementById("createAtlasModal");
       const closeCreateAtlasBtn = document.getElementById("closeCreateAtlasBtn");
       const createAtlasIdInput = document.getElementById("createAtlasIdInput");
@@ -381,11 +364,11 @@
         createModalTileHeight: 16,
         createModalSelectedTileIndex: 0,
         blockPreviewAnimationTimer: 0,
+        usedSeedItemIds: new Set(),
       };
 
       let pendingSaveAction = null;
-      let reorderDraft = [];
-      let reorderDragIndex = -1;
+      
 
       function normalizeAtlasIdValue(value) {
         if (typeof value === "number" && Number.isFinite(value)) {
@@ -410,7 +393,14 @@
 
       function getNextAvailableBlockId() {
         let candidate = 0;
-        const used = new Set(state.blocks.map((block) => Number(block.ID)).filter((value) => Number.isInteger(value) && value >= 0));
+        const used = new Set(
+          state.blocks
+            .map((block) => Number(block.ITEM_ID ?? block.ID))
+            .filter((value) => Number.isInteger(value) && value >= 0),
+        );
+        for (const seedItemId of state.usedSeedItemIds) {
+          used.add(seedItemId);
+        }
         while (used.has(candidate)) {
           candidate += 1;
         }
@@ -2361,7 +2351,9 @@
             continue;
           }
           const cloned = deepClone(entry) || {};
+          cloned.ITEM_ID = nextId;
           cloned.ID = nextId;
+          cloned.ITEM_TYPE = "block";
           nextPendingData.set(nextId, cloned);
         }
         state.pendingBlockDataById = nextPendingData;
@@ -2417,12 +2409,18 @@
 
         const idMap = new Map();
         if (targetBlock) {
+          sourceBlock.ITEM_ID = toId;
           sourceBlock.ID = toId;
+          sourceBlock.ITEM_TYPE = "block";
+          targetBlock.ITEM_ID = fromId;
           targetBlock.ID = fromId;
+          targetBlock.ITEM_TYPE = "block";
           idMap.set(fromId, toId);
           idMap.set(toId, fromId);
         } else {
+          sourceBlock.ITEM_ID = toId;
           sourceBlock.ID = toId;
+          sourceBlock.ITEM_TYPE = "block";
           idMap.set(fromId, toId);
         }
 
@@ -2439,179 +2437,6 @@
           changed: true,
           swapped: Boolean(targetBlock),
         };
-      }
-
-      function openReorderModal() {
-        reorderDraft = state.blocks.map((block) => ({
-          sourceId: Number(block.ID),
-          id: Number(block.ID),
-          name: String(block.NAME || "BLOCK"),
-        }));
-        reorderDragIndex = -1;
-        renderReorderDraft();
-        reorderModal.hidden = false;
-      }
-
-      function closeReorderModal() {
-        reorderModal.hidden = true;
-        reorderDraft = [];
-        reorderDragIndex = -1;
-      }
-
-      function setReorderDraftId(index, requestedValue) {
-        const item = reorderDraft[index];
-        if (!item) {
-          return;
-        }
-
-        const requestedId = Number(requestedValue);
-        if (!Number.isInteger(requestedId) || requestedId < 0) {
-          renderReorderDraft();
-          setStatus("Reorder ID must be a non-negative integer", true);
-          return;
-        }
-
-        if (requestedId === item.id) {
-          return;
-        }
-
-        const collisionIndex = reorderDraft.findIndex((entry, entryIndex) => entryIndex !== index && entry.id === requestedId);
-        if (collisionIndex >= 0) {
-          const shouldSwap = window.confirm(
-            `ID ${requestedId} is already in the reorder list. Swap IDs ${item.id} and ${requestedId}?`,
-          );
-          if (!shouldSwap) {
-            renderReorderDraft();
-            return;
-          }
-
-          const otherId = reorderDraft[collisionIndex].id;
-          reorderDraft[collisionIndex].id = item.id;
-          item.id = otherId;
-          renderReorderDraft();
-          return;
-        }
-
-        item.id = requestedId;
-      }
-
-      function moveReorderDraftItem(fromIndex, toIndex) {
-        if (fromIndex === toIndex) {
-          return;
-        }
-
-        if (fromIndex < 0 || fromIndex >= reorderDraft.length || toIndex < 0 || toIndex >= reorderDraft.length) {
-          return;
-        }
-
-        const [moved] = reorderDraft.splice(fromIndex, 1);
-        reorderDraft.splice(toIndex, 0, moved);
-      }
-
-      function renderReorderDraft() {
-        reorderList.innerHTML = "";
-
-        reorderDraft.forEach((entry, index) => {
-          const row = document.createElement("div");
-          row.className = "reorderListRow";
-          row.draggable = true;
-
-          row.addEventListener("dragstart", () => {
-            reorderDragIndex = index;
-            row.classList.add("dragging");
-          });
-
-          row.addEventListener("dragend", () => {
-            reorderDragIndex = -1;
-            row.classList.remove("dragging");
-          });
-
-          row.addEventListener("dragover", (event) => {
-            event.preventDefault();
-          });
-
-          row.addEventListener("drop", (event) => {
-            event.preventDefault();
-            if (reorderDragIndex < 0) {
-              return;
-            }
-            moveReorderDraftItem(reorderDragIndex, index);
-            reorderDragIndex = -1;
-            renderReorderDraft();
-          });
-
-          const handle = document.createElement("div");
-          handle.className = "reorderDragHandle";
-          handle.textContent = "drag";
-
-          const order = document.createElement("div");
-          order.className = "reorderOrder";
-          order.textContent = String(index + 1);
-
-          const name = document.createElement("div");
-          name.className = "reorderName";
-          name.textContent = `${entry.sourceId} - ${entry.name}`;
-
-          const idInput = document.createElement("input");
-          idInput.className = "reorderIdInput";
-          idInput.type = "number";
-          idInput.step = "1";
-          idInput.min = "0";
-          idInput.value = String(entry.id);
-
-          idInput.addEventListener("change", () => {
-            setReorderDraftId(index, idInput.value);
-          });
-
-          row.appendChild(handle);
-          row.appendChild(order);
-          row.appendChild(name);
-          row.appendChild(idInput);
-          reorderList.appendChild(row);
-        });
-      }
-
-      async function applyReorderDraftToState() {
-        if (!Array.isArray(reorderDraft) || reorderDraft.length !== state.blocks.length) {
-          setStatus("Reorder list is out of date. Reopen the modal and try again.", true);
-          return;
-        }
-
-        const seen = new Set();
-        for (const entry of reorderDraft) {
-          if (!Number.isInteger(entry.id) || entry.id < 0) {
-            setStatus("All reordered IDs must be non-negative integers", true);
-            return;
-          }
-          if (seen.has(entry.id)) {
-            setStatus(`Duplicate ID in reorder list: ${entry.id}`, true);
-            return;
-          }
-          seen.add(entry.id);
-        }
-
-        const blockByOldId = new Map(state.blocks.map((block) => [Number(block.ID), block]));
-        const nextBlocks = [];
-        const idMap = new Map();
-
-        for (const entry of reorderDraft) {
-          const block = blockByOldId.get(entry.sourceId);
-          if (!block) {
-            setStatus("Reorder list references a missing block. Reopen modal and retry.", true);
-            return;
-          }
-
-          block.ID = entry.id;
-          idMap.set(entry.sourceId, entry.id);
-          nextBlocks.push(block);
-        }
-
-        applyStateAfterBlockIdChanges(state.selectedBlockId, idMap, nextBlocks);
-        renderBlockOptions();
-        await selectBlock(state.selectedBlockId);
-        syncJsonOutput();
-        closeReorderModal();
-        setStatus("Applied reorder changes. Save to persist.");
       }
 
       async function loadEditorData() {
@@ -2633,9 +2458,15 @@
 
           state.atlases = Array.isArray(payload?.atlases) ? payload.atlases : [];
           state.blocks = Array.isArray(payload?.blocks) ? payload.blocks : [];
+          const seeds = Array.isArray(payload?.seeds) ? payload.seeds : [];
           state.version = Number.isInteger(payload?.VERSION) ? payload.VERSION : 1;
           state.blockById.clear();
           state.atlasByKey.clear();
+          state.usedSeedItemIds = new Set(
+            seeds
+              .map((seed) => Number(seed?.ITEM_ID ?? seed?.SEED_ID))
+              .filter((value) => Number.isInteger(value) && value >= 0),
+          );
 
           state.atlases.forEach((atlas) => {
             if (!atlas || typeof atlas !== "object") {
@@ -2644,18 +2475,25 @@
             state.atlasByKey.set(atlasKey(atlas.ATLAS_ID), atlas);
           });
 
-          state.blocks.sort((a, b) => Number(a.ID) - Number(b.ID));
+          state.blocks.sort((a, b) => Number(a.ITEM_ID ?? a.ID) - Number(b.ITEM_ID ?? b.ID));
           state.blocks.forEach((block) => {
             if (!block || typeof block !== "object") {
               return;
             }
-            state.blockById.set(Number(block.ID), block);
+            const blockItemId = Number(block.ITEM_ID ?? block.ID);
+            if (!Number.isInteger(blockItemId) || blockItemId < 0) {
+              return;
+            }
+            block.ITEM_ID = blockItemId;
+            block.ID = blockItemId;
+            block.ITEM_TYPE = "block";
+            state.blockById.set(blockItemId, block);
           });
 
           renderAtlasOptions();
           renderBlockOptions();
           if (state.blocks.length > 0) {
-            await selectBlock(state.blocks[0].ID);
+            await selectBlock(Number(state.blocks[0].ITEM_ID ?? state.blocks[0].ID));
           } else {
             renderBlockList();
             refreshBlockDataEditor();
@@ -2726,7 +2564,9 @@
         }
 
         if (!Object.prototype.hasOwnProperty.call(parsed, "ID")) {
+          parsed.ITEM_ID = blockId;
           parsed.ID = blockId;
+          parsed.ITEM_TYPE = "block";
         }
 
         const parsedId = Number(parsed.ID);
@@ -2747,7 +2587,9 @@
           activeId = Number(result.id);
         }
 
+        parsed.ITEM_ID = activeId;
         parsed.ID = activeId;
+        parsed.ITEM_TYPE = "block";
         applyParsedBlockChanges(activeId, parsed);
         setStatus(`Queued block data changes for block ${activeId}`);
         return true;
@@ -2786,7 +2628,9 @@
           activeId = Number(result.id);
         }
 
+        parsed.ITEM_ID = activeId;
         parsed.ID = activeId;
+        parsed.ITEM_TYPE = "block";
         applyParsedBlockChanges(activeId, parsed);
         setStatus(`Queued field changes for block ${activeId}`);
         return true;
@@ -3110,6 +2954,8 @@
         const dropSelfEnabled = createBlockDropSelfToggle.value === "true";
 
         const newBlock = {
+          ITEM_ID: blockId,
+          ITEM_TYPE: "block",
           ID: blockId,
           NAME: blockName,
           BLOCK_TYPE: String(createBlockTypeSelect.value || "SOLID"),
@@ -3188,21 +3034,7 @@
       });
 
       reorderBlocksBtn.addEventListener("click", () => {
-        openReorderModal();
-      });
-
-      closeReorderBtn.addEventListener("click", () => {
-        closeReorderModal();
-      });
-
-      reorderModal.addEventListener("click", (event) => {
-        if (event.target === reorderModal) {
-          closeReorderModal();
-        }
-      });
-
-      applyReorderBtn.addEventListener("click", async () => {
-        await applyReorderDraftToState();
+        window.location.href = "/item-manager.html";
       });
 
       createAtlasBtn.addEventListener("click", () => {

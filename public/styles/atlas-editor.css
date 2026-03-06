@@ -414,76 +414,6 @@ textarea {
   gap: 8px;
 }
 
-.reorderRow {
-  display: flex;
-  gap: 6px;
-}
-
-.reorderBtn {
-  flex: 1;
-  padding: 6px 8px;
-  font-size: 12px;
-}
-
-.reorderBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.reorderList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 52vh;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.reorderListRow {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) 96px;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  background: #0b1220;
-}
-
-.reorderListRow.dragging {
-  opacity: 0.7;
-}
-
-.reorderDragHandle {
-  font-size: 11px;
-  color: #93c5fd;
-  border: 1px solid #1e3a8a;
-  border-radius: 6px;
-  padding: 2px 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  cursor: grab;
-}
-
-.reorderOrder {
-  font-weight: 700;
-  color: #cbd5e1;
-  min-width: 20px;
-  text-align: right;
-}
-
-.reorderName {
-  font-size: 13px;
-  color: #e2e8f0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reorderIdInput {
-  width: 100%;
-  min-width: 0;
-}
 
 .addBlockCard {
   border: 1px dashed #60a5fa;
@@ -620,11 +550,4 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .reorderListRow {
-    grid-template-columns: auto minmax(0, 1fr) 90px;
-  }
-
-  .reorderOrder {
-    display: none;
-  }
 }

@@ -75,17 +75,21 @@
         <div class="gameTopbar">
           <div id="gameStatus">Connecting...</div>
           <div id="gemCount" style="font-size: 12px; opacity: 0.95; min-width: 88px">Gems: 0</div>
-          <label for="blockSelect">Block:</label>
-          <select id="blockSelect"></select>
-          <label for="seedSelectHud">Seed:</label>
-          <select id="seedSelectHud"></select>
-          <div id="blockTypeInfo" style="font-size: 12px; opacity: 0.8"></div>
+          <span id="blockHudControl" class="creativeHudControl hidden">
+            <label for="blockSelect">Block:</label>
+            <select id="blockSelect"></select>
+          </span>
+          <span id="seedHudControl" class="creativeHudControl hidden">
+            <label for="itemSelectHud">Item:</label>
+            <select id="itemSelectHud"></select>
+          </span>
+          <div id="blockTypeInfo" class="creativeHudControl hidden" style="font-size: 12px; opacity: 0.8"></div>
           <button id="zoomOutBtn" type="button">-</button>
           <div id="zoomLevel" style="font-size: 12px; opacity: 0.9; min-width: 66px; text-align: center">Zoom 1.00x</div>
           <button id="zoomInBtn" type="button">+</button>
           <button id="zoomResetBtn" type="button">1x</button>
           <button id="debugToggleBtn" type="button">Debug</button>
-          <div class="spacer">LMB: break | RMB: place (inventory: drop 1) | MMB: plant seed | Q: drop selected seed | WASD/Arrows: move | Enter: chat | ESC: pause</div>
+          <div class="spacer">LMB: break | RMB: build/plant selected item | Q: drop selected seed | WASD/Arrows: move | Enter: chat | ESC: pause</div>
         </div>
         </div>
         <div id="pauseOverlay" class="pauseOverlay hidden" role="dialog" aria-modal="true" aria-label="Pause Menu">
@@ -112,6 +116,10 @@
             <label class="debugGridToggle" for="debugHitboxesToggle">
               <input id="debugHitboxesToggle" type="checkbox" />
               Hitboxes
+            </label>
+            <label class="debugGridToggle" for="debugCreativeToggle">
+              <input id="debugCreativeToggle" type="checkbox" />
+              Creative
             </label>
           </div>
           <div id="debugNetSimPanel" class="debugNetSim">

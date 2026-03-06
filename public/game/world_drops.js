@@ -175,7 +175,7 @@ export function createWorldDropsController({ state, settings }) {
     const id = String(entry.id || "").trim();
     const x = Number(entry.x);
     const y = Number(entry.y);
-    const seedId = Number(entry.seedId ?? entry.seed_id);
+    const seedId = Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id);
     const plantedAtMs = Number(entry.plantedAtMs ?? entry.planted_at_ms ?? 0);
     if (!id || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(seedId) || seedId < 0) {
       return null;

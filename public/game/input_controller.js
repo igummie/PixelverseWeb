@@ -8,7 +8,9 @@ export function createInputController({ state, screens, canvas, constants, actio
     setCameraZoom,
     sendWs,
     pauseMenu,
-    getSelectedSeedId,
+    getSelectedInventoryItem,
+    getCreativePlacement,
+    isCreativeEnabled,
     dropSelectedInventorySeed,
   } = actions;
 
@@ -144,24 +146,72 @@ export function createInputController({ state, screens, canvas, constants, actio
       const isRightClick = event.button === 2;
       const isMiddleClick = event.button === 1;
       if (isMiddleClick) {
-        const seedId = Number(getSelectedSeedId?.());
-        if (!Number.isFinite(seedId) || seedId < 0) {
+        return;
+      }
+
+      if (isRightClick) {
+        const creativeEnabled = !!isCreativeEnabled?.();
+        if (creativeEnabled) {
+          const creativePlacement = getCreativePlacement?.() || null;
+          const creativeType = String(creativePlacement?.itemType || "").toLowerCase();
+          const creativeItemId = Number(creativePlacement?.itemId);
+          if (!Number.isFinite(creativeItemId) || creativeItemId < 0) {
+            return;
+          }
+
+          if (creativeType === "seed") {
+            sendWs({
+              type: "plant_seed",
+              x: tileX,
+              y: tileY,
+              seedId: Math.floor(creativeItemId),
+              creative: true,
+            });
+            return;
+          }
+
+          sendWs({
+            type: "set_tile",
+            action: "place",
+            x: tileX,
+            y: tileY,
+            tile: Math.floor(creativeItemId),
+            creative: true,
+          });
           return;
         }
-        sendWs({
-          type: "plant_seed",
-          x: tileX,
-          y: tileY,
-          seedId: Math.floor(seedId),
-        });
-      } else if (isRightClick) {
-        sendWs({
-          type: "set_tile",
-          action: "place",
-          x: tileX,
-          y: tileY,
-          tile: state.selectedBlockId,
-        });
+
+        const selectedItem = getSelectedInventoryItem?.() || null;
+        const itemType = String(selectedItem?.itemType || "").toLowerCase();
+        const itemId = Number(selectedItem?.itemId);
+        if (!Number.isFinite(itemId) || itemId < 0) {
+          return;
+        }
+
+        if (itemType === "seed") {
+          sendWs({
+            type: "plant_seed",
+            x: tileX,
+            y: tileY,
+            seedId: Math.floor(itemId),
+          });
+          return;
+        }
+
+        if (itemType === "block") {
+          sendWs({
+            type: "set_tile",
+            action: "place",
+            x: tileX,
+            y: tileY,
+            tile: Math.floor(itemId),
+            itemType: "block",
+            itemId: Math.floor(itemId),
+          });
+          return;
+        }
+
+        return;
       } else {
         sendWs({
           type: "set_tile",
