@@ -1292,6 +1292,16 @@ function ensureSelectedItemStillValid() {
     return;
   }
 
+  // If the player currently has a block selected from the block palette,
+  // do not treat it as "missing" just because it's not present in the
+  // seed inventory map. Blocks are selected from `state.blockDefs` and
+  // aren't tracked in `state.inventorySeeds`, so skip the inventory
+  // existence check for block selections.
+  if (String(state.selectedItemType || "").toLowerCase() === "block") {
+    state.selectedMissingSinceMs = 0;
+    return;
+  }
+
   const selectedKey = getSelectedInventoryKey();
   if (selectedKey && Number(state.inventorySeeds.get(selectedKey) || 0) > 0) {
     state.selectedMissingSinceMs = 0;
