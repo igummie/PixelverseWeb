@@ -802,7 +802,7 @@ def spawn_item_drop(
     return drop
 
 
-def spawn_item_drop_nearby(
+def spawn_item_drop_center(
     world: dict[str, Any],
     tile_x: int,
     tile_y: int,
@@ -819,35 +819,21 @@ def spawn_item_drop_nearby(
     if width <= 0 or height <= 0:
         return None
 
-    # Try center first, then nearby tiles in random order to avoid "one seed max per tile" losses.
-    candidate_tiles: list[tuple[int, int]] = [(int(tile_x), int(tile_y))]
-    for offset_y in (-1, 0, 1):
-        for offset_x in (-1, 0, 1):
-            if offset_x == 0 and offset_y == 0:
-                continue
-            candidate_tiles.append((int(tile_x) + offset_x, int(tile_y) + offset_y))
+    # Only drop on the center tile (no nearby fallback).
+    candidate_x = int(tile_x)
+    candidate_y = int(tile_y)
 
-    if len(candidate_tiles) > 1:
-        shuffled = candidate_tiles[1:]
-        random.shuffle(shuffled)
-        candidate_tiles = [candidate_tiles[0], *shuffled]
+    if candidate_x < 0 or candidate_x >= width or candidate_y < 0 or candidate_y >= height:
+        return None
 
-    for candidate_x, candidate_y in candidate_tiles:
-        if candidate_x < 0 or candidate_x >= width or candidate_y < 0 or candidate_y >= height:
-            continue
-
-        spawned = spawn_item_drop(
-            world,
-            candidate_x,
-            candidate_y,
-            item_id,
-            item_type=item_type,
-            allow_tile_stack=allow_tile_stack,
-        )
-        if spawned is not None:
-            return spawned
-
-    return None
+    return spawn_item_drop(
+        world,
+        candidate_x,
+        candidate_y,
+        item_id,
+        item_type=item_type,
+        allow_tile_stack=allow_tile_stack,
+    )
 
 
 def collect_gems_for_player(world: dict[str, Any], player: dict[str, Any]) -> tuple[list[str], int]:
@@ -1999,7 +1985,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             if tree_item_id < 0:
                                 continue
 
-                            tree_seed_drop = spawn_item_drop_nearby(
+                            tree_seed_drop = spawn_item_drop_center(
                                 world,
                                 x,
                                 y,
@@ -2081,7 +2067,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                         seed_drop_ids = get_block_seed_drop_ids(broken_tile_id)
                         for seed_drop_id in seed_drop_ids:
-                            seed_drop = spawn_item_drop_nearby(
+                            seed_drop = spawn_item_drop_center(
                                 world,
                                 x,
                                 y,
@@ -2105,7 +2091,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                         self_drop_ids = get_block_self_drop_seed_ids(broken_tile_id)
                         for self_drop_id in self_drop_ids:
-                            self_drop = spawn_item_drop_nearby(
+                            self_drop = spawn_item_drop_center(
                                 world,
                                 x,
                                 y,
