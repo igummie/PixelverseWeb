@@ -198,13 +198,13 @@
       "BLOCK_TYPE": "BACKGROUND",
       "ATLAS_ID": "cave_background",
       "TOUGHNESS": 2,
-      "GEM_CHANCE": 0.08,
+      "GEM_CHANCE": 0.1,
       "GEM_AMOUNT": 1,
       "GEM_AMOUNT_VAR": 0,
       "SEED_IDS": [
         {
           "ID": 14,
-          "CHANCE": 0.3
+          "CHANCE": 0.1
         }
       ],
       "PLACEABLE": true,
