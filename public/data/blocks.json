@@ -104,14 +104,6 @@
         }
       ],
       "PLACEABLE": true,
-      "ATLAS_TEXTURE_VARIANTS": [
-        {
-          "x": 48,
-          "y": 0,
-          "w": 16,
-          "h": 16
-        }
-      ],
       "DROP_SELF": true,
       "DROP_SELF_CHANCE": 0.2
     },
