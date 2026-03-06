@@ -157,6 +157,59 @@ button.secondary {
   margin-bottom: 10px;
 }
 
+.fruitDropsSection {
+  border-top: 1px solid #334155;
+  padding-top: 8px;
+  margin-top: 6px;
+}
+
+.fruitDropsEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.fruitDropsHintGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+  margin-top: 6px;
+}
+
+.fruitDropColumns {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.35fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(72px, 0.8fr) minmax(72px, 0.8fr) auto;
+  gap: 10px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.fruitDropRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.35fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(72px, 0.8fr) minmax(72px, 0.8fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.fruitDropRow input,
+.fruitDropRow select {
+  min-width: 0;
+  width: 100%;
+}
+
+.fruitDropRow input[type="number"] {
+  min-width: 70px;
+}
+
+.fruitDropRemoveBtn {
+  white-space: nowrap;
+}
+
 .pickerGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -314,6 +367,18 @@ button.secondary {
 
 @media (max-width: 1100px) {
   .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .fruitDropRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fruitDropColumns {
+    display: none;
+  }
+
+  .fruitDropsHintGrid {
     grid-template-columns: 1fr;
   }
 }

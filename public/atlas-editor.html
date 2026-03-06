@@ -1438,6 +1438,21 @@
       }
 
       function normalizeSeedIdsForEditor(block) {
+        const formatSeedDropChanceForInput = (rawChance) => {
+          const numericChance = Number(rawChance);
+          if (!Number.isFinite(numericChance)) {
+            return "20";
+          }
+
+          // Stored chance is canonical 0..1. Values >1 are treated as legacy percent input.
+          const normalizedChance = numericChance > 1
+            ? Math.max(0, Math.min(1, numericChance / 100))
+            : Math.max(0, Math.min(1, numericChance));
+          const percentValue = normalizedChance * 100;
+
+          return Number(percentValue.toFixed(2)).toString();
+        };
+
         const rows = [];
 
         const rawSeedIds = block ? block.SEED_IDS : null;
@@ -1448,13 +1463,13 @@
               const rawChance = entry.CHANCE ?? entry.chance;
               rows.push({
                 id: rawId == null ? "" : String(rawId),
-                chance: rawChance == null ? "0.2" : String(rawChance),
+                chance: rawChance == null ? "20" : formatSeedDropChanceForInput(rawChance),
               });
               continue;
             }
 
             if (entry != null && entry !== "") {
-              rows.push({ id: String(entry), chance: "0.2" });
+              rows.push({ id: String(entry), chance: "20" });
             }
           }
 
@@ -1467,7 +1482,7 @@
             if (!entry || typeof entry !== "object") continue;
             rows.push({
               id: entry.SEED_ID == null ? "" : String(entry.SEED_ID),
-              chance: entry.CHANCE == null ? "0.2" : String(entry.CHANCE),
+              chance: entry.CHANCE == null ? "20" : formatSeedDropChanceForInput(entry.CHANCE),
             });
           }
 
@@ -1477,7 +1492,9 @@
         }
 
         if (block && block.SEED_DROP_ID != null) {
-          const fallbackChance = block.SEED_DROP_CHANCE == null ? "0.2" : String(block.SEED_DROP_CHANCE);
+          const fallbackChance = block.SEED_DROP_CHANCE == null
+            ? "20"
+            : formatSeedDropChanceForInput(block.SEED_DROP_CHANCE);
           return [{ id: String(block.SEED_DROP_ID), chance: fallbackChance }];
         }
 
@@ -1498,7 +1515,7 @@
         addBtn.textContent = "+";
         addBtn.title = "Add seed drop row";
 
-        const appendRow = (seedId = "", chance = "0.2") => {
+        const appendRow = (seedId = "", chance = "20") => {
           const row = document.createElement("div");
           row.className = "seedIdsRow";
 
@@ -1513,10 +1530,10 @@
           const chanceInput = document.createElement("input");
           chanceInput.type = "number";
           chanceInput.className = "blockFieldInput seedIdsChance";
-          chanceInput.step = "0.01";
+          chanceInput.step = "0.1";
           chanceInput.min = "0";
-          chanceInput.max = "1";
-          chanceInput.placeholder = "chance";
+          chanceInput.max = "100";
+          chanceInput.placeholder = "%";
           chanceInput.value = chance;
 
           const removeBtn = document.createElement("button");
@@ -1533,12 +1550,12 @@
           list.appendChild(row);
         };
 
-        addBtn.addEventListener("click", () => appendRow("", "0.2"));
+        addBtn.addEventListener("click", () => appendRow("", "20"));
         wrap.appendChild(addBtn);
 
         if (Array.isArray(initialRows)) {
           for (const entry of initialRows) {
-            appendRow(String(entry.id ?? ""), String(entry.chance ?? "0.2"));
+            appendRow(String(entry.id ?? ""), String(entry.chance ?? "20"));
           }
         }
 
@@ -1591,7 +1608,7 @@
           return "Extra animation frames after base ATLAS_TEXTURE. `seconds` = frame duration in seconds.";
         }
         if (key === "SEED_IDS") {
-          return "Drop table entries. `id` is seed block ID, `chance` is 0..1.";
+          return "Drop table entries. `id` is seed block ID, `chance` accepts percent (0..100) or ratio (0..1).";
         }
         if (key === "DROP_SELF") {
           return "When enabled, this block can drop itself when broken.";
@@ -1934,12 +1951,14 @@
               }
 
               const chanceText = String(chanceInput ? chanceInput.value : "").trim();
-              const chanceValue = chanceText === "" ? 0.2 : Number(chanceText);
+              const chanceValue = chanceText === "" ? 20 : Number(chanceText);
               if (!Number.isFinite(chanceValue)) {
                 throw new Error("SEED_IDS chance must be a valid number");
               }
 
-              const clampedChance = Math.max(0, Math.min(1, chanceValue));
+              // Accept either 0..1 ratio or 0..100 percent from editor input.
+              const normalizedChance = chanceValue > 1 ? chanceValue / 100 : chanceValue;
+              const clampedChance = Math.max(0, Math.min(1, normalizedChance));
               entries.push({ ID: seedId, CHANCE: clampedChance });
             }
 

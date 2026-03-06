@@ -9,6 +9,20 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 
+ALLOWED_ITEM_TYPES = {"seed", "block", "furniture", "clothes"}
+
+
+def normalize_item_type(value: Any, default: str = "seed") -> str:
+    normalized_default = str(default or "seed").strip().lower()
+    if normalized_default not in ALLOWED_ITEM_TYPES:
+        normalized_default = "seed"
+
+    text = str(value or normalized_default).strip().lower()
+    if text not in ALLOWED_ITEM_TYPES:
+        return normalized_default
+    return text
+
+
 class SaveTexture47ConfigBody(BaseModel):
     atlasId: str = Field(min_length=1, max_length=64)
     columns: int = Field(ge=1, le=512)
@@ -292,6 +306,72 @@ def sanitize_seed_drop_entry(value: Any) -> dict[str, Any] | None:
     return output
 
 
+def sanitize_fruit_drop_entry(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        try:
+            item_id = int(value)
+        except Exception:
+            return None
+        if item_id < 0:
+            return None
+        return {
+            "ITEM_TYPE": "seed",
+            "ITEM_ID": item_id,
+            "CHANCE": 1.0,
+            "MIN": 1,
+            "MAX": 1,
+        }
+
+    item_id = -1
+    for key in ("ITEM_ID", "item_id", "ID", "SEED_ID", "id"):
+        if key not in value:
+            continue
+        try:
+            item_id = int(value.get(key))
+            break
+        except Exception:
+            continue
+    if item_id < 0:
+        return None
+
+    item_type = normalize_item_type(
+        value.get("ITEM_TYPE", value.get("item_type", value.get("TYPE", value.get("type", "seed")))),
+        default="seed",
+    )
+
+    try:
+        chance = float(value.get("CHANCE", value.get("chance", 1.0)))
+    except Exception:
+        chance = 1.0
+    chance = max(0.0, min(1.0, chance))
+
+    try:
+        count = int(value.get("COUNT", value.get("count", 1)))
+    except Exception:
+        count = 1
+
+    try:
+        min_count = int(value.get("MIN", value.get("min", count)))
+    except Exception:
+        min_count = count
+
+    try:
+        max_count = int(value.get("MAX", value.get("max", count)))
+    except Exception:
+        max_count = count
+
+    min_count = max(0, min_count)
+    max_count = max(min_count, max_count)
+
+    return {
+        "ITEM_TYPE": item_type,
+        "ITEM_ID": int(item_id),
+        "CHANCE": round(chance, 4),
+        "MIN": int(min_count),
+        "MAX": int(max_count),
+    }
+
+
 def normalize_tint_color(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -326,29 +406,19 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     except Exception:
         growtime = 0
 
-    try:
-        fruit_min = max(0, int(value.get("FRUIT_MIN", 0)))
-    except Exception:
-        fruit_min = 0
-
-    try:
-        fruit_max = max(0, int(value.get("FRUIT_MAX", fruit_min)))
-    except Exception:
-        fruit_max = fruit_min
-    if fruit_max < fruit_min:
-        fruit_max = fruit_min
-
     seed_atlas_id = normalize_atlas_id_value(value.get("SEED_ATLAS_ID"))
     seed_atlas_texture = normalize_atlas_texture_rect(value.get("SEED_ATLAS_TEXTURE"))
     seed_tint = normalize_tint_color(value.get("SEED_TINT"))
 
     tree_stages: list[dict[str, Any]] = []
     tree_drops: list[dict[str, Any]] = []
+    fruit_drops: list[dict[str, Any]] = []
     tree_name = ""
     tree_tint = ""
     raw_tree = value.get("TREE")
     raw_stages: Any = value.get("TREE_STAGES", [])
     raw_tree_drops: Any = value.get("TREE_DROPS", [])
+    raw_fruit_drops: Any = value.get("FRUIT_DROPS", [])
 
     if isinstance(raw_tree, dict):
         tree_name = str(raw_tree.get("NAME", "")).strip()
@@ -357,6 +427,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
             raw_stages = raw_tree.get("STAGES", [])
         if isinstance(raw_tree.get("DROPS"), list):
             raw_tree_drops = raw_tree.get("DROPS", [])
+        if isinstance(raw_tree.get("FRUIT_DROPS"), list):
+            raw_fruit_drops = raw_tree.get("FRUIT_DROPS", [])
 
     if isinstance(raw_stages, list):
         for raw_stage in raw_stages:
@@ -370,15 +442,22 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
             if drop is not None:
                 tree_drops.append(drop)
 
+    if isinstance(raw_fruit_drops, list):
+        for raw_fruit_drop in raw_fruit_drops:
+            fruit_drop = sanitize_fruit_drop_entry(raw_fruit_drop)
+            if fruit_drop is not None:
+                fruit_drops.append(fruit_drop)
+
     tree_stages.sort(key=lambda entry: int(entry.get("STAGE", 0)))
 
     output: dict[str, Any] = {
         "SEED_ID": seed_id,
         "NAME": name,
         "GROWTIME": growtime,
-        "FRUIT_MIN": fruit_min,
-        "FRUIT_MAX": fruit_max,
     }
+
+    if fruit_drops:
+        output["FRUIT_DROPS"] = fruit_drops
 
     if seed_atlas_id is not None:
         output["SEED_ATLAS_ID"] = seed_atlas_id

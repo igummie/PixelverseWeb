@@ -1,4 +1,6 @@
 export function createWorldDropsController({ state, settings }) {
+  const ALLOWED_ITEM_TYPES = new Set(["seed", "block", "furniture", "clothes"]);
+
   const {
     GEM_BOB_BASE_AMPLITUDE_PX,
     GEM_BOB_AMPLITUDE_VARIANCE_PX,
@@ -108,11 +110,15 @@ export function createWorldDropsController({ state, settings }) {
       return null;
     }
 
+    const normalizedItemType = String(entry.itemType ?? entry.item_type ?? "seed").trim().toLowerCase();
+    const itemType = ALLOWED_ITEM_TYPES.has(normalizedItemType) ? normalizedItemType : "seed";
+
     return {
       id,
       x,
       y,
       itemId: Math.floor(itemId),
+      itemType,
     };
   }
 

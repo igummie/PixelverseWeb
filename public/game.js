@@ -168,6 +168,7 @@ const state = {
   texture47: new Map(),
   selectedBlockId: 1,
   selectedSeedId: -1,
+  selectedItemType: "seed",
   velocity: { x: 0, y: 0 },
   collider: { width: 0.72, height: 0.92 },
   onGround: false,
@@ -527,6 +528,7 @@ function clearActiveWorldRuntimeState() {
   updateGemUi();
   state.inventorySeeds.clear();
   state.selectedSeedId = -1;
+  state.selectedItemType = "seed";
   renderInventoryDrawer();
   state.gemDrops.clear();
   state.seedDrops.clear();
@@ -654,7 +656,8 @@ const inputController = createInputController({
     sendWs,
     pauseMenu,
     getChatInputValue: () => chatInput?.value || "",
-    getSelectedSeedId: () => state.selectedSeedId,
+    getSelectedSeedId: () => (state.selectedItemType === "seed" ? state.selectedSeedId : -1),
+    dropSelectedInventorySeed,
   },
 });
 
@@ -1052,8 +1055,36 @@ function getSeedDropSprite(seedId) {
   return assetsLoader.getSeedDropSprite(seedId);
 }
 
-function getItemDropSprite(itemId) {
-  return assetsLoader.getItemDropSprite(itemId);
+function getItemDropSprite(itemId, itemType = "") {
+  return assetsLoader.getItemDropSprite(itemId, itemType);
+}
+
+const ALLOWED_ITEM_TYPES = new Set(["seed", "block", "furniture", "clothes"]);
+
+function normalizeItemType(value, fallback = "seed") {
+  const normalizedFallback = ALLOWED_ITEM_TYPES.has(String(fallback || "").trim().toLowerCase())
+    ? String(fallback).trim().toLowerCase()
+    : "seed";
+  const text = String(value ?? "").trim().toLowerCase();
+  return ALLOWED_ITEM_TYPES.has(text) ? text : normalizedFallback;
+}
+
+function getItemDisplayName(itemId, itemType) {
+  const normalizedType = normalizeItemType(itemType);
+  if (normalizedType === "block") {
+    return String(state.blockDefs.get(itemId)?.NAME || `Block ${itemId}`);
+  }
+  if (normalizedType === "furniture") {
+    return `Furniture ${itemId}`;
+  }
+  if (normalizedType === "clothes") {
+    return `Clothes ${itemId}`;
+  }
+  return String(
+    state.seedDefs.get(itemId)?.NAME
+    || state.blockDefs.get(itemId)?.NAME
+    || `Item ${itemId}`,
+  );
 }
 
 function normalizeInventoryEntry(entry) {
@@ -1062,6 +1093,7 @@ function normalizeInventoryEntry(entry) {
   }
 
   const itemId = Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id);
+  const itemType = normalizeItemType(entry.itemType ?? entry.item_type ?? "seed", "seed");
   const count = Number(entry.count);
   if (!Number.isFinite(itemId) || !Number.isFinite(count)) {
     return null;
@@ -1074,6 +1106,8 @@ function normalizeInventoryEntry(entry) {
   }
 
   return {
+    key: `${itemType}:${normalizedItemId}`,
+    itemType,
     itemId: normalizedItemId,
     count: normalizedCount,
   };
@@ -1090,7 +1124,7 @@ function normalizeInventoryPayload(payload) {
     if (!entry) {
       continue;
     }
-    merged.set(entry.itemId, (merged.get(entry.itemId) || 0) + entry.count);
+    merged.set(entry.key, (merged.get(entry.key) || 0) + entry.count);
   }
 
   return merged;
@@ -1098,15 +1132,35 @@ function normalizeInventoryPayload(payload) {
 
 function getInventoryEntriesSorted() {
   return Array.from(state.inventorySeeds.entries())
-    .map(([itemId, count]) => ({ itemId: Number(itemId), count: Number(count) }))
+    .map(([itemKey, count]) => {
+      const [typePart, idPart] = String(itemKey).split(":", 2);
+      const itemType = normalizeItemType(typePart || "seed", "seed");
+      const itemId = Number(idPart);
+      return {
+        key: String(itemKey),
+        itemType,
+        itemId,
+        count: Number(count),
+      };
+    })
     .filter((entry) => Number.isFinite(entry.itemId) && Number.isFinite(entry.count) && entry.count > 0)
-    .sort((a, b) => a.itemId - b.itemId);
+    .sort((a, b) => a.key.localeCompare(b.key));
 }
 
-function setSelectedSeed(seedId) {
+function getSelectedInventoryKey() {
+  if (!Number.isFinite(Number(state.selectedSeedId)) || Number(state.selectedSeedId) < 0) {
+    return "";
+  }
+  const type = normalizeItemType(state.selectedItemType || "seed", "seed");
+  return `${type}:${Math.floor(Number(state.selectedSeedId))}`;
+}
+
+function setSelectedSeed(seedId, itemType = "seed") {
   const numericSeedId = Number(seedId);
+  const normalizedType = normalizeItemType(itemType, "seed");
   if (!Number.isFinite(numericSeedId) || numericSeedId < 0) {
     state.selectedSeedId = -1;
+    state.selectedItemType = "seed";
     if (seedSelectHud) {
       seedSelectHud.value = "";
     }
@@ -1115,14 +1169,16 @@ function setSelectedSeed(seedId) {
   }
 
   state.selectedSeedId = Math.floor(numericSeedId);
+  state.selectedItemType = normalizedType;
   if (seedSelectHud) {
-    seedSelectHud.value = String(state.selectedSeedId);
+    seedSelectHud.value = normalizedType === "seed" ? String(state.selectedSeedId) : "";
   }
   renderInventoryDrawer();
 }
 
 function ensureSelectedSeedStillValid() {
-  if (state.selectedSeedId >= 0 && Number(state.inventorySeeds.get(state.selectedSeedId) || 0) > 0) {
+  const selectedKey = getSelectedInventoryKey();
+  if (selectedKey && Number(state.inventorySeeds.get(selectedKey) || 0) > 0) {
     return;
   }
 
@@ -1132,7 +1188,7 @@ function ensureSelectedSeedStillValid() {
     return;
   }
 
-  setSelectedSeed(first.itemId);
+  setSelectedSeed(first.itemId, first.itemType);
 }
 
 function renderInventoryDrawer() {
@@ -1157,12 +1213,12 @@ function renderInventoryDrawer() {
       continue;
     }
 
-    const isSelected = entry.itemId === state.selectedSeedId;
+    const isSelected = entry.key === getSelectedInventoryKey();
     if (isSelected) {
       slot.classList.add("selected");
     }
 
-    const sprite = getItemDropSprite(entry.itemId);
+    const sprite = getItemDropSprite(entry.itemId, entry.itemType);
     if (sprite) {
       const icon = document.createElement("img");
       icon.className = "inventoryItemIcon";
@@ -1178,14 +1234,12 @@ function renderInventoryDrawer() {
     count.textContent = String(entry.count);
     slot.appendChild(count);
 
-    const itemName = String(
-      state.seedDefs.get(entry.itemId)?.NAME
-      || state.blockDefs.get(entry.itemId)?.NAME
-      || `Item ${entry.itemId}`,
-    );
+    const itemName = entry.itemType === "block"
+      ? getItemDisplayName(entry.itemId, "block")
+      : getItemDisplayName(entry.itemId, entry.itemType);
     slot.title = `${itemName} x${entry.count}`;
     slot.addEventListener("click", () => {
-      setSelectedSeed(entry.itemId);
+      setSelectedSeed(entry.itemId, entry.itemType);
     });
     inventoryGrid.appendChild(slot);
   }
@@ -1194,15 +1248,31 @@ function renderInventoryDrawer() {
     if (state.selectedSeedId < 0) {
       inventorySelectedInfo.textContent = "Selected: none";
     } else {
-      const selectedCount = Number(state.inventorySeeds.get(state.selectedSeedId) || 0);
-      const selectedItemName = String(
-        state.seedDefs.get(state.selectedSeedId)?.NAME
-        || state.blockDefs.get(state.selectedSeedId)?.NAME
-        || `Item ${state.selectedSeedId}`,
-      );
+      const selectedKey = getSelectedInventoryKey();
+      const selectedCount = Number(state.inventorySeeds.get(selectedKey) || 0);
+      const selectedItemName = getItemDisplayName(state.selectedSeedId, state.selectedItemType);
       inventorySelectedInfo.textContent = `Selected: ${selectedItemName} x${Math.max(0, selectedCount)}`;
     }
   }
+}
+
+function dropSelectedInventorySeed(count = 1) {
+  if (!state.connected) {
+    return;
+  }
+
+  const itemId = Number(state.selectedSeedId);
+  if (!Number.isFinite(itemId) || itemId < 0) {
+    return;
+  }
+
+  const itemType = normalizeItemType(state.selectedItemType || "seed", "seed");
+  sendWs({
+    type: "drop_inventory_seed",
+    itemType,
+    itemId: Math.floor(itemId),
+    count: Math.max(1, Math.floor(Number(count) || 1)),
+  });
 }
 
 function applyInventorySnapshot(payload) {
@@ -1669,12 +1739,9 @@ function handleSocketMessage(msg) {
       const label = drops
         .map((entry) => {
           const itemId = Math.floor(Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id) || 0);
+          const itemType = normalizeItemType(entry.itemType ?? entry.item_type ?? "seed", "seed");
           const count = Math.max(1, Math.floor(Number(entry.count) || 1));
-          const itemName = String(
-            state.seedDefs.get(itemId)?.NAME
-            || state.blockDefs.get(itemId)?.NAME
-            || `Item ${itemId}`,
-          );
+          const itemName = getItemDisplayName(itemId, itemType);
           return `${itemName} x${count}`;
         })
         .join(", ");
@@ -1738,7 +1805,7 @@ blockSelect.addEventListener("change", () => {
 
 seedSelectHud?.addEventListener("change", () => {
   const nextSeedId = Number(seedSelectHud.value);
-  setSelectedSeed(Number.isFinite(nextSeedId) ? Math.floor(nextSeedId) : -1);
+  setSelectedSeed(Number.isFinite(nextSeedId) ? Math.floor(nextSeedId) : -1, "seed");
 });
 
 passwordInput.addEventListener("keydown", (event) => {
@@ -2052,7 +2119,7 @@ function drawSeedDrops() {
 
   const now = performance.now();
   for (const drop of state.seedDrops.values()) {
-    const sprite = getItemDropSprite(drop.itemId);
+    const sprite = getItemDropSprite(drop.itemId, drop.itemType);
     if (!sprite) {
       continue;
     }

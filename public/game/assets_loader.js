@@ -485,10 +485,20 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     return sprite;
   }
 
-  function getItemDropSprite(itemId) {
+  function getItemDropSprite(itemId, itemType = "") {
     const normalizedItemId = Number(itemId);
     if (!Number.isFinite(normalizedItemId) || normalizedItemId < 0) {
       return null;
+    }
+
+    const normalizedItemType = String(itemType || "").trim().toLowerCase();
+
+    if (normalizedItemType === "block") {
+      return getBlockDropSprite(normalizedItemId);
+    }
+
+    if (normalizedItemType === "seed") {
+      return getSeedDropSprite(normalizedItemId);
     }
 
     // Prefer seed visuals for legacy SEED_IDS compatibility when IDs overlap.

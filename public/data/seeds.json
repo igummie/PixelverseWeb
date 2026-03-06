@@ -4,8 +4,22 @@
       "SEED_ID": 1,
       "NAME": "Dirt Seed",
       "GROWTIME": 60,
-      "FRUIT_MIN": 3,
-      "FRUIT_MAX": 5,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_TYPE": "seed",
+          "ITEM_ID": 1,
+          "CHANCE": 0.33,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_TYPE": "block",
+          "ITEM_ID": 1,
+          "CHANCE": 1.0,
+          "MIN": 3,
+          "MAX": 5
+        }
+      ],
       "SEED_ATLAS_ID": "seed",
       "SEED_ATLAS_TEXTURE": {
         "x": 16,

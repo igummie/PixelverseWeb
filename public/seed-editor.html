@@ -44,14 +44,6 @@
               <input id="growtimeInput" type="number" min="0" step="1" value="3600" />
             </div>
             <div class="fieldStack">
-              <label for="fruitMinInput">FRUIT_MIN</label>
-              <input id="fruitMinInput" type="number" min="0" step="1" value="1" />
-            </div>
-            <div class="fieldStack">
-              <label for="fruitMaxInput">FRUIT_MAX</label>
-              <input id="fruitMaxInput" type="number" min="0" step="1" value="3" />
-            </div>
-            <div class="fieldStack">
               <label for="seedTintInput">SEED_TINT</label>
               <input id="seedTintInput" type="text" placeholder="#ffffff" />
             </div>
@@ -59,6 +51,30 @@
               <label for="seedTintColorInput">Seed Tint Picker</label>
               <input id="seedTintColorInput" type="color" value="#ffffff" />
             </div>
+          </div>
+
+          <div class="fruitDropsSection">
+            <div class="row" style="margin-bottom: 6px">
+              <div class="title small" style="margin: 0">Fruit Drops</div>
+              <button id="addFruitDropBtn" class="secondary" type="button">+ Add Fruit Drop</button>
+            </div>
+            <div class="tiny" style="margin-top: 0">Choose item type + item id, then set MIN/MAX amount range per drop entry.</div>
+            <!-- <div class="fruitDropsHintGrid tiny" aria-hidden="true">
+              <span>Type: `seed`, `block`, `furniture`, `clothes`</span>
+              <span>Item ID: numeric id for selected type</span>
+              <span>Chance: 0..1 (`0.25` = 25%)</span>
+              <span>Min: minimum amount</span>
+              <span>Max: maximum amount</span>
+            </div> -->
+            <div class="fruitDropColumns" aria-hidden="true">
+              <span>Type</span>
+              <span>Item ID</span>
+              <span>Chance</span>
+              <span>Min</span>
+              <span>Max</span>
+              <span></span>
+            </div>
+            <div id="fruitDropsEditor" class="fruitDropsEditor"></div>
           </div>
         </div>
 
@@ -170,8 +186,8 @@
       const seedIdInput = document.getElementById("seedIdInput");
       const seedNameInput = document.getElementById("seedNameInput");
       const growtimeInput = document.getElementById("growtimeInput");
-      const fruitMinInput = document.getElementById("fruitMinInput");
-      const fruitMaxInput = document.getElementById("fruitMaxInput");
+      const fruitDropsEditor = document.getElementById("fruitDropsEditor");
+      const addFruitDropBtn = document.getElementById("addFruitDropBtn");
       const seedTintInput = document.getElementById("seedTintInput");
       const seedTintColorInput = document.getElementById("seedTintColorInput");
       const treeNameInput = document.getElementById("treeNameInput");
@@ -200,8 +216,8 @@
       const resetJsonBtn = document.getElementById("resetJsonBtn");
       const copyJsonBtn = document.getElementById("copyJsonBtn");
 
-      const seedInputs = [seedIdInput, seedNameInput, growtimeInput, fruitMinInput, fruitMaxInput, seedTintInput, seedTintColorInput, treeNameInput, treeTintInput, treeTintColorInput];
-      const seedActionButtons = [deleteSeedBtn, saveBtn, assignSeedTextureBtn, assignTreeTextureBtn, loadSeedAtlasBtn, loadTreeAtlasBtn];
+      const seedInputs = [seedIdInput, seedNameInput, growtimeInput, seedTintInput, seedTintColorInput, treeNameInput, treeTintInput, treeTintColorInput];
+      const seedActionButtons = [deleteSeedBtn, saveBtn, assignSeedTextureBtn, assignTreeTextureBtn, loadSeedAtlasBtn, loadTreeAtlasBtn, addFruitDropBtn];
 
       const state = {
         pickerAtlases: [],
@@ -219,6 +235,8 @@
         },
       };
 
+      const ALLOWED_ITEM_TYPES = ["seed", "block", "furniture", "clothes"];
+
       function normalizeAtlasId(value) {
         if (typeof value === "number" && Number.isInteger(value)) return value;
         const text = String(value ?? "").trim();
@@ -233,6 +251,141 @@
           return text.toLowerCase();
         }
         return "";
+      }
+
+      function normalizeItemType(value, fallback = "seed") {
+        const normalizedFallback = ALLOWED_ITEM_TYPES.includes(String(fallback || "").trim().toLowerCase())
+          ? String(fallback).trim().toLowerCase()
+          : "seed";
+        const text = String(value ?? "").trim().toLowerCase();
+        if (!ALLOWED_ITEM_TYPES.includes(text)) {
+          return normalizedFallback;
+        }
+        return text;
+      }
+
+      function normalizeFruitDrops(rawDrops, fallbackSeedId = 0) {
+        const rows = [];
+        if (Array.isArray(rawDrops)) {
+          for (const entry of rawDrops) {
+            if (!entry || typeof entry !== "object") {
+              continue;
+            }
+
+            const rawItemId = entry.ITEM_ID ?? entry.item_id ?? entry.ID ?? entry.SEED_ID ?? entry.id;
+            const itemId = Math.max(0, Number.parseInt(rawItemId, 10) || 0);
+            const itemType = normalizeItemType(entry.ITEM_TYPE ?? entry.item_type ?? entry.TYPE ?? entry.type ?? "seed");
+            const chanceRaw = Number.parseFloat(String(entry.CHANCE ?? entry.chance ?? "1"));
+            const chance = Number.isFinite(chanceRaw) ? Math.max(0, Math.min(1, chanceRaw)) : 1;
+            const count = Number.parseInt(entry.COUNT ?? entry.count ?? 1, 10) || 1;
+            const min = Math.max(0, Number.parseInt(entry.MIN ?? entry.min ?? count, 10) || count);
+            const max = Math.max(min, Number.parseInt(entry.MAX ?? entry.max ?? count, 10) || min);
+            rows.push({ itemType, itemId, chance, min, max });
+          }
+        }
+
+        return rows;
+      }
+
+      function buildFruitDropsEditor(seed) {
+        if (!fruitDropsEditor) return;
+        fruitDropsEditor.innerHTML = "";
+
+        const rows = Array.isArray(seed?.FRUIT_DROPS) ? seed.FRUIT_DROPS : [];
+        const appendRow = (entry) => {
+          const row = document.createElement("div");
+          row.className = "fruitDropRow";
+
+          const typeSelect = document.createElement("select");
+          typeSelect.className = "fruitDropType";
+          for (const itemType of ALLOWED_ITEM_TYPES) {
+            const option = document.createElement("option");
+            option.value = itemType;
+            option.textContent = itemType;
+            typeSelect.append(option);
+          }
+          typeSelect.value = normalizeItemType(entry?.itemType ?? entry?.ITEM_TYPE ?? "seed");
+          typeSelect.title = "Item type to drop";
+
+          const idInput = document.createElement("input");
+          idInput.type = "number";
+          idInput.className = "fruitDropItemId";
+          idInput.min = "0";
+          idInput.step = "1";
+          idInput.placeholder = "item id";
+          idInput.title = "Item ID to drop";
+          idInput.value = String(Math.max(0, Number.parseInt(entry?.itemId ?? entry?.ITEM_ID ?? 0, 10) || 0));
+
+          const chanceInput = document.createElement("input");
+          chanceInput.type = "number";
+          chanceInput.className = "fruitDropChance";
+          chanceInput.min = "0";
+          chanceInput.max = "1";
+          chanceInput.step = "0.01";
+          chanceInput.placeholder = "chance";
+          chanceInput.title = "Drop chance from 0 to 1 (0.25 = 25%)";
+          const normalizedChance = Number.parseFloat(String(entry?.chance ?? entry?.CHANCE ?? 1));
+          chanceInput.value = String(Number.isFinite(normalizedChance) ? Math.max(0, Math.min(1, normalizedChance)) : 1);
+
+          const minInput = document.createElement("input");
+          minInput.type = "number";
+          minInput.className = "fruitDropMin";
+          minInput.min = "0";
+          minInput.step = "1";
+          minInput.placeholder = "min";
+          minInput.title = "Minimum amount to drop";
+          minInput.value = String(Math.max(0, Number.parseInt(entry?.min ?? entry?.MIN ?? 1, 10) || 1));
+
+          const maxInput = document.createElement("input");
+          maxInput.type = "number";
+          maxInput.className = "fruitDropMax";
+          maxInput.min = "0";
+          maxInput.step = "1";
+          maxInput.placeholder = "max";
+          maxInput.title = "Maximum amount to drop";
+          maxInput.value = String(Math.max(0, Number.parseInt(entry?.max ?? entry?.MAX ?? 1, 10) || 1));
+
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "secondary fruitDropRemoveBtn";
+          removeBtn.textContent = "Remove";
+          removeBtn.addEventListener("click", () => {
+            row.remove();
+            applyCurrentSeedFields();
+            updateJsonOutput();
+            renderSeedCards();
+          });
+
+          for (const control of [typeSelect, idInput, chanceInput, minInput, maxInput]) {
+            control.addEventListener("input", () => {
+              applyCurrentSeedFields();
+              updateJsonOutput();
+              renderSeedCards();
+            });
+          }
+
+          row.append(typeSelect, idInput, chanceInput, minInput, maxInput, removeBtn);
+          fruitDropsEditor.append(row);
+        };
+
+        for (const row of rows) {
+          appendRow(row);
+        }
+      }
+
+      function readFruitDropsFromEditor() {
+        if (!fruitDropsEditor) return [];
+        const rows = [];
+        for (const row of fruitDropsEditor.querySelectorAll(".fruitDropRow")) {
+          const itemType = normalizeItemType(row.querySelector(".fruitDropType")?.value || "seed");
+          const itemId = Math.max(0, Number.parseInt(row.querySelector(".fruitDropItemId")?.value || "0", 10) || 0);
+          const chanceRaw = Number.parseFloat(String(row.querySelector(".fruitDropChance")?.value || "1"));
+          const chance = Number.isFinite(chanceRaw) ? Math.max(0, Math.min(1, chanceRaw)) : 1;
+          const min = Math.max(0, Number.parseInt(row.querySelector(".fruitDropMin")?.value || "0", 10) || 0);
+          const max = Math.max(min, Number.parseInt(row.querySelector(".fruitDropMax")?.value || String(min), 10) || min);
+          rows.push({ ITEM_TYPE: itemType, ITEM_ID: itemId, CHANCE: chance, MIN: min, MAX: max });
+        }
+        return rows;
       }
 
       function setStatus(message, isError = false) {
@@ -272,8 +425,10 @@
           SEED_ID: Math.max(0, Number.parseInt(seed?.SEED_ID ?? 0, 10) || 0),
           NAME: String(seed?.NAME ?? "").trim() || `SEED_${seed?.SEED_ID ?? 0}`,
           GROWTIME: Math.max(0, Number.parseInt(seed?.GROWTIME ?? 3600, 10) || 3600),
-          FRUIT_MIN: Math.max(0, Number.parseInt(seed?.FRUIT_MIN ?? 1, 10) || 1),
-          FRUIT_MAX: Math.max(0, Number.parseInt(seed?.FRUIT_MAX ?? 3, 10) || 3),
+          FRUIT_DROPS: normalizeFruitDrops(
+            seed?.FRUIT_DROPS,
+            seed?.SEED_ID ?? 0,
+          ),
           SEED_TINT: normalizeTint(seed?.SEED_TINT ?? ""),
           SEED_ATLAS_ID: normalizeAtlasId(seed?.SEED_ATLAS_ID ?? ""),
           SEED_ATLAS_TEXTURE: {
@@ -410,13 +565,12 @@
           seedIdInput.value = "";
           seedNameInput.value = "";
           growtimeInput.value = "";
-          fruitMinInput.value = "";
-          fruitMaxInput.value = "";
           seedTintInput.value = "";
           seedTintColorInput.value = "#ffffff";
           treeNameInput.value = "";
           treeTintInput.value = "";
           treeTintColorInput.value = "#ffffff";
+          fruitDropsEditor.innerHTML = "";
           stageTableBody.innerHTML = "";
           treeSection.hidden = true;
           treeEmptyHint.hidden = false;
@@ -442,8 +596,7 @@
         seedIdInput.value = String(seed.SEED_ID);
         seedNameInput.value = seed.NAME;
         growtimeInput.value = String(seed.GROWTIME);
-        fruitMinInput.value = String(seed.FRUIT_MIN);
-        fruitMaxInput.value = String(seed.FRUIT_MAX);
+        buildFruitDropsEditor(seed);
         seedTintInput.value = seed.SEED_TINT || "";
         if (/^#[0-9a-f]{6}$/i.test(seed.SEED_TINT || "")) {
           seedTintColorInput.value = seed.SEED_TINT;
@@ -589,7 +742,7 @@
       function createSeedEntry() {
         applyCurrentSeedFields();
         const used = new Set(state.seeds.map((seed) => seed.SEED_ID));
-        let nextId = 0;
+        let nextId = 1;
         while (used.has(nextId)) nextId += 1;
 
         state.seeds.push(
@@ -597,8 +750,9 @@
             SEED_ID: nextId,
             NAME: `SEED_${nextId}`,
             GROWTIME: 3600,
-            FRUIT_MIN: 1,
-            FRUIT_MAX: 3,
+            FRUIT_DROPS: [
+              { ITEM_TYPE: "seed", ITEM_ID: nextId, MIN: 1, MAX: 1 },
+            ],
             TREE: {
               NAME: `TREE_${nextId}`,
               TINT: "",
@@ -615,8 +769,7 @@
         seed.SEED_ID = Math.max(0, Number.parseInt(seedIdInput.value, 10) || 0);
         seed.NAME = String(seedNameInput.value || "").trim() || `SEED_${seed.SEED_ID}`;
         seed.GROWTIME = Math.max(0, Number.parseInt(growtimeInput.value, 10) || 0);
-        seed.FRUIT_MIN = Math.max(0, Number.parseInt(fruitMinInput.value, 10) || 0);
-        seed.FRUIT_MAX = Math.max(seed.FRUIT_MIN, Number.parseInt(fruitMaxInput.value, 10) || 0);
+        seed.FRUIT_DROPS = readFruitDropsFromEditor();
         seed.SEED_TINT = normalizeTint(seedTintInput.value);
         seed.TREE.NAME = String(treeNameInput.value || "").trim();
         seed.TREE.TINT = normalizeTint(treeTintInput.value);
@@ -830,12 +983,25 @@
         renderFromSelected();
       });
 
-      [seedIdInput, seedNameInput, growtimeInput, fruitMinInput, fruitMaxInput, seedTintInput, treeNameInput, treeTintInput].forEach((input) => {
+      [seedIdInput, seedNameInput, growtimeInput, seedTintInput, treeNameInput, treeTintInput].forEach((input) => {
         input.addEventListener("input", () => {
           applyCurrentSeedFields();
           updateJsonOutput();
           renderSeedCards();
         });
+      });
+
+      addFruitDropBtn?.addEventListener("click", () => {
+        const seed = state.seeds[state.selectedIndex];
+        if (!seed) return;
+        const selectedSeedId = Math.max(0, Number.parseInt(seed.SEED_ID, 10) || 0);
+        const nextRows = Array.isArray(seed.FRUIT_DROPS) ? [...seed.FRUIT_DROPS] : [];
+        nextRows.push({ ITEM_TYPE: "seed", ITEM_ID: selectedSeedId, CHANCE: 1, MIN: 1, MAX: 1 });
+        seed.FRUIT_DROPS = normalizeFruitDrops(nextRows, selectedSeedId);
+        buildFruitDropsEditor(seed);
+        applyCurrentSeedFields();
+        updateJsonOutput();
+        renderSeedCards();
       });
 
       seedTintColorInput.addEventListener("input", () => {
