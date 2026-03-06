@@ -186,6 +186,18 @@ body {
   box-sizing: border-box;
 }
 
+.blockFieldInputWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldHint {
+  font-size: 11px;
+  color: #93c5fd;
+  line-height: 1.35;
+}
+
 .blockFieldJson {
   min-height: 72px;
   resize: vertical;
@@ -218,6 +230,65 @@ body {
 
 .seedIdsAddBtn {
   width: fit-content;
+}
+
+.animFramesEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.animFramesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.animFramesRow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.animFramesHeader {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: #bfdbfe;
+  opacity: 0.95;
+}
+
+.animFramesHeader span {
+  padding-left: 2px;
+}
+
+.animFramesEditor .animFramesHint,
+.animFramesEditor .animFramesHeader {
+  display: none;
+}
+
+.animFramesEditor.hasFrames .animFramesHint,
+.animFramesEditor.hasFrames .animFramesHeader {
+  display: grid;
+}
+
+.animFramesEditor.hasFrames .animFramesHint {
+  display: block;
+}
+
+.animFramesControls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.animFramesAddBtn,
+.animFramesRemoveBtn {
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 input,

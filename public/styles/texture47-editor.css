@@ -133,6 +133,20 @@
         gap: 4px;
       }
 
+      .tintColorRow {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      #tintPickerInput {
+        flex: 0 0 52px;
+        width: 52px;
+        height: 36px;
+        padding: 2px;
+        border-radius: 8px;
+      }
+
       .atlasSearchWrap {
         position: relative;
         flex: 1;

@@ -15,6 +15,8 @@ class SaveTexture47ConfigBody(BaseModel):
     rows: int = Field(ge=1, le=512)
     maskOrder: list[Any] = Field(default_factory=list)
     maskVariants: dict[str, list[Any]] = Field(default_factory=dict)
+    tint: str | None = None
+    tintAlpha: float | None = None
 
 
 class SaveRegularAtlasTextureEntry(BaseModel):
@@ -86,6 +88,17 @@ def normalize_atlas_id_value(value: Any) -> int | str | None:
     return None
 
 
+def normalize_texture47_id(value: Any) -> str | None:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+
+    if re.fullmatch(r"[a-z0-9_-]+", text):
+        return text
+
+    return None
+
+
 def normalize_atlas_texture_rect(value: Any) -> dict[str, int] | None:
     if not isinstance(value, dict):
         return None
@@ -116,7 +129,9 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
         "NAME",
         "BLOCK_TYPE",
         "ATLAS_ID",
+        "TEXTURE47_ID",
         "ATLAS_TEXTURE",
+        "ANIM_FRAMES",
         "TOUGHNESS",
         "GEM_CHANCE",
         "GEM_AMOUNT",
@@ -134,13 +149,18 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
     if normalized_atlas_id is not None:
         atlas_id_value = normalized_atlas_id
 
-    uses_texture47 = isinstance(atlas_id_value, str) and bool(str(atlas_id_value).strip())
+    texture47_id = normalize_texture47_id(block.get("TEXTURE47_ID"))
+
+    uses_texture47 = bool(texture47_id) or (isinstance(atlas_id_value, str) and bool(str(atlas_id_value).strip()))
 
     normalized_values: dict[str, Any] = {}
     for key, value in block.items():
         next_value = value
         if key == "ATLAS_ID":
             next_value = atlas_id_value
+
+        if key == "TEXTURE47_ID":
+            next_value = texture47_id
 
         # Texture47 blocks derive tile data from mask config, so explicit atlas rect is redundant.
         if key == "ATLAS_TEXTURE" and uses_texture47:
@@ -152,6 +172,9 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
             continue
 
         normalized_values[key] = next_value
+
+    if texture47_id is not None:
+        normalized_values["TEXTURE47_ID"] = texture47_id
 
     for key in key_order:
         if key in normalized_values:
@@ -448,6 +471,19 @@ def register_editor_routes(
             "maskOrder": sanitized_mask_order,
             "maskVariants": sanitized_mask_variants,
         }
+
+        tint = normalize_tint_color(payload.tint)
+        if tint:
+            output["tint"] = tint
+
+        if payload.tintAlpha is not None:
+            try:
+                tint_alpha = float(payload.tintAlpha)
+            except Exception:
+                tint_alpha = 0.0
+            tint_alpha = max(0.0, min(1.0, tint_alpha))
+            if tint_alpha > 0:
+                output["tintAlpha"] = round(tint_alpha, 4)
 
         texture47_dir = public_dir / "assets" / "texture47" / "configs"
         texture47_dir.mkdir(parents=True, exist_ok=True)

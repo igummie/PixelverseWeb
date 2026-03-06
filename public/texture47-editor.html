@@ -46,6 +46,21 @@
           </div>
         </div>
 
+        <div class="row">
+          <div class="fieldStack">
+            <label for="tintInput">Tint Color</label>
+            <div class="tintColorRow">
+              <input id="tintPickerInput" type="color" value="#ffffff" aria-label="Tint color picker" />
+              <input id="tintInput" type="text" value="" placeholder="#ffffff" />
+            </div>
+            <div class="tiny">Use picker or type hex (`#rrggbb` or `#rrggbbaa`). Leave text blank for no tint.</div>
+          </div>
+          <div class="fieldStack">
+            <label for="tintAlphaInput">Tint Strength (0..1)</label>
+            <input id="tintAlphaInput" type="number" min="0" max="1" step="0.05" value="0" />
+          </div>
+        </div>
+
         <div id="atlasWrap" class="atlasWrap">
           <canvas id="atlasCanvas" width="256" height="224"></canvas>
         </div>
@@ -120,6 +135,16 @@
           <button id="deletePresetBtn">Delete Preset</button>
         </div>
 
+        <div class="row">
+          <input id="presetOffsetXInput" type="number" step="1" value="0" placeholder="preset offset X (tiles)" />
+          <input id="presetOffsetYInput" type="number" step="1" value="0" placeholder="preset offset Y (tiles)" />
+        </div>
+
+        <div class="row">
+          <button id="loadPresetOffsetBtn">Load Preset + Offset</button>
+          <button id="shiftCurrentMappingsBtn">Shift Current Mapping</button>
+        </div>
+
         <div id="status" class="status"></div>
         <div class="links">Other tools: <a href="/atlas-editor.html">regular atlas editor</a> | <a href="/seed-editor.html">seed editor</a> | <a href="/index.html">game</a></div>
       </div>
@@ -176,6 +201,9 @@
       const openCreateAtlasBtn = document.getElementById("openCreateAtlasBtn");
       const columnsInput = document.getElementById("columnsInput");
       const rowsInput = document.getElementById("rowsInput");
+      const tintPickerInput = document.getElementById("tintPickerInput");
+      const tintInput = document.getElementById("tintInput");
+      const tintAlphaInput = document.getElementById("tintAlphaInput");
       const loadBtn = document.getElementById("loadBtn");
       const atlasWrap = document.getElementById("atlasWrap");
       const atlasCanvas = document.getElementById("atlasCanvas");
@@ -206,6 +234,10 @@
       const presetSelect = document.getElementById("presetSelect");
       const loadPresetBtn = document.getElementById("loadPresetBtn");
       const deletePresetBtn = document.getElementById("deletePresetBtn");
+      const presetOffsetXInput = document.getElementById("presetOffsetXInput");
+      const presetOffsetYInput = document.getElementById("presetOffsetYInput");
+      const loadPresetOffsetBtn = document.getElementById("loadPresetOffsetBtn");
+      const shiftCurrentMappingsBtn = document.getElementById("shiftCurrentMappingsBtn");
       const status = document.getElementById("status");
       const testCanvasWrap = document.getElementById("testCanvasWrap");
       const testCanvas = document.getElementById("testCanvas");
@@ -253,6 +285,8 @@
         overlayOpacity: 0.22,
         showVariantDetails: false,
         showAdvancedMasks: false,
+        tint: "",
+        tintAlpha: 0,
         saveHandle: null,
         atlasOptions: ["dirt", "dev", "sand", "cave_background"],
         filteredAtlasOptions: [],
@@ -580,6 +614,122 @@
         return value;
       }
 
+      function normalizeTintColor(value) {
+        const text = String(value || "").trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{8}$/.test(text)) {
+          return text.toLowerCase();
+        }
+        return "";
+      }
+
+      function tintColorForPicker(value) {
+        const tint = normalizeTintColor(value);
+        if (!tint) {
+          return "#ffffff";
+        }
+        if (tint.length === 9) {
+          return tint.slice(0, 7);
+        }
+        return tint;
+      }
+
+      function syncTintInputsFromState() {
+        tintInput.value = state.tint;
+        tintPickerInput.value = tintColorForPicker(state.tint);
+      }
+
+      function normalizeTintAlpha(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return 0;
+        }
+        return Math.min(1, Math.max(0, numeric));
+      }
+
+      function applyTextureTintToContext(targetContext, x, y, width, height) {
+        const tint = normalizeTintColor(state.tint);
+        const tintAlpha = normalizeTintAlpha(state.tintAlpha);
+        if (!tint || tintAlpha <= 0) {
+          return;
+        }
+
+        targetContext.save();
+        targetContext.globalCompositeOperation = "source-atop";
+        targetContext.globalAlpha = tintAlpha;
+        targetContext.fillStyle = tint;
+        targetContext.fillRect(x, y, width, height);
+        targetContext.restore();
+      }
+
+      function parseInteger(inputValue, fallback = 0) {
+        const value = Number(inputValue);
+        if (!Number.isInteger(value)) {
+          return fallback;
+        }
+        return value;
+      }
+
+      function shiftTileIndex(tileIndex, offsetX, offsetY) {
+        if (!Number.isInteger(tileIndex) || tileIndex < 0) {
+          return null;
+        }
+
+        const sourceX = tileIndex % state.columns;
+        const sourceY = Math.floor(tileIndex / state.columns);
+        const nextX = sourceX + offsetX;
+        const nextY = sourceY + offsetY;
+
+        if (nextX < 0 || nextY < 0 || nextX >= state.columns || nextY >= state.rows) {
+          return null;
+        }
+
+        return nextY * state.columns + nextX;
+      }
+
+      function shiftCurrentMaskMappings(offsetX, offsetY) {
+        if (offsetX === 0 && offsetY === 0) {
+          return { changed: false, dropped: 0 };
+        }
+
+        const nextMap = new Map();
+        let changed = false;
+        let dropped = 0;
+
+        for (const [mask, variants] of state.maskVariants.entries()) {
+          if (!Array.isArray(variants)) {
+            continue;
+          }
+
+          const nextVariants = [];
+          for (const tileIndex of variants) {
+            const shifted = shiftTileIndex(tileIndex, offsetX, offsetY);
+            if (shifted == null) {
+              dropped += 1;
+              changed = true;
+              continue;
+            }
+
+            if (shifted !== tileIndex) {
+              changed = true;
+            }
+
+            if (!nextVariants.includes(shifted)) {
+              nextVariants.push(shifted);
+            }
+          }
+
+          if (nextVariants.length > 0) {
+            nextMap.set(mask, nextVariants);
+          }
+        }
+
+        if (changed) {
+          state.maskVariants = nextMap;
+        }
+
+        return { changed, dropped };
+      }
+
       function getTileCount() {
         return state.columns * state.rows;
       }
@@ -739,6 +889,7 @@
         atlasCanvas.height = state.image.height;
 
         atlasContext.drawImage(state.image, 0, 0);
+        applyTextureTintToContext(atlasContext, 0, 0, atlasCanvas.width, atlasCanvas.height);
 
         atlasContext.strokeStyle = "rgba(148, 163, 184, 0.45)";
         atlasContext.lineWidth = 1;
@@ -1128,6 +1279,8 @@
           testState.tileSize,
           testState.tileSize,
         );
+
+        applyTextureTintToContext(testContext, drawX, drawY, testState.tileSize, testState.tileSize);
       }
 
       function renderTestCanvas() {
@@ -1250,12 +1403,23 @@
       }
 
       function buildCleanJsonOutput() {
-        return {
+        const output = {
           columns: state.columns,
           rows: state.rows,
           maskOrder: buildCompactMaskOrderOutput(),
           maskVariants: buildMaskVariantsOutput(),
         };
+
+        const tint = normalizeTintColor(state.tint);
+        const tintAlpha = normalizeTintAlpha(state.tintAlpha);
+        if (tint) {
+          output.tint = tint;
+        }
+        if (tintAlpha > 0) {
+          output.tintAlpha = Number(tintAlpha.toFixed(4));
+        }
+
+        return output;
       }
 
       function readPresetsFromStorage() {
@@ -1325,6 +1489,8 @@
           rows: state.rows,
           maskOrder: buildMaskOrderOutput(),
           maskVariants: buildMaskVariantsOutput(),
+          tint: normalizeTintColor(state.tint),
+          tintAlpha: Number(normalizeTintAlpha(state.tintAlpha).toFixed(4)),
         };
 
         writePresetsToStorage(presets);
@@ -1332,7 +1498,7 @@
         setStatus(`Saved preset: ${presetName}`);
       }
 
-      async function loadPresetByName(presetName) {
+      async function loadPresetByName(presetName, offsetX = 0, offsetY = 0) {
         const presets = readPresetsFromStorage();
         const preset = presets[presetName];
         if (!preset || typeof preset !== "object") {
@@ -1356,9 +1522,23 @@
           maskOrder: preset.maskOrder,
           maskVariants: preset.maskVariants || {},
         });
+
+        state.tint = normalizeTintColor(preset.tint);
+        state.tintAlpha = normalizeTintAlpha(preset.tintAlpha);
+        syncTintInputsFromState();
+        tintAlphaInput.value = String(state.tintAlpha);
+
+        const offsetResult = shiftCurrentMaskMappings(offsetX, offsetY);
         clampTileSelection();
         generateJsonOutput();
         renderAll();
+
+        if (offsetX !== 0 || offsetY !== 0) {
+          const droppedText = offsetResult.dropped > 0 ? `; dropped ${offsetResult.dropped} out-of-bounds tiles` : "";
+          setStatus(`Loaded preset: ${presetName} with offset (${offsetX}, ${offsetY})${droppedText}`);
+          return;
+        }
+
         setStatus(`Loaded preset: ${presetName} (applied to current texture ${state.atlasId})`);
       }
 
@@ -1456,9 +1636,17 @@
           state.tileHeight = Math.floor(state.image.height / state.rows);
 
           parseConfigIntoState(config);
+          state.tint = normalizeTintColor(config?.tint);
+          state.tintAlpha = normalizeTintAlpha(config?.tintAlpha);
+          syncTintInputsFromState();
+          tintAlphaInput.value = String(state.tintAlpha);
           setStatus(`Loaded ${state.atlasId}.png and ${state.atlasId}.json`);
         } catch {
           state.maskVariants = new Map(DEFAULT_TEXTURE47_VALID_MASKS.map((mask, index) => [mask, [index]]));
+          state.tint = "";
+          state.tintAlpha = 0;
+          syncTintInputsFromState();
+          tintAlphaInput.value = "0";
           setStatus(`Loaded ${state.atlasId}.png. JSON missing, using default mask order.`);
         }
 
@@ -1474,6 +1662,15 @@
           maskOrder: buildMaskOrderOutput(),
           maskVariants: buildMaskVariantsOutput(),
         };
+
+        const tint = normalizeTintColor(state.tint);
+        const tintAlpha = normalizeTintAlpha(state.tintAlpha);
+        if (tint) {
+          output.tint = tint;
+        }
+        if (tintAlpha > 0) {
+          output.tintAlpha = Number(tintAlpha.toFixed(4));
+        }
 
         jsonOutput.value = JSON.stringify(output, null, 2);
       }
@@ -1560,15 +1757,26 @@
           rows: state.rows,
           maskOrder: buildMaskOrderOutput(),
           maskVariants: buildMaskVariantsOutput(),
+          tint: normalizeTintColor(state.tint),
+          tintAlpha: Number(normalizeTintAlpha(state.tintAlpha).toFixed(4)),
         };
 
         jsonOutput.value = JSON.stringify(
-          {
-            columns: payloadToSave.columns,
-            rows: payloadToSave.rows,
-            maskOrder: payloadToSave.maskOrder,
-            maskVariants: payloadToSave.maskVariants,
-          },
+          (() => {
+            const output = {
+              columns: payloadToSave.columns,
+              rows: payloadToSave.rows,
+              maskOrder: payloadToSave.maskOrder,
+              maskVariants: payloadToSave.maskVariants,
+            };
+            if (payloadToSave.tint) {
+              output.tint = payloadToSave.tint;
+            }
+            if (payloadToSave.tintAlpha > 0) {
+              output.tintAlpha = payloadToSave.tintAlpha;
+            }
+            return output;
+          })(),
           null,
           2,
         );
@@ -1979,6 +2187,34 @@
         await loadPresetByName(selectedName);
       });
 
+      loadPresetOffsetBtn.addEventListener("click", async () => {
+        const selectedName = String(presetSelect.value || "").trim();
+        if (!selectedName) {
+          setStatus("Select a preset to load", true);
+          return;
+        }
+
+        const offsetX = parseInteger(presetOffsetXInput.value, 0);
+        const offsetY = parseInteger(presetOffsetYInput.value, 0);
+        await loadPresetByName(selectedName, offsetX, offsetY);
+      });
+
+      shiftCurrentMappingsBtn.addEventListener("click", () => {
+        const offsetX = parseInteger(presetOffsetXInput.value, 0);
+        const offsetY = parseInteger(presetOffsetYInput.value, 0);
+        const result = shiftCurrentMaskMappings(offsetX, offsetY);
+
+        if (!result.changed) {
+          setStatus("No mapping shift applied");
+          return;
+        }
+
+        const droppedText = result.dropped > 0 ? `; dropped ${result.dropped} out-of-bounds tiles` : "";
+        setStatus(`Shifted current mapping by (${offsetX}, ${offsetY})${droppedText}`);
+        generateJsonOutput();
+        renderAll();
+      });
+
       deletePresetBtn.addEventListener("click", () => {
         const selectedName = String(presetSelect.value || "").trim();
         if (!selectedName) {
@@ -2011,6 +2247,27 @@
         state.rows = parsePositiveInt(rowsInput.value, state.rows);
         state.tileHeight = state.image ? Math.floor(state.image.height / state.rows) : state.tileHeight;
         clampTileSelection();
+        generateJsonOutput();
+        renderAll();
+      });
+
+      tintInput.addEventListener("change", () => {
+        state.tint = normalizeTintColor(tintInput.value);
+        syncTintInputsFromState();
+        generateJsonOutput();
+        renderAll();
+      });
+
+      tintPickerInput.addEventListener("input", () => {
+        state.tint = normalizeTintColor(tintPickerInput.value);
+        syncTintInputsFromState();
+        generateJsonOutput();
+        renderAll();
+      });
+
+      tintAlphaInput.addEventListener("change", () => {
+        state.tintAlpha = normalizeTintAlpha(tintAlphaInput.value);
+        tintAlphaInput.value = String(state.tintAlpha);
         generateJsonOutput();
         renderAll();
       });

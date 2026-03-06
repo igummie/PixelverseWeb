@@ -1408,8 +1408,15 @@ def bootstrap_payload(authorization: str | None = Header(default=None)) -> dict[
     for block in blocks_payload.get("blocks", []):
         if not isinstance(block, dict):
             continue
+
+        texture47_id = str(block.get("TEXTURE47_ID", "")).strip().lower()
+        if texture47_id:
+            texture47_atlas_ids.add(texture47_id)
+            continue
+
+        # Backward compatibility: legacy Texture47 blocks used string ATLAS_ID directly.
         atlas_id = str(block.get("ATLAS_ID", "")).strip().lower()
-        if atlas_id:
+        if atlas_id and not isinstance(block.get("ATLAS_TEXTURE"), dict):
             texture47_atlas_ids.add(atlas_id)
 
     payload = {

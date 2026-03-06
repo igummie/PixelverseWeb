@@ -146,6 +146,7 @@ const state = {
   mouse: { x: 0, y: 0 },
   lastMoveSentAt: 0,
   blockDefs: new Map(),
+  animatedBlockIds: new Set(),
   seedDefs: new Map(),
   atlases: new Map(),
   seedDropSpriteCache: new Map(),
@@ -524,7 +525,31 @@ function adjustCameraZoom(delta) {
 }
 
 function isTexture47Block(block) {
-  return typeof block?.ATLAS_ID === "string";
+  return !!getTexture47IdFromBlock(block);
+}
+
+function getTexture47IdFromBlock(block) {
+  const explicitId = String(block?.TEXTURE47_ID || "").trim().toLowerCase();
+  if (explicitId) {
+    return explicitId;
+  }
+
+  // Backward compatibility: legacy Texture47 blocks used string ATLAS_ID directly.
+  if (block?.ATLAS_TEXTURE && typeof block.ATLAS_TEXTURE === "object") {
+    return "";
+  }
+
+  const legacyId = String(block?.ATLAS_ID || "").trim().toLowerCase();
+  if (legacyId) {
+    return legacyId;
+  }
+
+  return "";
+}
+
+function atlasLookupKey(value) {
+  const kind = typeof value;
+  return `${kind}:${String(value)}`;
 }
 
 function getTileIdAtLayer(tileX, tileY, layer = "foreground") {
@@ -539,26 +564,26 @@ function getTileIdAtLayer(tileX, tileY, layer = "foreground") {
   return Number(state.world.foreground?.[index] || 0);
 }
 
-function sameTexture47Group(tileX, tileY, atlasId, layer = "foreground") {
+function sameTexture47Group(tileX, tileY, texture47Id, layer = "foreground") {
   const neighborId = getTileIdAtLayer(tileX, tileY, layer);
   if (neighborId === 0) {
     return false;
   }
 
   const neighborBlock = state.blockDefs.get(neighborId);
-  return !!neighborBlock && typeof neighborBlock.ATLAS_ID === "string" && neighborBlock.ATLAS_ID === atlasId;
+  return !!neighborBlock && getTexture47IdFromBlock(neighborBlock) === texture47Id;
 }
 
-function getTexture47Mask(tileX, tileY, atlasId, layer = "foreground") {
-  const north = sameTexture47Group(tileX, tileY - 1, atlasId, layer);
-  const east = sameTexture47Group(tileX + 1, tileY, atlasId, layer);
-  const south = sameTexture47Group(tileX, tileY + 1, atlasId, layer);
-  const west = sameTexture47Group(tileX - 1, tileY, atlasId, layer);
+function getTexture47Mask(tileX, tileY, texture47Id, layer = "foreground") {
+  const north = sameTexture47Group(tileX, tileY - 1, texture47Id, layer);
+  const east = sameTexture47Group(tileX + 1, tileY, texture47Id, layer);
+  const south = sameTexture47Group(tileX, tileY + 1, texture47Id, layer);
+  const west = sameTexture47Group(tileX - 1, tileY, texture47Id, layer);
 
-  const northEast = north && east && sameTexture47Group(tileX + 1, tileY - 1, atlasId, layer);
-  const southEast = south && east && sameTexture47Group(tileX + 1, tileY + 1, atlasId, layer);
-  const southWest = south && west && sameTexture47Group(tileX - 1, tileY + 1, atlasId, layer);
-  const northWest = north && west && sameTexture47Group(tileX - 1, tileY - 1, atlasId, layer);
+  const northEast = north && east && sameTexture47Group(tileX + 1, tileY - 1, texture47Id, layer);
+  const southEast = south && east && sameTexture47Group(tileX + 1, tileY + 1, texture47Id, layer);
+  const southWest = south && west && sameTexture47Group(tileX - 1, tileY + 1, texture47Id, layer);
+  const northWest = north && west && sameTexture47Group(tileX - 1, tileY - 1, texture47Id, layer);
 
   let mask = 0;
   if (north) mask |= 2;
@@ -578,14 +603,15 @@ function drawConnected47TileToContext(targetContext, block, drawX, drawY, layer 
     return false;
   }
 
-  const texture47 = state.texture47.get(block.ATLAS_ID);
+  const texture47Id = getTexture47IdFromBlock(block);
+  const texture47 = state.texture47.get(texture47Id);
   if (!texture47?.image) {
     return false;
   }
 
   const tileX = Math.floor(drawX / TILE_SIZE);
   const tileY = Math.floor(drawY / TILE_SIZE);
-  const mask = getTexture47Mask(tileX, tileY, block.ATLAS_ID, layer);
+  const mask = getTexture47Mask(tileX, tileY, texture47Id, layer);
   const variants = texture47.maskVariants.get(mask) || texture47.maskVariants.get(255) || [texture47.fallbackIndex];
   const hash = Math.abs((tileX * 73856093) ^ (tileY * 19349663));
   const variantIndex = variants[hash % variants.length];
@@ -597,7 +623,7 @@ function drawConnected47TileToContext(targetContext, block, drawX, drawY, layer 
   const sourceY = Math.floor(variantIndex / atlasColumns) * texture47.tileHeight;
 
   targetContext.drawImage(
-    texture47.image,
+    texture47.renderImage || texture47.image,
     sourceX,
     sourceY,
     texture47.tileWidth,
@@ -957,6 +983,85 @@ function updateRemotePlayersInterpolation(deltaSeconds) {
   }
 }
 
+function normalizeAnimFrame(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const x = Number(entry.x);
+  const y = Number(entry.y);
+  const w = Number(entry.w);
+  const h = Number(entry.h);
+  const seconds = Number(entry.seconds ?? entry.SECONDS ?? entry.duration ?? 0.15);
+
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) {
+    return null;
+  }
+
+  if (x < 0 || y < 0 || w <= 0 || h <= 0) {
+    return null;
+  }
+
+  return {
+    x: Math.floor(x),
+    y: Math.floor(y),
+    w: Math.floor(w),
+    h: Math.floor(h),
+    seconds: Number.isFinite(seconds) && seconds > 0 ? seconds : 0.15,
+  };
+}
+
+function blockHasRegularAnimation(block) {
+  if (!block?.ATLAS_TEXTURE || typeof block.ATLAS_TEXTURE !== "object") {
+    return false;
+  }
+
+  return Array.isArray(block.ANIM_FRAMES) && block.ANIM_FRAMES.length > 0;
+}
+
+function getAnimatedRegularTextureRect(block, nowMs = performance.now()) {
+  if (!block?.ATLAS_TEXTURE || typeof block.ATLAS_TEXTURE !== "object") {
+    return null;
+  }
+
+  const base = {
+    x: Number(block.ATLAS_TEXTURE.x) || 0,
+    y: Number(block.ATLAS_TEXTURE.y) || 0,
+    w: Number(block.ATLAS_TEXTURE.w) || TILE_SIZE,
+    h: Number(block.ATLAS_TEXTURE.h) || TILE_SIZE,
+    seconds: 0.15,
+  };
+
+  const frames = [base];
+  const rawFrames = Array.isArray(block.ANIM_FRAMES) ? block.ANIM_FRAMES : [];
+  for (const rawFrame of rawFrames) {
+    const frame = normalizeAnimFrame(rawFrame);
+    if (frame) {
+      frames.push(frame);
+    }
+  }
+
+  if (frames.length === 1) {
+    return base;
+  }
+
+  const totalSeconds = frames.reduce((sum, frame) => sum + Math.max(0.01, Number(frame.seconds) || 0.15), 0);
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return base;
+  }
+
+  let cursor = (Math.max(0, nowMs) / 1000) % totalSeconds;
+  for (const frame of frames) {
+    const frameSeconds = Math.max(0.01, Number(frame.seconds) || 0.15);
+    if (cursor < frameSeconds) {
+      return frame;
+    }
+    cursor -= frameSeconds;
+  }
+
+  return frames[frames.length - 1];
+}
+
 function drawTileToContext(targetContext, tileId, drawX, drawY, layer = "foreground") {
   const block = state.blockDefs.get(tileId);
   if (!block) {
@@ -972,7 +1077,10 @@ function drawTileToContext(targetContext, tileId, drawX, drawY, layer = "foregro
     return;
   }
 
-  const tex = block.ATLAS_TEXTURE;
+  const tex = getAnimatedRegularTextureRect(block, performance.now()) || block.ATLAS_TEXTURE;
+  if (!tex) {
+    return;
+  }
   targetContext.drawImage(
     atlas.image,
     tex.x,
@@ -1289,6 +1397,7 @@ async function loadBlockDefinitions(onAssetProgress = null) {
     : {};
 
   state.blockDefs.clear();
+  state.animatedBlockIds.clear();
   state.seedDefs.clear();
   state.atlases.clear();
   state.seedDropSpriteCache.clear();
@@ -1296,11 +1405,7 @@ async function loadBlockDefinitions(onAssetProgress = null) {
   state.texture47.clear();
   state.crackAtlas = null;
 
-  const texture47AtlasIds = new Set(
-    Array.from(data.blocks || [])
-      .filter((block) => isTexture47Block(block))
-      .map((block) => block.ATLAS_ID),
-  );
+  const atlasSpecsById = new Map();
 
   const atlasSpecs = [];
   const seenAtlasIds = new Set();
@@ -1312,6 +1417,7 @@ async function loadBlockDefinitions(onAssetProgress = null) {
     }
     seenAtlasIds.add(atlasId);
     atlasSpecs.push(atlas);
+    atlasSpecsById.set(atlasLookupKey(atlasId), atlas);
   }
 
   for (const atlas of seedsPayload.atlases || []) {
@@ -1321,6 +1427,28 @@ async function loadBlockDefinitions(onAssetProgress = null) {
     }
     seenAtlasIds.add(atlasId);
     atlasSpecs.push(atlas);
+    atlasSpecsById.set(atlasLookupKey(atlasId), atlas);
+  }
+
+  const texture47AtlasIds = new Set();
+  const texture47SrcById = new Map();
+  for (const block of data.blocks || []) {
+    if (!isTexture47Block(block)) {
+      continue;
+    }
+
+    const texture47Id = getTexture47IdFromBlock(block);
+    if (!texture47Id) {
+      continue;
+    }
+
+    texture47AtlasIds.add(texture47Id);
+
+    const atlasSpec = atlasSpecsById.get(atlasLookupKey(block?.ATLAS_ID));
+    const atlasSrc = String(atlasSpec?.SRC || "").trim();
+    if (atlasSrc && !texture47SrcById.has(texture47Id)) {
+      texture47SrcById.set(texture47Id, atlasSrc);
+    }
   }
 
   const totalAssets = atlasSpecs.length + 1 + texture47AtlasIds.size;
@@ -1343,6 +1471,10 @@ async function loadBlockDefinitions(onAssetProgress = null) {
 
   for (const block of data.blocks || []) {
     state.blockDefs.set(block.ID, block);
+    const blockId = Number(block?.ID);
+    if (blockHasRegularAnimation(block) && Number.isInteger(blockId)) {
+      state.animatedBlockIds.add(blockId);
+    }
   }
 
   for (const seed of seedsPayload.seeds || []) {
@@ -1390,11 +1522,14 @@ async function loadBlockDefinitions(onAssetProgress = null) {
 
   for (const atlasId of texture47AtlasIds) {
     try {
-      const image = await loadImage(`/assets/texture47/${atlasId}.png`);
+      const texture47Src = texture47SrcById.get(atlasId) || `/assets/texture47/${atlasId}.png`;
+      const image = await loadImage(texture47Src);
       let columns = TEXTURE47_COLS;
       let rows = TEXTURE47_ROWS;
       let maskOrder = DEFAULT_TEXTURE47_VALID_MASKS;
       let maskVariants = new Map();
+      let tint = "";
+      let tintAlpha = 0;
 
       try {
         const config = texture47Configs?.[atlasId] ?? null;
@@ -1438,6 +1573,12 @@ async function loadBlockDefinitions(onAssetProgress = null) {
             }
           }
         }
+
+        tint = normalizeSeedTint(config?.tint);
+        const parsedTintAlpha = Number(config?.tintAlpha);
+        if (Number.isFinite(parsedTintAlpha)) {
+          tintAlpha = Math.max(0, Math.min(1, parsedTintAlpha));
+        }
       } catch {
       }
 
@@ -1461,8 +1602,11 @@ async function loadBlockDefinitions(onAssetProgress = null) {
         }
       }
 
+      const renderImage = buildTintedAtlasImage(image, tint, tintAlpha);
+
       state.texture47.set(atlasId, {
         image,
+        renderImage,
         columns,
         rows,
         tileWidth: Math.floor(image.width / columns),
@@ -1471,6 +1615,8 @@ async function loadBlockDefinitions(onAssetProgress = null) {
         fallbackIndex,
         maskVariants,
         maskToIndex,
+        tint,
+        tintAlpha,
       });
     } catch (error) {
       console.warn(`47-tile texture missing for ${atlasId}:`, error.message);
@@ -1537,6 +1683,30 @@ function buildTintedSeedSprite(image, texture, tintHex) {
   spriteCtx.globalCompositeOperation = "source-over";
 
   return spriteCanvas;
+}
+
+function buildTintedAtlasImage(image, tintHex, tintAlpha = 0.35) {
+  const tintColor = normalizeSeedTint(tintHex);
+  const alpha = Number(tintAlpha);
+  if (!tintColor || !Number.isFinite(alpha) || alpha <= 0) {
+    return image;
+  }
+
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  const tintedCanvas = document.createElement("canvas");
+  tintedCanvas.width = image.width;
+  tintedCanvas.height = image.height;
+  const tintedContext = tintedCanvas.getContext("2d");
+  tintedContext.imageSmoothingEnabled = false;
+  tintedContext.clearRect(0, 0, tintedCanvas.width, tintedCanvas.height);
+  tintedContext.drawImage(image, 0, 0);
+  tintedContext.globalCompositeOperation = "source-atop";
+  tintedContext.globalAlpha = clampedAlpha;
+  tintedContext.fillStyle = tintColor;
+  tintedContext.fillRect(0, 0, tintedCanvas.width, tintedCanvas.height);
+  tintedContext.globalAlpha = 1;
+  tintedContext.globalCompositeOperation = "source-over";
+  return tintedCanvas;
 }
 
 function getSeedDropSprite(seedId) {
@@ -2538,6 +2708,61 @@ function drawWorld() {
     sourceW * state.camera.zoom,
     sourceH * state.camera.zoom,
   );
+
+  drawAnimatedTilesOverlay();
+}
+
+function drawAnimatedTilesOverlay() {
+  if (!state.world || state.animatedBlockIds.size === 0) {
+    return;
+  }
+
+  const zoom = Math.max(0.0001, state.camera.zoom);
+  const startTileX = Math.max(0, Math.floor(state.camera.x / TILE_SIZE));
+  const startTileY = Math.max(0, Math.floor(state.camera.y / TILE_SIZE));
+  const endTileX = Math.min(state.world.width - 1, Math.ceil((state.camera.x + canvas.width / zoom) / TILE_SIZE));
+  const endTileY = Math.min(state.world.height - 1, Math.ceil((state.camera.y + canvas.height / zoom) / TILE_SIZE));
+  const nowMs = performance.now();
+
+  const drawLayer = (layer) => {
+    for (let tileY = startTileY; tileY <= endTileY; tileY += 1) {
+      for (let tileX = startTileX; tileX <= endTileX; tileX += 1) {
+        const tileId = getTileIdAtLayer(tileX, tileY, layer);
+        if (!state.animatedBlockIds.has(tileId)) {
+          continue;
+        }
+
+        const block = state.blockDefs.get(tileId);
+        const atlas = state.atlases.get(block?.ATLAS_ID);
+        const image = atlas?.image;
+        if (!image) {
+          continue;
+        }
+
+        const tex = getAnimatedRegularTextureRect(block, nowMs);
+        if (!tex) {
+          continue;
+        }
+
+        const screenX = (tileX * TILE_SIZE - state.camera.x) * zoom;
+        const screenY = (tileY * TILE_SIZE - state.camera.y) * zoom;
+        ctx.drawImage(
+          image,
+          tex.x,
+          tex.y,
+          tex.w,
+          tex.h,
+          screenX,
+          screenY,
+          TILE_SIZE * zoom,
+          TILE_SIZE * zoom,
+        );
+      }
+    }
+  };
+
+  drawLayer("background");
+  drawLayer("foreground");
 }
 
 function getTileDamageKey(x, y, layer) {
