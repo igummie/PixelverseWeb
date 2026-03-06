@@ -17,12 +17,6 @@
     <div class="hero panel">
       <div class="title">Global Item Manager</div>
       <div class="subtitle">Manage ITEM_ID across all item types (currently blocks + seeds).</div>
-      <div class="warning">
-        This remaps references inside blocks.json and seeds.json (drop tables, fruit drops, tree drops)
-        and will remove legacy "ID"/"SEED_ID" fields in favor of a single <code>ITEM_ID</code>.
-        World and inventory save data are not migrated here.
-      </div>
-
       <div class="row">
         <button id="reloadBtn" type="button">Reload</button>
         <button id="autoReindexBtn" type="button">Auto Reindex</button>
@@ -210,6 +204,23 @@
           return state.atlasImageCache.get(key);
         }
 
+        // Support texture47 atlases (key like "t47:name") by loading the full
+        // texture47 image. For regular atlases, behave as before.
+        if (String(key).startsWith("s:t47:") || String(key).startsWith("t47:")) {
+          // atlasId may be passed as 't47:foo' or 'foo' depending on caller; normalize
+          const raw = String(atlasId || "");
+          const t47Key = raw.startsWith("t47:") ? raw.replace(/^t47:/, "") : raw;
+          try {
+            const data = await getTexture47PreviewData(t47Key);
+            const img = data?.image ?? null;
+            state.atlasImageCache.set(key, img);
+            return img;
+          } catch {
+            state.atlasImageCache.set(key, null);
+            return null;
+          }
+        }
+
         const atlas = state.atlasByKey.get(key);
         if (!atlas || !atlas.SRC) {
           state.atlasImageCache.set(key, null);
@@ -228,7 +239,91 @@
         }
       }
 
-      async function drawTexturePreview(canvas, atlasId, texture, placeholderLabel = "?") {
+      function parsePositiveInt(value, fallback) {
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+      }
+
+      async function getTexture47PreviewData(atlasId) {
+        const key = String(atlasId || "").trim().toLowerCase();
+        if (!key) return null;
+        if (state.texture47PreviewCache && state.texture47PreviewCache.has(key)) {
+          return state.texture47PreviewCache.get(key);
+        }
+
+        const image = new Image();
+        image.src = `/assets/texture47/${key}.png?ts=${Date.now()}`;
+        try {
+          await image.decode();
+        } catch {
+          if (!state.texture47PreviewCache) state.texture47PreviewCache = new Map();
+          state.texture47PreviewCache.set(key, null);
+          return null;
+        }
+
+        let config = null;
+        try {
+          let response = await fetch(`/assets/texture47/configs/${key}.json?ts=${Date.now()}`);
+          if (!response.ok) {
+            response = await fetch(`/assets/texture47/${key}.json?ts=${Date.now()}`);
+          }
+          if (response.ok) config = await response.json();
+        } catch {
+          // ignore
+        }
+
+        const columns = Math.max(1, parsePositiveInt(config?.columns, 8));
+        const rows = Math.max(1, parsePositiveInt(config?.rows, 6));
+        const tileWidth = Math.max(1, Math.floor(image.width / columns));
+        const tileHeight = Math.max(1, Math.floor(image.height / rows));
+
+        const pickTexture47PreviewIndex = (cfg) => {
+          const maskVariants = cfg?.maskVariants;
+          if (maskVariants && typeof maskVariants === "object") {
+            const variantZero = Array.isArray(maskVariants[0]) ? maskVariants[0] : Array.isArray(maskVariants["0"]) ? maskVariants["0"] : null;
+            if (Array.isArray(variantZero)) {
+              const first = Number(variantZero[0]);
+              if (Number.isInteger(first) && first >= 0) return first;
+            }
+            const variant255 = Array.isArray(maskVariants[255]) ? maskVariants[255] : Array.isArray(maskVariants["255"]) ? maskVariants["255"] : null;
+            if (Array.isArray(variant255)) {
+              const first = Number(variant255[0]);
+              if (Number.isInteger(first) && first >= 0) return first;
+            }
+          }
+          const maskOrder = Array.isArray(cfg?.maskOrder) ? cfg.maskOrder : [];
+          const index0 = maskOrder.findIndex((value) => Number(value) === 0);
+          if (index0 >= 0) return index0;
+          const index255 = maskOrder.findIndex((value) => Number(value) === 255);
+          if (index255 >= 0) return index255;
+          return 0;
+        };
+
+        const previewIndex = pickTexture47PreviewIndex(config);
+        const tint = typeof config?.tint === "string" ? String(config.tint).trim() : "";
+        const tintAlpha = Number.isFinite(Number(config?.tintAlpha)) ? Number(config?.tintAlpha) : 0;
+
+        const data = { image, columns, rows, tileWidth, tileHeight, previewIndex, tint, tintAlpha };
+        if (!state.texture47PreviewCache) state.texture47PreviewCache = new Map();
+        state.texture47PreviewCache.set(key, data);
+        return data;
+      }
+
+      function normalizeTintColor(value) {
+        const text = String(value ?? "").trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{8}$/.test(text)) {
+          return text.toLowerCase();
+        }
+        return "";
+      }
+
+      function normalizeTintAlpha(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(0, Math.min(1, n));
+      }
+
+      async function drawTexturePreview(canvas, atlasId, texture, placeholderLabel = "?", tint = "", tintAlpha = 0.35) {
         if (!texture) {
           drawPreviewPlaceholder(canvas, placeholderLabel);
           return;
@@ -243,10 +338,22 @@
         const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw background panel behind the sprite
         ctx.fillStyle = "#111827";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.drawImage(
+        // Create an offscreen canvas to render the sprite alone so tint can be
+        // applied only to sprite pixels (avoids tinting the whole background).
+        const temp = document.createElement("canvas");
+        temp.width = canvas.width;
+        temp.height = canvas.height;
+        const tctx = temp.getContext("2d");
+        tctx.imageSmoothingEnabled = false;
+        tctx.clearRect(0, 0, temp.width, temp.height);
+
+        // Draw the sprite into temp canvas at full size
+        tctx.drawImage(
           image,
           texture.x,
           texture.y,
@@ -254,9 +361,23 @@
           texture.h,
           0,
           0,
-          canvas.width,
-          canvas.height,
+          temp.width,
+          temp.height,
         );
+
+        const tintColor = normalizeTintColor(tint);
+        const alpha = normalizeTintAlpha(tintAlpha);
+        if (tintColor && alpha > 0) {
+          tctx.globalCompositeOperation = "source-atop";
+          tctx.globalAlpha = alpha;
+          tctx.fillStyle = tintColor;
+          tctx.fillRect(0, 0, temp.width, temp.height);
+          tctx.globalAlpha = 1;
+          tctx.globalCompositeOperation = "source-over";
+        }
+
+        // Draw the composed sprite (tinted if requested) onto the main canvas
+        ctx.drawImage(temp, 0, 0);
       }
 
       async function drawRowPreview(canvas, row) {
@@ -267,7 +388,7 @@
 
         if (row.itemType === "seed") {
           const seed = row.source;
-          await drawTexturePreview(canvas, seed.SEED_ATLAS_ID, seedTexture(seed), "S");
+          await drawTexturePreview(canvas, seed.SEED_ATLAS_ID, seedTexture(seed), "S", seed.SEED_TINT || seed.TINT || "", seed.SEED_TINT_ALPHA ?? seed.tintAlpha ?? 0.35);
           return;
         }
 
@@ -280,14 +401,21 @@
 
         const texture47Id = String(block.TEXTURE47_ID || block.ATLAS_ID || "").trim().toLowerCase();
         if (texture47Id) {
-          const tempAtlas = {
-            SRC: `/assets/texture47/${texture47Id}.png`,
-          };
-          const key = atlasLookupKey(`t47:${texture47Id}`);
-          if (!state.atlasByKey.has(key)) {
-            state.atlasByKey.set(key, tempAtlas);
-          }
-          await drawTexturePreview(canvas, `t47:${texture47Id}`, { x: 0, y: 0, w: 16, h: 16 }, "47");
+            const key = `t47:${texture47Id}`;
+            const data = await getTexture47PreviewData(texture47Id);
+            if (!data) {
+              drawPreviewPlaceholder(canvas, "47");
+              return;
+            }
+
+            const tileX = data.previewIndex % data.columns;
+            const tileY = Math.floor(data.previewIndex / data.columns);
+            const tex = { x: tileX * data.tileWidth, y: tileY * data.tileHeight, w: data.tileWidth, h: data.tileHeight };
+            // cache a minimal atlas entry so other code paths can still query it
+            const tempAtlas = { SRC: `/assets/texture47/${texture47Id}.png` };
+            const atlasKey = atlasLookupKey(key);
+            if (!state.atlasByKey.has(atlasKey)) state.atlasByKey.set(atlasKey, tempAtlas);
+            await drawTexturePreview(canvas, key, tex, "47", data.tint, data.tintAlpha);
           return;
         }
 
@@ -361,7 +489,7 @@
 
           const ids = document.createElement("div");
           ids.className = "itemIds";
-          ids.textContent = `ID ${row.currentId} -> ${row.nextId}`;
+          ids.textContent = `ID ${row.currentId}`;
           if (row.currentId !== row.nextId) {
             ids.classList.add("changed");
           }

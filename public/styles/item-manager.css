@@ -28,31 +28,41 @@ body {
 }
 
 .editorSwitcher {
+  /* Match other editors: pinned switcher bar */
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 60;
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+  background: rgba(17, 24, 39, 0.92);
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 6px;
 }
 
 .switchBtn {
+  display: inline-block;
   text-decoration: none;
-  color: #d7e4ff;
-  border: 1px solid rgba(162, 179, 255, 0.35);
-  padding: 7px 11px;
-  border-radius: 10px;
-  background: rgba(18, 28, 54, 0.75);
+  color: #bfdbfe;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #0f172a;
   transition: transform 120ms ease, background 120ms ease;
 }
 
 .switchBtn:hover {
   transform: translateY(-1px);
-  background: rgba(34, 50, 88, 0.85);
+  background: #0b1220;
 }
 
 .switchBtn.active {
-  background: linear-gradient(90deg, #2f5cf0, #3f83ff);
-  color: #f8fbff;
-  border-color: #6997ff;
+  color: #052e16;
+  border-color: #22c55e;
+  background: #86efac;
 }
 
 .panel {
@@ -66,6 +76,8 @@ body {
 
 .hero {
   margin-bottom: 12px;
+  /* create space so the fixed editorSwitcher doesn't overlap */
+  margin-top: 56px;
 }
 
 .title {
