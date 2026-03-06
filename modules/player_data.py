@@ -159,13 +159,22 @@ def parse_inventory_key(raw_key: Any) -> tuple[str, int] | None:
             return None
         return kind, item_id
 
-    # Legacy inventory keys were plain numeric ids; treat them as seeds.
+    # Legacy inventory keys were plain numeric ids; try to infer the type.
     try:
         item_id = int(text)
     except Exception:
         return None
     if item_id < 0:
         return None
+
+    # prefer block if we have a definition for this id
+    try:
+        from app import BLOCKS_BY_ID
+        if isinstance(BLOCKS_BY_ID, dict) and item_id in BLOCKS_BY_ID:
+            return "block", item_id
+    except Exception:
+        pass
+
     return "seed", item_id
 
 

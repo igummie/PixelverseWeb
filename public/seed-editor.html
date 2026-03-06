@@ -423,22 +423,23 @@
           };
         }
 
-        {
-          const itemId = Math.max(0, Number.parseInt(seed?.ITEM_ID ?? seed?.SEED_ID ?? 0, 10) || 0);
-          return {
-            ITEM_ID: itemId,
-            ITEM_TYPE: "seed",
-            NAME: String(seed?.NAME ?? "").trim() || `SEED_${itemId}`,
-            GROWTIME: Math.max(0, Number.parseInt(seed?.GROWTIME ?? 3600, 10) || 3600),
-            FRUIT_DROPS: normalizeFruitDrops(seed?.FRUIT_DROPS, itemId),
-            SEED_TINT: normalizeTint(seed?.SEED_TINT ?? ""),
-            SEED_ATLAS_ID: normalizeAtlasId(seed?.SEED_ATLAS_ID ?? ""),
-            SEED_ATLAS_TEXTURE: {
-              x: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.x ?? 0, 10) || 0),
-              y: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.y ?? 0, 10) || 0),
-            w: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.w ?? 16, 10) || 16),
-            h: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.h ?? 16, 10) || 16),
-          },
+        const itemId = Math.max(0, Number.parseInt(seed?.ITEM_ID ?? seed?.SEED_ID ?? 0, 10) || 0);
+        const seedAtlasTexture = {
+          x: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.x ?? 0, 10) || 0),
+          y: Math.max(0, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.y ?? 0, 10) || 0),
+          w: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.w ?? 16, 10) || 16),
+          h: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.h ?? 16, 10) || 16),
+        };
+
+        return {
+          ITEM_ID: itemId,
+          ITEM_TYPE: "seed",
+          NAME: String(seed?.NAME ?? "").trim() || `SEED_${itemId}`,
+          GROWTIME: Math.max(0, Number.parseInt(seed?.GROWTIME ?? 3600, 10) || 3600),
+          FRUIT_DROPS: normalizeFruitDrops(seed?.FRUIT_DROPS, itemId),
+          SEED_TINT: normalizeTint(seed?.SEED_TINT ?? ""),
+          SEED_ATLAS_ID: normalizeAtlasId(seed?.SEED_ATLAS_ID ?? ""),
+          SEED_ATLAS_TEXTURE: seedAtlasTexture,
           TREE: {
             NAME: String(seed?.TREE?.NAME ?? "").trim(),
             TINT: normalizeTint(seed?.TREE?.TINT ?? ""),
@@ -873,10 +874,22 @@
           state.seeds.sort((a, b) => Number(a.ITEM_ID || 0) - Number(b.ITEM_ID || 0));
           state.selectedIndex = state.seeds.length ? 0 : -1;
 
-          renderFromSelected();
+          try {
+            renderFromSelected();
+          } catch (err) {
+            console.error("renderFromSelected error:", err);
+            setStatus(String(err?.message || err), true);
+            return;
+          }
           if (state.seedAtlases.length) {
-            await loadPickerImage("seed");
-            await loadPickerImage("tree");
+            try {
+              await loadPickerImage("seed");
+              await loadPickerImage("tree");
+            } catch (err) {
+              console.error("loadPickerImage error:", err);
+              // Continue - atlas loading failures are non-fatal for editor data population
+              setStatus(String(err?.message || err), true);
+            }
           } else {
             drawPicker(seedAtlasCanvas, null, state.seedPicker.selectedRect, seedTileSizeInput);
             drawPicker(treeAtlasCanvas, null, state.treePicker.selectedRect, treeTileSizeInput);
