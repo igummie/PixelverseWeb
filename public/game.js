@@ -2257,6 +2257,20 @@ function drawDebugHitboxes() {
     ctx.strokeRect(pos.x, pos.y, size, size);
   }
 
+  // Seed/item pickup boxes centered on drop point.
+  for (const drop of state.seedDrops.values()) {
+    const itemType = String(drop.itemType || "seed").toLowerCase();
+    if (itemType === "seed") {
+      ctx.strokeStyle = "rgba(34, 197, 94, 0.95)";
+    } else {
+      ctx.strokeStyle = "rgba(99, 102, 241, 0.95)";
+    }
+    const half = 0.16;
+    const pos = toScreen(drop.x - half, drop.y - half);
+    const size = half * 2 * TILE_SIZE * zoom;
+    ctx.strokeRect(pos.x, pos.y, size, size);
+  }
+
   ctx.restore();
 }
 

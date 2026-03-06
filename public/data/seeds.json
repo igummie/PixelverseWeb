@@ -8,7 +8,7 @@
         {
           "ITEM_TYPE": "seed",
           "ITEM_ID": 1,
-          "CHANCE": 0.33,
+          "CHANCE": 0.5,
           "MIN": 1,
           "MAX": 1
         },

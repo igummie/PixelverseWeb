@@ -746,16 +746,16 @@ def spawn_gem_drops(world: dict[str, Any], tile_x: int, tile_y: int, total_amoun
     return created
 
 
-def spawn_seed_drop(
+def spawn_item_drop(
     world: dict[str, Any],
     tile_x: int,
     tile_y: int,
-    seed_id: int,
+    item_id: int,
     *,
     item_type: str = "seed",
     allow_tile_stack: bool = False,
 ) -> dict[str, Any] | None:
-    if seed_id < 0:
+    if item_id < 0:
         return None
 
     seed_drops = ensure_world_seed_state(world)
@@ -782,7 +782,7 @@ def spawn_seed_drop(
         "id": drop_id,
         "x": float(tile_x + local_x),
         "y": float(tile_y + local_y),
-        "item_id": int(seed_id),
+        "item_id": int(item_id),
         "item_type": normalize_item_type(item_type),
         "created_at": time.monotonic(),
     }
@@ -790,16 +790,16 @@ def spawn_seed_drop(
     return drop
 
 
-def spawn_seed_drop_nearby(
+def spawn_item_drop_nearby(
     world: dict[str, Any],
     tile_x: int,
     tile_y: int,
-    seed_id: int,
+    item_id: int,
     *,
     item_type: str = "seed",
     allow_tile_stack: bool = False,
 ) -> dict[str, Any] | None:
-    if seed_id < 0:
+    if item_id < 0:
         return None
 
     width = int(world.get("width", 0))
@@ -824,11 +824,11 @@ def spawn_seed_drop_nearby(
         if candidate_x < 0 or candidate_x >= width or candidate_y < 0 or candidate_y >= height:
             continue
 
-        spawned = spawn_seed_drop(
+        spawned = spawn_item_drop(
             world,
             candidate_x,
             candidate_y,
-            seed_id,
+            item_id,
             item_type=item_type,
             allow_tile_stack=allow_tile_stack,
         )
@@ -1604,6 +1604,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     "username": client["username"],
                     "x": spawn_x,
                     "y": spawn_y,
+                    "facing_x": 1,
                     "gems": int(persisted_gems),
                     "inventory": normalize_inventory(persisted_inventory),
                     "fly_enabled": False,
@@ -1695,6 +1696,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 x = max(0, min(world["width"] - 1, x))
                 y = max(0, min(world["height"] - 1, y))
+
+                try:
+                    previous_x = float(player.get("x", x))
+                except Exception:
+                    previous_x = x
+
+                horizontal_delta = x - previous_x
+                if horizontal_delta > 0.001:
+                    player["facing_x"] = 1
+                elif horizontal_delta < -0.001:
+                    player["facing_x"] = -1
+
                 player["x"] = x
                 player["y"] = y
 
@@ -1802,9 +1815,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     continue
 
                 try:
-                    seed_id = int(msg.get("itemId", msg.get("item_id", msg.get("seedId", msg.get("seed_id", -1)))))
+                    item_id = int(msg.get("itemId", msg.get("item_id", msg.get("seedId", msg.get("seed_id", -1)))))
                 except Exception:
-                    seed_id = -1
+                    item_id = -1
 
                 drop_item_type = normalize_item_type(msg.get("itemType", msg.get("item_type", "seed")))
 
@@ -1813,13 +1826,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 except Exception:
                     drop_count = 1
 
-                seed_id = int(seed_id)
+                item_id = int(item_id)
                 drop_count = max(1, min(99, int(drop_count)))
-                if seed_id < 0:
+                if item_id < 0:
                     continue
 
                 inventory = normalize_inventory(player.get("inventory", {}))
-                inventory_key = make_inventory_key(drop_item_type, seed_id)
+                inventory_key = make_inventory_key(drop_item_type, item_id)
                 current_count = int(inventory.get(inventory_key, 0))
                 if current_count <= 0:
                     continue
@@ -1836,23 +1849,25 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     player_center_x = 0.36
                     player_center_y = 0.46
 
-                drop_tile_x = max(0, min(world["width"] - 1, int(player_center_x)))
+                facing_x = -1 if int(player.get("facing_x", 1)) < 0 else 1
+                drop_tile_x = max(0, min(world["width"] - 1, int(player_center_x) + facing_x))
                 drop_tile_y = max(0, min(world["height"] - 1, int(player_center_y)))
 
-                spawned_seed_drops: list[dict[str, Any]] = []
+                spawned_item_drops: list[dict[str, Any]] = []
                 for _ in range(drop_count):
-                    spawned_seed_drop = spawn_seed_drop_nearby(
+                    spawned_item_drop = spawn_item_drop(
                         world,
                         drop_tile_x,
                         drop_tile_y,
-                        seed_id,
+                        item_id,
                         item_type=drop_item_type,
+                        allow_tile_stack=True,
                     )
-                    if spawned_seed_drop is None:
+                    if spawned_item_drop is None:
                         break
-                    spawned_seed_drops.append(spawned_seed_drop)
+                    spawned_item_drops.append(spawned_item_drop)
 
-                actual_drop_count = len(spawned_seed_drops)
+                actual_drop_count = len(spawned_item_drops)
                 if actual_drop_count <= 0:
                     continue
 
@@ -1868,17 +1883,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
                     await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
 
-                for spawned_seed_drop in spawned_seed_drops:
+                for spawned_item_drop in spawned_item_drops:
                     await broadcast_to_world(
                         world,
                         {
                             "type": "seed_drop_spawn",
                             "drop": {
-                                "id": str(spawned_seed_drop["id"]),
-                                "x": float(spawned_seed_drop["x"]),
-                                "y": float(spawned_seed_drop["y"]),
-                                    "itemId": int(spawned_seed_drop.get("item_id", spawned_seed_drop.get("seed_id", -1))),
-                                    "itemType": str(spawned_seed_drop.get("item_type", "seed")),
+                                "id": str(spawned_item_drop["id"]),
+                                "x": float(spawned_item_drop["x"]),
+                                "y": float(spawned_item_drop["y"]),
+                                "itemId": int(spawned_item_drop.get("item_id", spawned_item_drop.get("seed_id", -1))),
+                                "itemType": str(spawned_item_drop.get("item_type", "seed")),
                             },
                         },
                     )
@@ -1925,13 +1940,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             if tree_item_id < 0:
                                 continue
 
-                            tree_seed_drop = spawn_seed_drop_nearby(
+                            tree_seed_drop = spawn_item_drop(
                                 world,
                                 x,
                                 y,
                                 tree_item_id,
                                 item_type=tree_item_type,
-                                allow_tile_stack=True,
                             )
                             if tree_seed_drop is not None:
                                 await broadcast_to_world(
@@ -2007,7 +2021,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                         seed_drop_ids = get_block_seed_drop_ids(broken_tile_id)
                         for seed_drop_id in seed_drop_ids:
-                            seed_drop = spawn_seed_drop(world, x, y, seed_drop_id, item_type="seed")
+                            seed_drop = spawn_item_drop(
+                                world,
+                                x,
+                                y,
+                                seed_drop_id,
+                                item_type="seed",
+                            )
                             if seed_drop is not None:
                                 await broadcast_to_world(
                                     world,
@@ -2025,7 +2045,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                         self_drop_ids = get_block_self_drop_seed_ids(broken_tile_id)
                         for self_drop_id in self_drop_ids:
-                            self_drop = spawn_seed_drop_nearby(world, x, y, self_drop_id, item_type="block")
+                            self_drop = spawn_item_drop(
+                                world,
+                                x,
+                                y,
+                                self_drop_id,
+                                item_type="block",
+                            )
                             if self_drop is not None:
                                 await broadcast_to_world(
                                     world,
