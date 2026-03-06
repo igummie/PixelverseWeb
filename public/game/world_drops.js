@@ -103,8 +103,8 @@ export function createWorldDropsController({ state, settings }) {
     const id = String(entry.id || "").trim();
     const x = Number(entry.x);
     const y = Number(entry.y);
-    const seedId = Number(entry.seedId ?? entry.seed_id);
-    if (!id || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(seedId) || seedId < 0) {
+    const itemId = Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id);
+    if (!id || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(itemId) || itemId < 0) {
       return null;
     }
 
@@ -112,7 +112,7 @@ export function createWorldDropsController({ state, settings }) {
       id,
       x,
       y,
-      seedId: Math.floor(seedId),
+      itemId: Math.floor(itemId),
     };
   }
 

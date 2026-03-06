@@ -65,6 +65,7 @@ def initialize_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
+                inventory_json TEXT NOT NULL DEFAULT '{}',
                 created_at INTEGER NOT NULL
             )
             """
@@ -91,6 +92,7 @@ def initialize_db() -> None:
                 device_id TEXT NOT NULL UNIQUE,
                 username TEXT NOT NULL,
                 gems INTEGER NOT NULL DEFAULT 0,
+                inventory_json TEXT NOT NULL DEFAULT '{}',
                 created_at INTEGER NOT NULL
             )
             """
@@ -111,6 +113,15 @@ def initialize_db() -> None:
         }
         if "gems" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN gems INTEGER NOT NULL DEFAULT 0")
+        if "inventory_json" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN inventory_json TEXT NOT NULL DEFAULT '{}' ")
+
+        guest_columns = {
+            str(row["name"]).lower()
+            for row in conn.execute("PRAGMA table_info(guest_profiles)").fetchall()
+        }
+        if "inventory_json" not in guest_columns:
+            conn.execute("ALTER TABLE guest_profiles ADD COLUMN inventory_json TEXT NOT NULL DEFAULT '{}' ")
 
 
 def normalize_name(value: str | None, fallback: str = "") -> str:
@@ -141,6 +152,77 @@ def set_user_gems(user_id: int, gems: int) -> None:
         conn.execute("UPDATE users SET gems = ? WHERE id = ?", (max(0, int(gems)), user_id))
 
 
+def normalize_inventory(raw: Any) -> dict[int, int]:
+    if not isinstance(raw, dict):
+        return {}
+
+    normalized: dict[int, int] = {}
+    for raw_seed_id, raw_count in raw.items():
+        try:
+            seed_id = int(raw_seed_id)
+            count = int(raw_count)
+        except Exception:
+            continue
+
+        if seed_id < 0 or count <= 0:
+            continue
+
+        normalized[seed_id] = int(normalized.get(seed_id, 0)) + count
+
+    return normalized
+
+
+def parse_inventory_json(raw: Any) -> dict[int, int]:
+    if raw is None:
+        return {}
+
+    payload: Any = raw
+    if isinstance(raw, str):
+        try:
+            payload = json.loads(raw)
+        except Exception:
+            return {}
+
+    return normalize_inventory(payload)
+
+
+def serialize_inventory_json(inventory: dict[int, int]) -> str:
+    normalized = normalize_inventory(inventory)
+    payload = {str(seed_id): int(count) for seed_id, count in sorted(normalized.items())}
+    return json.dumps(payload, separators=(",", ":"))
+
+
+def inventory_to_client_payload(inventory: dict[int, int]) -> list[dict[str, int]]:
+    payload: list[dict[str, int]] = []
+    for seed_id, count in sorted(normalize_inventory(inventory).items()):
+        payload.append({"itemId": int(seed_id), "count": int(count)})
+    return payload
+
+
+def get_user_inventory(user_id: int) -> dict[int, int]:
+    if user_id <= 0:
+        return {}
+
+    with get_db() as conn:
+        row = conn.execute("SELECT inventory_json FROM users WHERE id = ?", (user_id,)).fetchone()
+
+    if not row:
+        return {}
+
+    return parse_inventory_json(row["inventory_json"])
+
+
+def set_user_inventory(user_id: int, inventory: dict[int, int]) -> None:
+    if user_id <= 0:
+        return
+
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET inventory_json = ? WHERE id = ?",
+            (serialize_inventory_json(inventory), user_id),
+        )
+
+
 def normalize_guest_device_id(value: str | None) -> str:
     normalized = str(value or "").strip().lower()
     if not re.fullmatch(r"[a-z0-9_-]{12,128}", normalized):
@@ -156,7 +238,7 @@ def get_or_create_guest_profile(device_id: str) -> dict[str, Any] | None:
     now = int(time.time())
     with get_db() as conn:
         existing = conn.execute(
-            "SELECT id, username, gems FROM guest_profiles WHERE device_id = ?",
+            "SELECT id, username, gems, inventory_json FROM guest_profiles WHERE device_id = ?",
             (normalized_device_id,),
         ).fetchone()
         if existing:
@@ -165,6 +247,7 @@ def get_or_create_guest_profile(device_id: str) -> dict[str, Any] | None:
                 "device_id": normalized_device_id,
                 "username": str(existing["username"]),
                 "gems": max(0, int(existing["gems"])),
+                "inventory": parse_inventory_json(existing["inventory_json"]),
             }
 
         guest_number = secrets.randbelow(900) + 100
@@ -180,6 +263,7 @@ def get_or_create_guest_profile(device_id: str) -> dict[str, Any] | None:
         "device_id": normalized_device_id,
         "username": guest_username,
         "gems": 0,
+        "inventory": {},
     }
 
 
@@ -205,6 +289,30 @@ def set_guest_profile_gems(profile_id: int, gems: int) -> None:
 
     with get_db() as conn:
         conn.execute("UPDATE guest_profiles SET gems = ? WHERE id = ?", (max(0, int(gems)), profile_id))
+
+
+def get_guest_profile_inventory(profile_id: int) -> dict[int, int]:
+    if profile_id <= 0:
+        return {}
+
+    with get_db() as conn:
+        row = conn.execute("SELECT inventory_json FROM guest_profiles WHERE id = ?", (profile_id,)).fetchone()
+
+    if not row:
+        return {}
+
+    return parse_inventory_json(row["inventory_json"])
+
+
+def set_guest_profile_inventory(profile_id: int, inventory: dict[int, int]) -> None:
+    if profile_id <= 0:
+        return
+
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE guest_profiles SET inventory_json = ? WHERE id = ?",
+            (serialize_inventory_json(inventory), profile_id),
+        )
 
 
 def hash_password(password: str) -> str:
@@ -459,6 +567,179 @@ def get_block_seed_drop_ids(tile_id: int) -> list[int]:
     return [seed_id]
 
 
+def _clamp_chance(raw_value: Any, default: float = 0.0) -> float:
+    try:
+        chance = float(raw_value)
+    except Exception:
+        chance = float(default)
+    return max(0.0, min(1.0, chance))
+
+
+def _resolve_drop_entry_seed_id(raw_entry: Any) -> int:
+    try:
+        if isinstance(raw_entry, dict):
+            return int(raw_entry.get("ID", raw_entry.get("SEED_ID", raw_entry.get("id", -1))))
+        return int(raw_entry)
+    except Exception:
+        return -1
+
+
+def _resolve_drop_entry_count(raw_entry: Any, *, default_count: int = 1) -> int:
+    if not isinstance(raw_entry, dict):
+        return max(1, int(default_count))
+
+    try:
+        base_count = int(raw_entry.get("COUNT", raw_entry.get("count", default_count)))
+    except Exception:
+        base_count = default_count
+
+    # Support ranged yields in either TREE.DROPS or TREE_DROPS entries.
+    try:
+        min_count = int(raw_entry.get("MIN", raw_entry.get("min", base_count)))
+    except Exception:
+        min_count = base_count
+
+    try:
+        max_count = int(raw_entry.get("MAX", raw_entry.get("max", base_count)))
+    except Exception:
+        max_count = base_count
+
+    min_count = max(0, min_count)
+    max_count = max(min_count, max_count)
+    if max_count == min_count:
+        return max(0, min_count)
+
+    return max(0, random.randint(min_count, max_count))
+
+
+def get_block_self_drop_seed_ids(tile_id: int) -> list[int]:
+    block = BLOCKS_BY_ID.get(tile_id)
+    if not isinstance(block, dict):
+        return []
+
+    drop_self_enabled = bool(block.get("DROP_SELF", False))
+    if not drop_self_enabled:
+        return []
+
+    chance = _clamp_chance(block.get("DROP_SELF_CHANCE", 0.2), default=0.2)
+    if chance <= 0.0 or random.random() > chance:
+        return []
+
+    if tile_id < 0:
+        return []
+
+    # Self drop is intentionally a single item for growth progression balance.
+    return [tile_id]
+
+
+def get_tree_seed_drop_ids(tree: dict[str, Any], now_ms: int) -> list[int]:
+    if not isinstance(tree, dict):
+        return []
+
+    try:
+        seed_id = int(tree.get("seed_id", -1))
+    except Exception:
+        seed_id = -1
+
+    if seed_id < 0:
+        return []
+
+    seed = get_seed_definition(seed_id)
+    if not isinstance(seed, dict):
+        return []
+
+    try:
+        planted_at_ms = int(tree.get("planted_at_ms", 0))
+    except Exception:
+        planted_at_ms = 0
+
+    try:
+        grow_seconds = max(1, int(seed.get("GROWTIME", 1)))
+    except Exception:
+        grow_seconds = 1
+
+    elapsed_ms = max(0, int(now_ms) - max(0, planted_at_ms))
+    is_fully_grown = elapsed_ms >= (grow_seconds * 1000)
+    if not is_fully_grown:
+        return []
+
+    # Preferred format for harvest drops:
+    # TREE.DROPS: [{ID/SEED_ID, CHANCE, COUNT|MIN/MAX}, ...]
+    # Legacy/alt format supported: TREE_DROPS: [...]
+    raw_drops: Any = []
+    raw_tree = seed.get("TREE")
+    if isinstance(raw_tree, dict) and isinstance(raw_tree.get("DROPS"), list):
+        raw_drops = raw_tree.get("DROPS", [])
+    elif isinstance(seed.get("TREE_DROPS"), list):
+        raw_drops = seed.get("TREE_DROPS", [])
+
+    drops: list[int] = []
+    if isinstance(raw_drops, list) and raw_drops:
+        for raw_entry in raw_drops:
+            entry_seed_id = _resolve_drop_entry_seed_id(raw_entry)
+            if entry_seed_id < 0:
+                continue
+
+            chance = 1.0
+            if isinstance(raw_entry, dict):
+                chance = _clamp_chance(raw_entry.get("CHANCE", raw_entry.get("chance", 1.0)), default=1.0)
+            if chance <= 0.0 or random.random() > chance:
+                continue
+
+            entry_count = _resolve_drop_entry_count(raw_entry, default_count=1)
+            for _ in range(max(0, entry_count)):
+                drops.append(entry_seed_id)
+
+        if drops:
+            return drops
+
+    # Fallback format: FRUIT_MIN / FRUIT_MAX yields fruit/item id from seed stats.
+    # If no explicit fruit id is configured, fallback to the planted seed id.
+    fruit_drop_seed_id = seed_id
+    raw_tree = seed.get("TREE")
+    fruit_id_candidates: list[Any] = [
+        seed.get("FRUIT_ID"),
+        seed.get("FRUIT_SEED_ID"),
+        seed.get("FRUIT_DROP_ID"),
+    ]
+    if isinstance(raw_tree, dict):
+        fruit_id_candidates.extend(
+            [
+                raw_tree.get("FRUIT_ID"),
+                raw_tree.get("FRUIT_SEED_ID"),
+                raw_tree.get("FRUIT_DROP_ID"),
+            ]
+        )
+
+    for candidate in fruit_id_candidates:
+        try:
+            candidate_id = int(candidate)
+        except Exception:
+            continue
+        if candidate_id >= 0:
+            fruit_drop_seed_id = candidate_id
+            break
+
+    try:
+        fruit_min = max(0, int(seed.get("FRUIT_MIN", 0)))
+    except Exception:
+        fruit_min = 0
+
+    try:
+        fruit_max = max(fruit_min, int(seed.get("FRUIT_MAX", fruit_min)))
+    except Exception:
+        fruit_max = fruit_min
+
+    if fruit_max <= 0:
+        return []
+
+    fruit_count = random.randint(fruit_min, fruit_max)
+    if fruit_count <= 0:
+        return []
+
+    return [fruit_drop_seed_id for _ in range(fruit_count)]
+
+
 def split_gem_amount(total: int) -> list[int]:
     remaining = max(0, int(total))
     drops: list[int] = []
@@ -560,7 +841,7 @@ def serialize_seed_drops(world: dict[str, Any]) -> list[dict[str, Any]]:
                     "id": str(drop.get("id", "")),
                     "x": float(drop.get("x", 0.0)),
                     "y": float(drop.get("y", 0.0)),
-                    "seedId": int(drop.get("seed_id", -1)),
+                    "itemId": int(drop.get("item_id", drop.get("seed_id", -1))),
                 }
             )
         except Exception:
@@ -656,18 +937,18 @@ def parse_world_seed_drops(raw: Any, width: int, height: int) -> dict[str, dict[
         try:
             x = max(0.0, min(max_x, float(entry.get("x", 0.0))))
             y = max(0.0, min(max_y, float(entry.get("y", 0.0))))
-            seed_id = int(entry.get("seedId", entry.get("seed_id", -1)))
+            item_id = int(entry.get("itemId", entry.get("item_id", entry.get("seedId", entry.get("seed_id", -1)))))
         except Exception:
             continue
 
-        if seed_id < 0:
+        if item_id < 0:
             continue
 
         parsed[drop_id] = {
             "id": drop_id,
             "x": x,
             "y": y,
-            "seed_id": seed_id,
+            "item_id": item_id,
             "created_at": time.monotonic(),
         }
 
@@ -770,11 +1051,44 @@ def spawn_seed_drop(world: dict[str, Any], tile_x: int, tile_y: int, seed_id: in
         "id": drop_id,
         "x": float(tile_x + local_x),
         "y": float(tile_y + local_y),
-        "seed_id": int(seed_id),
+        "item_id": int(seed_id),
         "created_at": time.monotonic(),
     }
     seed_drops[drop_id] = drop
     return drop
+
+
+def spawn_seed_drop_nearby(world: dict[str, Any], tile_x: int, tile_y: int, seed_id: int) -> dict[str, Any] | None:
+    if seed_id < 0:
+        return None
+
+    width = int(world.get("width", 0))
+    height = int(world.get("height", 0))
+    if width <= 0 or height <= 0:
+        return None
+
+    # Try center first, then nearby tiles in random order to avoid "one seed max per tile" losses.
+    candidate_tiles: list[tuple[int, int]] = [(int(tile_x), int(tile_y))]
+    for offset_y in (-1, 0, 1):
+        for offset_x in (-1, 0, 1):
+            if offset_x == 0 and offset_y == 0:
+                continue
+            candidate_tiles.append((int(tile_x) + offset_x, int(tile_y) + offset_y))
+
+    if len(candidate_tiles) > 1:
+        shuffled = candidate_tiles[1:]
+        random.shuffle(shuffled)
+        candidate_tiles = [candidate_tiles[0], *shuffled]
+
+    for candidate_x, candidate_y in candidate_tiles:
+        if candidate_x < 0 or candidate_x >= width or candidate_y < 0 or candidate_y >= height:
+            continue
+
+        spawned = spawn_seed_drop(world, candidate_x, candidate_y, seed_id)
+        if spawned is not None:
+            return spawned
+
+    return None
 
 
 def collect_gems_for_player(world: dict[str, Any], player: dict[str, Any]) -> tuple[list[str], int]:
@@ -837,7 +1151,7 @@ def collect_seed_drops_for_player(world: dict[str, Any], player: dict[str, Any])
         try:
             dx = float(drop.get("x", 0.0)) - player_center_x
             dy = float(drop.get("y", 0.0)) - player_center_y
-            seed_id = int(drop.get("seed_id", -1))
+            seed_id = int(drop.get("item_id", drop.get("seed_id", -1)))
         except Exception:
             continue
 
@@ -1558,10 +1872,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     spawn_y = max(0.0, min(float(world["height"] - 1), reconnect_y_value))
 
                 persisted_gems = 0
+                persisted_inventory: dict[int, int] = {}
                 if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
                     persisted_gems = await asyncio.to_thread(get_user_gems, int(client["user_id"]))
+                    persisted_inventory = await asyncio.to_thread(get_user_inventory, int(client["user_id"]))
                 elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
                     persisted_gems = await asyncio.to_thread(get_guest_profile_gems, int(client["guest_profile_id"]))
+                    persisted_inventory = await asyncio.to_thread(
+                        get_guest_profile_inventory, int(client["guest_profile_id"])
+                    )
 
                 world["players"][client_id] = {
                     "id": client_id,
@@ -1569,6 +1888,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     "x": spawn_x,
                     "y": spawn_y,
                     "gems": int(persisted_gems),
+                    "inventory": normalize_inventory(persisted_inventory),
                     "fly_enabled": False,
                     "noclip_enabled": False,
                     "ws": websocket,
@@ -1603,6 +1923,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         },
                         "selfId": client_id,
                         "gems": int(world["players"][client_id].get("gems", 0)),
+                        "inventory": inventory_to_client_payload(world["players"][client_id].get("inventory", {})),
                     },
                 )
 
@@ -1701,6 +2022,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     for seed_id in collected_seed_ids:
                         seed_counts[seed_id] = seed_counts.get(seed_id, 0) + 1
 
+                    inventory = normalize_inventory(player.get("inventory", {}))
+                    for seed_id, count in seed_counts.items():
+                        if seed_id < 0 or count <= 0:
+                            continue
+                        inventory[seed_id] = int(inventory.get(seed_id, 0)) + int(count)
+                    player["inventory"] = inventory
+
+                    if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
+                        await asyncio.to_thread(set_user_inventory, int(client["user_id"]), inventory)
+                    elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
+                        await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
+
                     for drop_id in collected_seed_drop_ids:
                         await broadcast_to_world(
                             world,
@@ -1715,9 +2048,103 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         websocket,
                         {
                             "type": "seed_collected",
-                            "drops": [{"seedId": int(seed_id), "count": int(count)} for seed_id, count in sorted(seed_counts.items())],
+                            "drops": [{"itemId": int(seed_id), "count": int(count)} for seed_id, count in sorted(seed_counts.items())],
                         },
                     )
+                    await ws_send(
+                        websocket,
+                        {
+                            "type": "inventory_update",
+                            "inventory": inventory_to_client_payload(inventory),
+                        },
+                    )
+                continue
+
+            if msg_type == "drop_inventory_seed":
+                player = world["players"].get(client_id)
+                if not isinstance(player, dict):
+                    continue
+
+                try:
+                    seed_id = int(msg.get("itemId", msg.get("item_id", msg.get("seedId", msg.get("seed_id", -1)))))
+                except Exception:
+                    seed_id = -1
+
+                try:
+                    drop_count = int(msg.get("count", 1))
+                except Exception:
+                    drop_count = 1
+
+                seed_id = int(seed_id)
+                drop_count = max(1, min(99, int(drop_count)))
+                if seed_id < 0:
+                    continue
+
+                inventory = normalize_inventory(player.get("inventory", {}))
+                current_count = int(inventory.get(seed_id, 0))
+                if current_count <= 0:
+                    continue
+
+                # Clamp to what the player actually owns.
+                drop_count = min(drop_count, current_count)
+                if drop_count <= 0:
+                    continue
+
+                try:
+                    player_center_x = float(player.get("x", 0.0)) + 0.36
+                    player_center_y = float(player.get("y", 0.0)) + 0.46
+                except Exception:
+                    player_center_x = 0.36
+                    player_center_y = 0.46
+
+                drop_tile_x = max(0, min(world["width"] - 1, int(player_center_x)))
+                drop_tile_y = max(0, min(world["height"] - 1, int(player_center_y)))
+
+                spawned_seed_drops: list[dict[str, Any]] = []
+                for _ in range(drop_count):
+                    spawned_seed_drop = spawn_seed_drop_nearby(world, drop_tile_x, drop_tile_y, seed_id)
+                    if spawned_seed_drop is None:
+                        break
+                    spawned_seed_drops.append(spawned_seed_drop)
+
+                actual_drop_count = len(spawned_seed_drops)
+                if actual_drop_count <= 0:
+                    continue
+
+                next_count = current_count - actual_drop_count
+                if next_count <= 0:
+                    inventory.pop(seed_id, None)
+                else:
+                    inventory[seed_id] = next_count
+                player["inventory"] = inventory
+
+                if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
+                    await asyncio.to_thread(set_user_inventory, int(client["user_id"]), inventory)
+                elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
+                    await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
+
+                for spawned_seed_drop in spawned_seed_drops:
+                    await broadcast_to_world(
+                        world,
+                        {
+                            "type": "seed_drop_spawn",
+                            "drop": {
+                                "id": str(spawned_seed_drop["id"]),
+                                "x": float(spawned_seed_drop["x"]),
+                                "y": float(spawned_seed_drop["y"]),
+                                    "itemId": int(spawned_seed_drop.get("item_id", spawned_seed_drop.get("seed_id", -1))),
+                            },
+                        },
+                    )
+
+                await ws_send(
+                    websocket,
+                    {
+                        "type": "inventory_update",
+                        "inventory": inventory_to_client_payload(inventory),
+                    },
+                )
+                await schedule_world_save(world["name"])
                 continue
 
             if msg_type == "set_tile":
@@ -1742,6 +2169,23 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if action == "break":
                     removed_tree = remove_planted_tree_at(world, x, y)
                     if removed_tree is not None:
+                        tree_drop_ids = get_tree_seed_drop_ids(removed_tree, int(time.time() * 1000))
+                        for tree_seed_id in tree_drop_ids:
+                            tree_seed_drop = spawn_seed_drop_nearby(world, x, y, tree_seed_id)
+                            if tree_seed_drop is not None:
+                                await broadcast_to_world(
+                                    world,
+                                    {
+                                        "type": "seed_drop_spawn",
+                                        "drop": {
+                                            "id": str(tree_seed_drop["id"]),
+                                            "x": float(tree_seed_drop["x"]),
+                                            "y": float(tree_seed_drop["y"]),
+                                            "itemId": int(tree_seed_drop.get("item_id", tree_seed_drop.get("seed_id", -1))),
+                                        },
+                                    },
+                                )
+
                         await schedule_world_save(world["name"])
                         await broadcast_to_world(
                             world,
@@ -1800,8 +2244,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 )
 
                         seed_drop_ids = get_block_seed_drop_ids(broken_tile_id)
+                        seed_drop_ids.extend(get_block_self_drop_seed_ids(broken_tile_id))
                         for seed_drop_id in seed_drop_ids:
-                            seed_drop = spawn_seed_drop(world, x, y, seed_drop_id)
+                            seed_drop = spawn_seed_drop_nearby(world, x, y, seed_drop_id)
                             if seed_drop is not None:
                                 await broadcast_to_world(
                                     world,
@@ -1811,7 +2256,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                             "id": str(seed_drop["id"]),
                                             "x": float(seed_drop["x"]),
                                             "y": float(seed_drop["y"]),
-                                            "seedId": int(seed_drop["seed_id"]),
+                                            "itemId": int(seed_drop.get("item_id", seed_drop.get("seed_id", -1))),
                                         },
                                     },
                                 )
@@ -1937,6 +2382,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if get_seed_definition(seed_id) is None:
                     continue
 
+                player = world["players"].get(client_id)
+                if not isinstance(player, dict):
+                    continue
+
+                inventory = normalize_inventory(player.get("inventory", {}))
+                current_seed_count = int(inventory.get(seed_id, 0))
+                if current_seed_count <= 0:
+                    continue
+
                 index = y * world["width"] + x
                 # Planting must happen in an empty foreground tile (background is allowed).
                 target_foreground = int(world["foreground"][index])
@@ -1969,7 +2423,26 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if planted_tree is None:
                     continue
 
+                next_seed_count = current_seed_count - 1
+                if next_seed_count <= 0:
+                    inventory.pop(seed_id, None)
+                else:
+                    inventory[seed_id] = next_seed_count
+                player["inventory"] = inventory
+
+                if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
+                    await asyncio.to_thread(set_user_inventory, int(client["user_id"]), inventory)
+                elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
+                    await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
+
                 await schedule_world_save(world["name"])
+                await ws_send(
+                    websocket,
+                    {
+                        "type": "inventory_update",
+                        "inventory": inventory_to_client_payload(inventory),
+                    },
+                )
                 await broadcast_to_world(
                     world,
                     {

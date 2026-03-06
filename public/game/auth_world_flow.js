@@ -16,6 +16,7 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     renderChatLog,
     showScreen,
     setLoadingChatLogOpen,
+    repullGameBundle,
     loadBlockDefinitions,
     requestJson,
     saveAuthSession,
@@ -41,6 +42,12 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
   }
 
   async function ensureAssetsLoadedWithProgress() {
+    appendChatLine("system", "checking latest game bundle...");
+    if (loadingStatus) {
+      loadingStatus.textContent = "Checking latest game bundle...";
+    }
+    await repullGameBundle?.();
+
     if (state.assetsLoaded) {
       appendChatLine("system", "loading assets (cached)");
       return;

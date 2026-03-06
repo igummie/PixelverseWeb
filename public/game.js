@@ -5,6 +5,9 @@ import {
   CHAT_DRAWER_HANDLE_PEEK,
   CHAT_INPUT_PANEL_HEIGHT,
   CHAT_LOG_DRAWER_HEIGHT,
+  INVENTORY_DRAWER_HEIGHT,
+  INVENTORY_DRAWER_HANDLE_PEEK,
+  INVENTORY_GRID_SLOTS,
   CRACK_ATLAS_COLUMNS,
   CRACK_ATLAS_ROWS,
   CRACK_ATLAS_SRC,
@@ -85,7 +88,6 @@ const refreshWorldsBtn = document.getElementById("refreshWorldsBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const worldError = document.getElementById("worldError");
 
-const leaveWorldBtn = document.getElementById("leaveWorldBtn");
 const gameStatus = document.getElementById("gameStatus");
 const gemCount = document.getElementById("gemCount");
 const blockSelect = document.getElementById("blockSelect");
@@ -109,6 +111,10 @@ const loadingChatDrawerHandle = document.getElementById("loadingChatDrawerHandle
 const loadingChatDrawer = document.getElementById("loadingChatDrawer");
 const chatInputPanel = document.getElementById("chatInputPanel");
 const chatInput = document.getElementById("chatInput");
+const inventoryDrawerHandle = document.getElementById("inventoryDrawerHandle");
+const inventoryDrawer = document.getElementById("inventoryDrawer");
+const inventoryGrid = document.getElementById("inventoryGrid");
+const inventorySelectedInfo = document.getElementById("inventorySelectedInfo");
 const debugOverlay = document.getElementById("debugOverlay");
 const debugInfo = document.getElementById("debugInfo");
 const debugGridToggle = document.getElementById("debugGridToggle");
@@ -155,6 +161,7 @@ const state = {
   blockDefs: new Map(),
   animatedBlockIds: new Set(),
   seedDefs: new Map(),
+  inventorySeeds: new Map(),
   atlases: new Map(),
   seedDropSpriteCache: new Map(),
   treeSpriteCache: new Map(),
@@ -176,6 +183,12 @@ const state = {
   chatDrawerDragging: false,
   chatDrawerDragStartY: 0,
   chatDrawerDragStartOffsetY: 0,
+  inventoryOpen: false,
+  inventoryDrawerHeight: INVENTORY_DRAWER_HEIGHT,
+  inventoryDrawerOffsetY: Math.max(0, INVENTORY_DRAWER_HEIGHT - INVENTORY_DRAWER_HANDLE_PEEK),
+  inventoryDrawerDragging: false,
+  inventoryDrawerDragStartY: 0,
+  inventoryDrawerDragStartOffsetY: 0,
   worldChatLogOpen: false,
   worldChatDrawerHeight: CHAT_LOG_DRAWER_HEIGHT,
   worldChatDrawerOffsetY: -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK),
@@ -354,12 +367,15 @@ const hud = createHudController({
     chatInput,
     worldChatDrawer,
     loadingChatDrawer,
+    inventoryDrawer,
   },
   settings: {
     TILE_SIZE,
     CHAT_DRAWER_HANDLE_PEEK,
     CHAT_INPUT_PANEL_HEIGHT,
     CHAT_LOG_DRAWER_HEIGHT,
+    INVENTORY_DRAWER_HEIGHT,
+    INVENTORY_DRAWER_HANDLE_PEEK,
     DEBUG_INFO_REFRESH_MS,
   },
 });
@@ -502,12 +518,16 @@ async function repullGameBundle() {
 function clearActiveWorldRuntimeState() {
   setChatInputOpen(false);
   setChatLogOpen(false);
+  setInventoryOpen(false);
   setWorldChatLogOpen(false);
   pauseMenu.setPauseMenuOpen(false);
   state.world = null;
   state.worldRender = null;
   state.gems = 0;
   updateGemUi();
+  state.inventorySeeds.clear();
+  state.selectedSeedId = -1;
+  renderInventoryDrawer();
   state.gemDrops.clear();
   state.seedDrops.clear();
   state.plantedTrees.clear();
@@ -628,6 +648,7 @@ const inputController = createInputController({
   actions: {
     setChatInputOpen,
     setChatLogOpen,
+    setInventoryOpen,
     adjustCameraZoom,
     setCameraZoom,
     sendWs,
@@ -741,6 +762,18 @@ function applyLoadingChatDrawerPosition(nextOffsetY, immediate = false) {
 
 function setLoadingChatLogOpen(open) {
   hud.setLoadingChatLogOpen(open);
+}
+
+function getInventoryDrawerHiddenOffset() {
+  return hud.getInventoryDrawerHiddenOffset();
+}
+
+function applyInventoryDrawerPosition(nextOffsetY, immediate = false) {
+  hud.applyInventoryDrawerPosition(nextOffsetY, immediate);
+}
+
+function setInventoryOpen(open) {
+  hud.setInventoryOpen(open);
 }
 
 function setPlayerChatBubble(playerId, messageText) {
@@ -1019,6 +1052,165 @@ function getSeedDropSprite(seedId) {
   return assetsLoader.getSeedDropSprite(seedId);
 }
 
+function getItemDropSprite(itemId) {
+  return assetsLoader.getItemDropSprite(itemId);
+}
+
+function normalizeInventoryEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const itemId = Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id);
+  const count = Number(entry.count);
+  if (!Number.isFinite(itemId) || !Number.isFinite(count)) {
+    return null;
+  }
+
+  const normalizedItemId = Math.floor(itemId);
+  const normalizedCount = Math.floor(count);
+  if (normalizedItemId < 0 || normalizedCount <= 0) {
+    return null;
+  }
+
+  return {
+    itemId: normalizedItemId,
+    count: normalizedCount,
+  };
+}
+
+function normalizeInventoryPayload(payload) {
+  const merged = new Map();
+  if (!Array.isArray(payload)) {
+    return merged;
+  }
+
+  for (const rawEntry of payload) {
+    const entry = normalizeInventoryEntry(rawEntry);
+    if (!entry) {
+      continue;
+    }
+    merged.set(entry.itemId, (merged.get(entry.itemId) || 0) + entry.count);
+  }
+
+  return merged;
+}
+
+function getInventoryEntriesSorted() {
+  return Array.from(state.inventorySeeds.entries())
+    .map(([itemId, count]) => ({ itemId: Number(itemId), count: Number(count) }))
+    .filter((entry) => Number.isFinite(entry.itemId) && Number.isFinite(entry.count) && entry.count > 0)
+    .sort((a, b) => a.itemId - b.itemId);
+}
+
+function setSelectedSeed(seedId) {
+  const numericSeedId = Number(seedId);
+  if (!Number.isFinite(numericSeedId) || numericSeedId < 0) {
+    state.selectedSeedId = -1;
+    if (seedSelectHud) {
+      seedSelectHud.value = "";
+    }
+    renderInventoryDrawer();
+    return;
+  }
+
+  state.selectedSeedId = Math.floor(numericSeedId);
+  if (seedSelectHud) {
+    seedSelectHud.value = String(state.selectedSeedId);
+  }
+  renderInventoryDrawer();
+}
+
+function ensureSelectedSeedStillValid() {
+  if (state.selectedSeedId >= 0 && Number(state.inventorySeeds.get(state.selectedSeedId) || 0) > 0) {
+    return;
+  }
+
+  const first = getInventoryEntriesSorted()[0];
+  if (!first) {
+    setSelectedSeed(-1);
+    return;
+  }
+
+  setSelectedSeed(first.itemId);
+}
+
+function renderInventoryDrawer() {
+  if (!inventoryGrid) {
+    return;
+  }
+
+  const entries = getInventoryEntriesSorted();
+  inventoryGrid.innerHTML = "";
+
+  const slotCount = Math.max(INVENTORY_GRID_SLOTS, entries.length);
+  for (let i = 0; i < slotCount; i += 1) {
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.className = "inventorySlot";
+
+    const entry = entries[i];
+    if (!entry) {
+      slot.classList.add("empty");
+      slot.disabled = true;
+      inventoryGrid.appendChild(slot);
+      continue;
+    }
+
+    const isSelected = entry.itemId === state.selectedSeedId;
+    if (isSelected) {
+      slot.classList.add("selected");
+    }
+
+    const sprite = getItemDropSprite(entry.itemId);
+    if (sprite) {
+      const icon = document.createElement("img");
+      icon.className = "inventoryItemIcon";
+      icon.alt = "";
+      icon.src = sprite.toDataURL("image/png");
+      slot.appendChild(icon);
+    } else {
+      slot.textContent = `#${entry.itemId}`;
+    }
+
+    const count = document.createElement("span");
+    count.className = "inventoryItemCount";
+    count.textContent = String(entry.count);
+    slot.appendChild(count);
+
+    const itemName = String(
+      state.seedDefs.get(entry.itemId)?.NAME
+      || state.blockDefs.get(entry.itemId)?.NAME
+      || `Item ${entry.itemId}`,
+    );
+    slot.title = `${itemName} x${entry.count}`;
+    slot.addEventListener("click", () => {
+      setSelectedSeed(entry.itemId);
+    });
+    inventoryGrid.appendChild(slot);
+  }
+
+  if (inventorySelectedInfo) {
+    if (state.selectedSeedId < 0) {
+      inventorySelectedInfo.textContent = "Selected: none";
+    } else {
+      const selectedCount = Number(state.inventorySeeds.get(state.selectedSeedId) || 0);
+      const selectedItemName = String(
+        state.seedDefs.get(state.selectedSeedId)?.NAME
+        || state.blockDefs.get(state.selectedSeedId)?.NAME
+        || `Item ${state.selectedSeedId}`,
+      );
+      inventorySelectedInfo.textContent = `Selected: ${selectedItemName} x${Math.max(0, selectedCount)}`;
+    }
+  }
+}
+
+function applyInventorySnapshot(payload) {
+  state.inventorySeeds = normalizeInventoryPayload(payload);
+  ensureSelectedSeedStillValid();
+  renderInventoryDrawer();
+}
+
 function getSeedTreeStage(seed, serverNowMs, plantedAtMs) {
   if (!seed || typeof seed !== "object") {
     return null;
@@ -1271,6 +1463,7 @@ function handleSocketMessage(msg) {
     state.selfId = msg.selfId;
     state.gems = Number(msg.gems || 0);
     updateGemUi();
+    applyInventorySnapshot(msg.inventory || []);
     state.players.clear();
     applyGemDropSnapshot(msg.world.gemDrops || []);
     applySeedDropSnapshot(msg.world.seedDrops || []);
@@ -1470,6 +1663,31 @@ function handleSocketMessage(msg) {
     return;
   }
 
+  if (msg.type === "seed_collected") {
+    const drops = Array.isArray(msg.drops) ? msg.drops : [];
+    if (drops.length > 0) {
+      const label = drops
+        .map((entry) => {
+          const itemId = Math.floor(Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id) || 0);
+          const count = Math.max(1, Math.floor(Number(entry.count) || 1));
+          const itemName = String(
+            state.seedDefs.get(itemId)?.NAME
+            || state.blockDefs.get(itemId)?.NAME
+            || `Item ${itemId}`,
+          );
+          return `${itemName} x${count}`;
+        })
+        .join(", ");
+      appendChatLine("system", `Picked up ${label}`);
+    }
+    return;
+  }
+
+  if (msg.type === "inventory_update") {
+    applyInventorySnapshot(msg.inventory || []);
+    return;
+  }
+
   if (msg.type === "tree_planted") {
     state.serverTimeOffsetMs = Number(msg.serverTimeMs || Date.now()) - Date.now();
     upsertPlantedTree(msg.tree);
@@ -1509,13 +1727,6 @@ guestBtn.addEventListener("click", authGuest);
 joinWorldBtn.addEventListener("click", () => enterWorld());
 refreshWorldsBtn.addEventListener("click", loadWorldList);
 logoutBtn.addEventListener("click", logout);
-leaveWorldBtn.addEventListener("click", leaveWorld);
-leaveWorldBtn.addEventListener("mousedown", (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  leaveWorld();
-});
-
 blockSelect.addEventListener("change", () => {
   const nextBlockId = Number(blockSelect.value);
   if (!Number.isNaN(nextBlockId)) {
@@ -1527,7 +1738,7 @@ blockSelect.addEventListener("change", () => {
 
 seedSelectHud?.addEventListener("change", () => {
   const nextSeedId = Number(seedSelectHud.value);
-  state.selectedSeedId = Number.isFinite(nextSeedId) ? Math.floor(nextSeedId) : -1;
+  setSelectedSeed(Number.isFinite(nextSeedId) ? Math.floor(nextSeedId) : -1);
 });
 
 passwordInput.addEventListener("keydown", (event) => {
@@ -1545,6 +1756,47 @@ worldInput.addEventListener("keydown", (event) => {
 chatDebug.bindControls();
 pauseMenu.bindControls();
 inputController.bindControls();
+
+inventoryDrawerHandle?.addEventListener("pointerdown", (event) => {
+  if (!screens.game.classList.contains("active")) {
+    return;
+  }
+
+  event.preventDefault();
+  state.inventoryDrawerDragging = true;
+  state.inventoryDrawerDragStartY = event.clientY;
+  state.inventoryDrawerDragStartOffsetY = state.inventoryDrawerOffsetY;
+  inventoryDrawerHandle.setPointerCapture?.(event.pointerId);
+  inventoryDrawer?.classList.add("dragging");
+});
+
+inventoryDrawerHandle?.addEventListener("pointermove", (event) => {
+  if (!state.inventoryDrawerDragging) {
+    return;
+  }
+
+  event.preventDefault();
+  const deltaY = event.clientY - state.inventoryDrawerDragStartY;
+  applyInventoryDrawerPosition(state.inventoryDrawerDragStartOffsetY + deltaY, true);
+});
+
+const endInventoryDrawerDrag = (event) => {
+  if (!state.inventoryDrawerDragging) {
+    return;
+  }
+
+  state.inventoryDrawerDragging = false;
+  inventoryDrawer?.classList.remove("dragging");
+  inventoryDrawerHandle?.releasePointerCapture?.(event?.pointerId);
+  applyInventoryDrawerPosition(state.inventoryDrawerOffsetY);
+  const hiddenOffset = getInventoryDrawerHiddenOffset();
+  state.inventoryOpen = state.inventoryDrawerOffsetY < hiddenOffset - 0.5;
+};
+
+inventoryDrawerHandle?.addEventListener("pointerup", endInventoryDrawerDrag);
+inventoryDrawerHandle?.addEventListener("pointercancel", endInventoryDrawerDrag);
+applyInventoryDrawerPosition(state.inventoryDrawerOffsetY);
+renderInventoryDrawer();
 
 
 function update() {
@@ -1800,7 +2052,7 @@ function drawSeedDrops() {
 
   const now = performance.now();
   for (const drop of state.seedDrops.values()) {
-    const sprite = getSeedDropSprite(drop.seedId);
+    const sprite = getItemDropSprite(drop.itemId);
     if (!sprite) {
       continue;
     }

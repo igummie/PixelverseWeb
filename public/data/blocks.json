@@ -32,7 +32,7 @@
       "GEM_AMOUNT_VAR": 0,
       "SEED_IDS": [
         {
-          "ID": 0,
+          "ID": 1,
           "CHANCE": 0.2
         }
       ]
@@ -48,11 +48,13 @@
       "GEM_AMOUNT_VAR": 1,
       "SEED_IDS": [
         {
-          "ID": 0,
+          "ID": 1,
           "CHANCE": 0.2
         }
       ],
-      "PLACEABLE": true
+      "PLACEABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 0.2
     },
     {
       "ID": 2,

@@ -397,6 +397,109 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     return sprite;
   }
 
+  function getTexture47SingleCellSprite(block) {
+    if (!block || typeof block !== "object") {
+      return null;
+    }
+
+    const texture47Id = getTexture47IdFromBlock(block);
+    if (!texture47Id) {
+      return null;
+    }
+
+    const texture47 = state.texture47.get(texture47Id);
+    if (!texture47?.image) {
+      return null;
+    }
+
+    const variants = texture47.maskVariants?.get?.(0)
+      || texture47.maskVariants?.get?.(255)
+      || [Number(texture47.fallbackIndex) || 0];
+    const tileIndex = Number(Array.isArray(variants) ? variants[0] : texture47.fallbackIndex) || 0;
+    const columns = Math.max(1, Number(texture47.columns) || TEXTURE47_COLS);
+    const tileWidth = Math.max(1, Number(texture47.tileWidth) || TILE_SIZE);
+    const tileHeight = Math.max(1, Number(texture47.tileHeight) || TILE_SIZE);
+    const sourceX = (tileIndex % columns) * tileWidth;
+    const sourceY = Math.floor(tileIndex / columns) * tileHeight;
+
+    const spriteCanvas = document.createElement("canvas");
+    spriteCanvas.width = tileWidth;
+    spriteCanvas.height = tileHeight;
+    const spriteCtx = spriteCanvas.getContext("2d");
+    spriteCtx.imageSmoothingEnabled = false;
+    spriteCtx.clearRect(0, 0, tileWidth, tileHeight);
+    spriteCtx.drawImage(
+      texture47.renderImage || texture47.image,
+      sourceX,
+      sourceY,
+      tileWidth,
+      tileHeight,
+      0,
+      0,
+      tileWidth,
+      tileHeight,
+    );
+    return spriteCanvas;
+  }
+
+  function getBlockDropSprite(blockId) {
+    const normalizedBlockId = Number(blockId);
+    if (!Number.isFinite(normalizedBlockId) || normalizedBlockId < 0) {
+      return null;
+    }
+
+    const block = state.blockDefs.get(Math.floor(normalizedBlockId));
+    if (!block || typeof block !== "object") {
+      return null;
+    }
+
+    const blockCacheKey = JSON.stringify({
+      type: "block",
+      blockId: Math.floor(normalizedBlockId),
+      atlasId: block.ATLAS_ID,
+      texture47Id: getTexture47IdFromBlock(block),
+      texture: block.ATLAS_TEXTURE || null,
+    });
+    const cachedBlockSprite = state.seedDropSpriteCache.get(blockCacheKey);
+    if (cachedBlockSprite) {
+      return cachedBlockSprite;
+    }
+
+    let sprite = null;
+    if (isTexture47Block(block)) {
+      sprite = getTexture47SingleCellSprite(block);
+    } else {
+      const atlas = state.atlases.get(block.ATLAS_ID);
+      const image = atlas?.image;
+      const texture = block.ATLAS_TEXTURE;
+      if (image && texture && typeof texture === "object") {
+        sprite = buildTintedSeedSprite(image, texture, "");
+      }
+    }
+
+    if (!sprite) {
+      return null;
+    }
+
+    state.seedDropSpriteCache.set(blockCacheKey, sprite);
+    return sprite;
+  }
+
+  function getItemDropSprite(itemId) {
+    const normalizedItemId = Number(itemId);
+    if (!Number.isFinite(normalizedItemId) || normalizedItemId < 0) {
+      return null;
+    }
+
+    // Prefer seed visuals for legacy SEED_IDS compatibility when IDs overlap.
+    const seedSprite = getSeedDropSprite(normalizedItemId);
+    if (seedSprite) {
+      return seedSprite;
+    }
+
+    return getBlockDropSprite(normalizedItemId);
+  }
+
   function getTreeSprite(seed, stage) {
     const atlasId = stage?.ATLAS_ID;
     const texture = stage?.ATLAS_TEXTURE;
@@ -421,6 +524,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
   return {
     loadBlockDefinitions,
     getSeedDropSprite,
+    getItemDropSprite,
     getTreeSprite,
   };
 }

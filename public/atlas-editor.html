@@ -184,6 +184,17 @@
             <label for="createBlockGemAmountVarInput">GEM_AMOUNT_VAR</label>
             <input id="createBlockGemAmountVarInput" type="number" min="0" step="1" value="0" />
           </div>
+          <div class="fieldStack">
+            <label for="createBlockDropSelfToggle">DROP_SELF</label>
+            <select id="createBlockDropSelfToggle">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+          <div class="fieldStack">
+            <label for="createBlockDropSelfChanceInput">DROP_SELF_CHANCE</label>
+            <input id="createBlockDropSelfChanceInput" type="number" min="0" max="1" step="0.01" value="0.2" />
+          </div>
         </div>
 
         <div class="row">
@@ -308,6 +319,8 @@
       const createBlockGemChanceInput = document.getElementById("createBlockGemChanceInput");
       const createBlockGemAmountInput = document.getElementById("createBlockGemAmountInput");
       const createBlockGemAmountVarInput = document.getElementById("createBlockGemAmountVarInput");
+      const createBlockDropSelfToggle = document.getElementById("createBlockDropSelfToggle");
+      const createBlockDropSelfChanceInput = document.getElementById("createBlockDropSelfChanceInput");
       const createBlockSubmitBtn = document.getElementById("createBlockSubmitBtn");
       const saveWarningModal = document.getElementById("saveWarningModal");
       const closeSaveWarningBtn = document.getElementById("closeSaveWarningBtn");
@@ -615,6 +628,8 @@
         createBlockGemChanceInput.value = "0";
         createBlockGemAmountInput.value = "0";
         createBlockGemAmountVarInput.value = "0";
+        createBlockDropSelfToggle.value = "false";
+        createBlockDropSelfChanceInput.value = "0.2";
         state.createModalSelectedTileIndex = 0;
         updateCreateBlockAtlasModeUi();
         renderTexture47AtlasOptions();
@@ -1291,9 +1306,23 @@
 
         const compacted = {};
         const usesTexture47 = isTexture47Assigned(block);
+        const dropSelfEnabled = Boolean(block.DROP_SELF);
         for (const [key, value] of Object.entries(block)) {
           if (key === "ATLAS_TEXTURE" && usesTexture47) {
             continue;
+          }
+
+          if (!dropSelfEnabled && ["DROP_SELF_CHANCE", "DROP_SELF_COUNT", "DROP_SELF_COUNT_VAR", "DROP_SELF_SEED_ID"].includes(key)) {
+            continue;
+          }
+
+          if (dropSelfEnabled) {
+            if (key === "DROP_SELF_CHANCE" && Number(value) === 0.2) {
+              continue;
+            }
+            if (["DROP_SELF_COUNT", "DROP_SELF_COUNT_VAR", "DROP_SELF_SEED_ID"].includes(key)) {
+              continue;
+            }
           }
 
           if (typeof value === "boolean" && value === false && key !== "BREAKABLE") {
@@ -1564,6 +1593,12 @@
         if (key === "SEED_IDS") {
           return "Drop table entries. `id` is seed block ID, `chance` is 0..1.";
         }
+        if (key === "DROP_SELF") {
+          return "When enabled, this block can drop itself when broken.";
+        }
+        if (key === "DROP_SELF_CHANCE") {
+          return "Chance 0..1 to drop on break. Default is 0.2 (20%).";
+        }
         if (kind === "string") {
           if (key === "NAME") {
             return "Display/internal block name.";
@@ -1749,8 +1784,16 @@
           return;
         }
 
-        const keys = Object.keys(block).filter((key) => !["SEED_DROP_ID", "SEED_DROP_CHANCE", "SEED_DROPS", "ANIM_FIRST_SECONDS"].includes(key));
-        for (const optionalKey of ["SEED_IDS", "ANIM_FRAMES"]) {
+        const keys = Object.keys(block).filter((key) => ![
+          "SEED_DROP_ID",
+          "SEED_DROP_CHANCE",
+          "SEED_DROPS",
+          "ANIM_FIRST_SECONDS",
+          "DROP_SELF_COUNT",
+          "DROP_SELF_COUNT_VAR",
+          "DROP_SELF_SEED_ID",
+        ].includes(key));
+        for (const optionalKey of ["SEED_IDS", "ANIM_FRAMES", "DROP_SELF", "DROP_SELF_CHANCE"]) {
           if (!keys.includes(optionalKey)) {
             keys.push(optionalKey);
           }
@@ -1768,6 +1811,10 @@
             ? normalizeSeedIdsForEditor(block)
             : key === "ANIM_FRAMES"
               ? normalizeAnimFramesForEditor(block)
+              : key === "DROP_SELF"
+                ? Boolean(block.DROP_SELF)
+                : key === "DROP_SELF_CHANCE"
+                  ? Number.isFinite(Number(block.DROP_SELF_CHANCE)) ? Number(block.DROP_SELF_CHANCE) : 0.2
               : block[key];
           const row = document.createElement("div");
           row.className = "blockFieldRow";
@@ -1797,6 +1844,16 @@
               input.step = "0.01";
               input.min = "0";
               input.max = "1";
+            } else if (key === "DROP_SELF_CHANCE") {
+              input.step = "0.01";
+              input.min = "0";
+              input.max = "1";
+            } else if (["DROP_SELF_COUNT", "DROP_SELF_COUNT_VAR"].includes(key)) {
+              input.step = "1";
+              input.min = "0";
+            } else if (key === "DROP_SELF_SEED_ID") {
+              input.step = "1";
+              input.min = "-1";
             } else {
               input.step = "any";
             }
@@ -1978,6 +2035,25 @@
         delete next.SEED_DROP_ID;
         delete next.SEED_DROP_CHANCE;
         delete next.SEED_DROPS;
+
+        const dropSelfEnabled = Boolean(next.DROP_SELF);
+        if (!dropSelfEnabled) {
+          delete next.DROP_SELF;
+          delete next.DROP_SELF_CHANCE;
+          delete next.DROP_SELF_COUNT;
+          delete next.DROP_SELF_COUNT_VAR;
+          delete next.DROP_SELF_SEED_ID;
+          return next;
+        }
+
+        const normalizedDropChance = Number(next.DROP_SELF_CHANCE);
+
+        next.DROP_SELF_CHANCE = Number.isFinite(normalizedDropChance)
+          ? Math.max(0, Math.min(1, normalizedDropChance))
+          : 0.2;
+        delete next.DROP_SELF_COUNT;
+        delete next.DROP_SELF_COUNT_VAR;
+        delete next.DROP_SELF_SEED_ID;
 
         return next;
       }
@@ -3012,6 +3088,8 @@
           return;
         }
 
+        const dropSelfEnabled = createBlockDropSelfToggle.value === "true";
+
         const newBlock = {
           ID: blockId,
           NAME: blockName,
@@ -3024,6 +3102,11 @@
           PLACEABLE: createBlockPlaceableToggle.value === "true",
           BREAKABLE: createBlockBreakableToggle.value === "true",
         };
+
+        if (dropSelfEnabled) {
+          newBlock.DROP_SELF = true;
+          newBlock.DROP_SELF_CHANCE = Math.max(0, Math.min(1, Number(createBlockDropSelfChanceInput.value) || 0.2));
+        }
 
         if (!usesTexture47) {
           newBlock.ATLAS_TEXTURE = getCreateModalSelectedTextureRect();

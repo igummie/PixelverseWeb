@@ -1,7 +1,7 @@
 {
   "seeds": [
     {
-      "SEED_ID": 0,
+      "SEED_ID": 1,
       "NAME": "Dirt Seed",
       "GROWTIME": 60,
       "FRUIT_MIN": 3,

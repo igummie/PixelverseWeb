@@ -3,11 +3,13 @@ export function createInputController({ state, screens, canvas, constants, actio
   const {
     setChatInputOpen,
     setChatLogOpen,
+    setInventoryOpen,
     adjustCameraZoom,
     setCameraZoom,
     sendWs,
     pauseMenu,
     getSelectedSeedId,
+    dropSelectedInventorySeed,
   } = actions;
 
   function bindControls() {
@@ -21,6 +23,11 @@ export function createInputController({ state, screens, canvas, constants, actio
 
         if (state.chatInputOpen) {
           setChatInputOpen(false);
+          return;
+        }
+
+        if (state.inventoryOpen) {
+          setInventoryOpen(false);
           return;
         }
 
@@ -53,7 +60,21 @@ export function createInputController({ state, screens, canvas, constants, actio
         return;
       }
 
+      const key = event.key.toLowerCase();
+
       if (screens.game.classList.contains("active")) {
+        if (key === "i") {
+          event.preventDefault();
+          setInventoryOpen(!state.inventoryOpen);
+          return;
+        }
+
+        if (key === "q" && !event.repeat) {
+          event.preventDefault();
+          dropSelectedInventorySeed?.(1);
+          return;
+        }
+
         if (event.key === "+" || event.key === "=") {
           event.preventDefault();
           adjustCameraZoom(CAMERA_ZOOM_STEP);
@@ -73,7 +94,6 @@ export function createInputController({ state, screens, canvas, constants, actio
         }
       }
 
-      const key = event.key.toLowerCase();
       if (!event.repeat && (key === " " || (!state.flyEnabled && (key === "w" || key === "arrowup")))) {
         event.preventDefault();
         state.jumpQueued = true;

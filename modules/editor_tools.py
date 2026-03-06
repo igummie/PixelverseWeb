@@ -237,6 +237,61 @@ def sanitize_tree_stage_entry(value: Any) -> dict[str, Any] | None:
     return output
 
 
+def sanitize_seed_drop_entry(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        try:
+            seed_id = int(value)
+        except Exception:
+            return None
+        if seed_id < 0:
+            return None
+        return {"SEED_ID": seed_id, "CHANCE": 1.0, "COUNT": 1}
+
+    try:
+        seed_id = int(value.get("SEED_ID", value.get("ID", value.get("id", -1))))
+    except Exception:
+        seed_id = -1
+    if seed_id < 0:
+        return None
+
+    try:
+        chance = float(value.get("CHANCE", value.get("chance", 1.0)))
+    except Exception:
+        chance = 1.0
+    chance = max(0.0, min(1.0, chance))
+
+    try:
+        count = int(value.get("COUNT", value.get("count", 1)))
+    except Exception:
+        count = 1
+
+    try:
+        min_count = int(value.get("MIN", value.get("min", count)))
+    except Exception:
+        min_count = count
+
+    try:
+        max_count = int(value.get("MAX", value.get("max", count)))
+    except Exception:
+        max_count = count
+
+    min_count = max(0, min_count)
+    max_count = max(min_count, max_count)
+
+    output: dict[str, Any] = {
+        "SEED_ID": seed_id,
+        "CHANCE": round(chance, 4),
+    }
+
+    if min_count == max_count:
+        output["COUNT"] = min_count
+    else:
+        output["MIN"] = min_count
+        output["MAX"] = max_count
+
+    return output
+
+
 def normalize_tint_color(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -288,22 +343,32 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     seed_tint = normalize_tint_color(value.get("SEED_TINT"))
 
     tree_stages: list[dict[str, Any]] = []
+    tree_drops: list[dict[str, Any]] = []
     tree_name = ""
     tree_tint = ""
     raw_tree = value.get("TREE")
     raw_stages: Any = value.get("TREE_STAGES", [])
+    raw_tree_drops: Any = value.get("TREE_DROPS", [])
 
     if isinstance(raw_tree, dict):
         tree_name = str(raw_tree.get("NAME", "")).strip()
         tree_tint = normalize_tint_color(raw_tree.get("TINT"))
         if isinstance(raw_tree.get("STAGES"), list):
             raw_stages = raw_tree.get("STAGES", [])
+        if isinstance(raw_tree.get("DROPS"), list):
+            raw_tree_drops = raw_tree.get("DROPS", [])
 
     if isinstance(raw_stages, list):
         for raw_stage in raw_stages:
             stage = sanitize_tree_stage_entry(raw_stage)
             if stage is not None:
                 tree_stages.append(stage)
+
+    if isinstance(raw_tree_drops, list):
+        for raw_drop in raw_tree_drops:
+            drop = sanitize_seed_drop_entry(raw_drop)
+            if drop is not None:
+                tree_drops.append(drop)
 
     tree_stages.sort(key=lambda entry: int(entry.get("STAGE", 0)))
 
@@ -321,7 +386,7 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
         output["SEED_ATLAS_TEXTURE"] = seed_atlas_texture
     if seed_tint:
         output["SEED_TINT"] = seed_tint
-    if tree_name or tree_tint or tree_stages:
+    if tree_name or tree_tint or tree_stages or tree_drops:
         output["TREE"] = {}
         if tree_name:
             output["TREE"]["NAME"] = tree_name
@@ -329,6 +394,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
             output["TREE"]["TINT"] = tree_tint
         if tree_stages:
             output["TREE"]["STAGES"] = tree_stages
+        if tree_drops:
+            output["TREE"]["DROPS"] = tree_drops
 
     return output
 

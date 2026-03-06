@@ -2,6 +2,13 @@
         color-scheme: dark;
       }
 
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
       body {
         margin: 0;
         font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -96,6 +103,7 @@
         align-items: stretch;
         justify-content: flex-start;
         position: relative;
+        overflow: hidden;
         --hud-height: 58px;
       }
 
@@ -150,6 +158,17 @@
         pointer-events: none;
       }
 
+      .inventoryOverlayRegion {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: var(--hud-height);
+        bottom: 0;
+        overflow: hidden;
+        z-index: 11;
+        pointer-events: none;
+      }
+
       .chatDrawer {
         position: absolute;
         left: 0;
@@ -167,6 +186,144 @@
 
       .chatDrawer.dragging {
         transition: none;
+      }
+
+      .inventoryDrawer {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 11;
+        height: 248px;
+        overflow: visible;
+        background: rgba(8, 16, 32, 0.96);
+        border-top: 1px solid #374151;
+        transition: transform 140ms ease, height 140ms ease;
+        transform: translateY(232px);
+        pointer-events: auto;
+      }
+
+      .inventoryDrawer.dragging {
+        transition: none;
+      }
+
+      .inventoryDrawerBody {
+        height: 100%;
+        padding: 14px 12px 12px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .inventoryDrawerHead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .inventoryTitle {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 700;
+        color: #bfdbfe;
+      }
+
+      .inventorySelectedInfo {
+        font-size: 12px;
+        color: #cbd5e1;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+      }
+
+      .inventoryGrid {
+        flex: 1;
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        grid-auto-rows: 1fr;
+        gap: 8px;
+        min-height: 0;
+      }
+
+      .inventorySlot {
+        position: relative;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.95);
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .inventorySlot:hover {
+        border-color: #64748b;
+      }
+
+      .inventorySlot.selected {
+        border-color: #22d3ee;
+        box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.4);
+      }
+
+      .inventorySlot.empty {
+        cursor: default;
+      }
+
+      .inventorySlot.empty::before {
+        content: "";
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        border: 1px dashed rgba(100, 116, 139, 0.5);
+      }
+
+      .inventoryItemIcon {
+        width: 20px;
+        height: 20px;
+        image-rendering: pixelated;
+      }
+
+      .inventoryItemCount {
+        position: absolute;
+        right: 5px;
+        bottom: 3px;
+        font-size: 11px;
+        line-height: 1;
+        color: #e2e8f0;
+        text-shadow: 0 1px 0 rgba(2, 6, 23, 0.9);
+        pointer-events: none;
+      }
+
+      .inventoryDrawerHandle {
+        position: absolute;
+        left: 50%;
+        top: -16px;
+        transform: translateX(-50%);
+        z-index: 12;
+        width: 64px;
+        height: 16px;
+        border-radius: 10px 10px 0 0;
+        border: 1px solid #374151;
+        border-bottom: 0;
+        background: rgba(8, 16, 32, 0.96);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: ns-resize;
+        user-select: none;
+      }
+
+      .inventoryDrawerHandle::before {
+        content: "";
+        width: 28px;
+        height: 3px;
+        border-radius: 999px;
+        background: #64748b;
       }
 
       .chatDrawerHandle {
@@ -396,6 +553,18 @@
         width: 100%;
         margin: 4px 0;
         text-align: left;
+      }
+
+      @media (max-width: 900px) {
+        .inventoryGrid {
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        .inventoryGrid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
       }
     
 

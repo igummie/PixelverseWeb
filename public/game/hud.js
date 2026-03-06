@@ -12,6 +12,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     chatInput,
     worldChatDrawer,
     loadingChatDrawer,
+    inventoryDrawer,
   } = elements;
 
   const {
@@ -19,6 +20,8 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     CHAT_DRAWER_HANDLE_PEEK,
     CHAT_INPUT_PANEL_HEIGHT,
     CHAT_LOG_DRAWER_HEIGHT,
+    INVENTORY_DRAWER_HEIGHT,
+    INVENTORY_DRAWER_HANDLE_PEEK,
     DEBUG_INFO_REFRESH_MS,
   } = settings;
 
@@ -219,6 +222,32 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     updateDebugOverlayPosition();
   }
 
+  function getInventoryDrawerHiddenOffset() {
+    return Math.max(0, INVENTORY_DRAWER_HEIGHT - INVENTORY_DRAWER_HANDLE_PEEK);
+  }
+
+  function applyInventoryDrawerPosition(nextOffsetY, immediate = false) {
+    const hiddenOffset = getInventoryDrawerHiddenOffset();
+    state.inventoryDrawerHeight = INVENTORY_DRAWER_HEIGHT;
+    state.inventoryDrawerOffsetY = Math.max(0, Math.min(hiddenOffset, nextOffsetY));
+
+    if (inventoryDrawer) {
+      if (immediate) {
+        inventoryDrawer.classList.add("dragging");
+      } else {
+        inventoryDrawer.classList.remove("dragging");
+      }
+      inventoryDrawer.style.height = `${INVENTORY_DRAWER_HEIGHT}px`;
+      inventoryDrawer.style.transform = `translateY(${state.inventoryDrawerOffsetY}px)`;
+    }
+  }
+
+  function setInventoryOpen(open) {
+    state.inventoryOpen = !!open;
+    const targetOffset = state.inventoryOpen ? 0 : getInventoryDrawerHiddenOffset();
+    applyInventoryDrawerPosition(targetOffset);
+  }
+
   return {
     updateZoomUi,
     updateGemUi,
@@ -236,6 +265,9 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     getLoadingChatDrawerHiddenOffset,
     applyLoadingChatDrawerPosition,
     setLoadingChatLogOpen,
+    getInventoryDrawerHiddenOffset,
+    applyInventoryDrawerPosition,
+    setInventoryOpen,
     resizeCanvas,
   };
 }
