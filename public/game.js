@@ -1011,6 +1011,14 @@ function normalizeAnimFrame(entry) {
   };
 }
 
+function normalizePrimaryAnimSeconds(value, fallback = 0.15) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallback;
+  }
+  return Math.max(0.01, Number(numeric.toFixed(3)));
+}
+
 function blockHasRegularAnimation(block) {
   if (!block?.ATLAS_TEXTURE || typeof block.ATLAS_TEXTURE !== "object") {
     return false;
@@ -1024,21 +1032,30 @@ function getAnimatedRegularTextureRect(block, nowMs = performance.now()) {
     return null;
   }
 
+  const rawFrames = Array.isArray(block.ANIM_FRAMES) ? block.ANIM_FRAMES : [];
+  const normalizedExtraFrames = [];
+  for (const rawFrame of rawFrames) {
+    const frame = normalizeAnimFrame(rawFrame);
+    if (frame) {
+      normalizedExtraFrames.push(frame);
+    }
+  }
+
+  const primarySeconds = normalizedExtraFrames.length > 0
+    ? normalizePrimaryAnimSeconds(block?.ANIM_FIRST_SECONDS, 0.15)
+    : 0.15;
+
   const base = {
     x: Number(block.ATLAS_TEXTURE.x) || 0,
     y: Number(block.ATLAS_TEXTURE.y) || 0,
     w: Number(block.ATLAS_TEXTURE.w) || TILE_SIZE,
     h: Number(block.ATLAS_TEXTURE.h) || TILE_SIZE,
-    seconds: 0.15,
+    seconds: primarySeconds,
   };
 
   const frames = [base];
-  const rawFrames = Array.isArray(block.ANIM_FRAMES) ? block.ANIM_FRAMES : [];
-  for (const rawFrame of rawFrames) {
-    const frame = normalizeAnimFrame(rawFrame);
-    if (frame) {
-      frames.push(frame);
-    }
+  for (const frame of normalizedExtraFrames) {
+    frames.push(frame);
   }
 
   if (frames.length === 1) {

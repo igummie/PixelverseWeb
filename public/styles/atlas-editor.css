@@ -246,14 +246,14 @@ body {
 
 .animFramesRow {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(5, minmax(56px, 1fr)) 78px;
   gap: 6px;
   align-items: center;
 }
 
 .animFramesHeader {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(5, minmax(56px, 1fr)) 78px;
   gap: 6px;
   align-items: center;
   font-size: 11px;
@@ -270,6 +270,21 @@ body {
   display: none;
 }
 
+.animFramesEditor .animFramesRow .blockFieldInput {
+  padding-right: 8px;
+}
+
+/* Keep anim frame numbers readable by removing browser spinner controls. */
+.animFramesEditor input[type="number"]::-webkit-outer-spin-button,
+.animFramesEditor input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.animFramesEditor input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .animFramesEditor.hasFrames .animFramesHint,
 .animFramesEditor.hasFrames .animFramesHeader {
   display: grid;
@@ -277,6 +292,21 @@ body {
 
 .animFramesEditor.hasFrames .animFramesHint {
   display: block;
+.animFramesPrimaryRow {
+  display: none;
+  gap: 8px;
+  align-items: center;
+}
+
+.animFramesPrimaryLabel {
+  font-size: 11px;
+  color: #bfdbfe;
+  white-space: nowrap;
+}
+
+.animFramesPrimaryRow .animFramePrimarySeconds {
+  max-width: 120px;
+}
 }
 
 .animFramesControls {

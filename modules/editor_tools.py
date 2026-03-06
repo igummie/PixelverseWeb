@@ -132,6 +132,7 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
         "TEXTURE47_ID",
         "ATLAS_TEXTURE",
         "ANIM_FRAMES",
+        "ANIM_FIRST_SECONDS",
         "TOUGHNESS",
         "GEM_CHANCE",
         "GEM_AMOUNT",

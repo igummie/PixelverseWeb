@@ -1018,14 +1018,35 @@
         };
       }
 
+      function normalizePrimaryAnimSeconds(value, fallback = 0.15) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric <= 0) {
+          return fallback;
+        }
+        return Math.max(0.01, Number(numeric.toFixed(3)));
+      }
+
       function getAnimatedTextureRectForPreview(block, fallbackTexture, nowMs) {
+        const rawFrames = Array.isArray(block?.ANIM_FRAMES) ? block.ANIM_FRAMES : [];
+        const normalizedExtraFrames = [];
+        for (const rawFrame of rawFrames) {
+          const normalized = normalizeAnimFrameEntry(rawFrame);
+          if (normalized) {
+            normalizedExtraFrames.push(normalized);
+          }
+        }
+
+        const primarySeconds = normalizedExtraFrames.length > 0
+          ? normalizePrimaryAnimSeconds(block?.ANIM_FIRST_SECONDS, 0.15)
+          : 0.15;
+
         const base = fallbackTexture && typeof fallbackTexture === "object"
           ? {
             x: Number(fallbackTexture.x) || 0,
             y: Number(fallbackTexture.y) || 0,
             w: Number(fallbackTexture.w) || state.tileWidth,
             h: Number(fallbackTexture.h) || state.tileHeight,
-            seconds: 0.15,
+            seconds: primarySeconds,
           }
           : null;
 
@@ -1034,14 +1055,8 @@
           frames.push(base);
         }
 
-        const rawFrames = block?.ANIM_FRAMES;
-        if (Array.isArray(rawFrames)) {
-          for (const rawFrame of rawFrames) {
-            const normalized = normalizeAnimFrameEntry(rawFrame);
-            if (normalized) {
-              frames.push(normalized);
-            }
-          }
+        for (const normalized of normalizedExtraFrames) {
+          frames.push(normalized);
         }
 
         if (frames.length === 0) {
@@ -1572,7 +1587,7 @@
         return "";
       }
 
-      function createAnimFramesEditorInput(initialRows) {
+      function createAnimFramesEditorInput(initialRows, initialPrimarySeconds = 0.15) {
         const wrap = document.createElement("div");
         wrap.className = "animFramesEditor";
 
@@ -1589,6 +1604,26 @@
         const list = document.createElement("div");
         list.className = "animFramesList";
         wrap.appendChild(list);
+
+        const primaryRow = document.createElement("div");
+        primaryRow.className = "animFramesPrimaryRow";
+
+        const primaryLabel = document.createElement("label");
+        primaryLabel.className = "animFramesPrimaryLabel";
+        primaryLabel.textContent = "Primary frame seconds";
+
+        const primarySecondsInput = document.createElement("input");
+        primarySecondsInput.type = "number";
+        primarySecondsInput.className = "blockFieldInput animFramePrimarySeconds";
+        primarySecondsInput.step = "0.01";
+        primarySecondsInput.min = "0.01";
+        primarySecondsInput.placeholder = "0.15";
+        primarySecondsInput.title = "How long the base ATLAS_TEXTURE frame is shown before ANIM_FRAMES";
+        primarySecondsInput.value = String(normalizePrimaryAnimSeconds(initialPrimarySeconds, 0.15));
+
+        primaryRow.appendChild(primaryLabel);
+        primaryRow.appendChild(primarySecondsInput);
+        wrap.appendChild(primaryRow);
 
         const refreshHelperVisibility = () => {
           const hasRows = list.querySelectorAll(".animFramesRow").length > 0;
@@ -1714,7 +1749,7 @@
           return;
         }
 
-        const keys = Object.keys(block).filter((key) => !["SEED_DROP_ID", "SEED_DROP_CHANCE", "SEED_DROPS"].includes(key));
+        const keys = Object.keys(block).filter((key) => !["SEED_DROP_ID", "SEED_DROP_CHANCE", "SEED_DROPS", "ANIM_FIRST_SECONDS"].includes(key));
         for (const optionalKey of ["SEED_IDS", "ANIM_FRAMES"]) {
           if (!keys.includes(optionalKey)) {
             keys.push(optionalKey);
@@ -1752,7 +1787,7 @@
             input = createSeedIdsEditorInput(value);
             input.dataset.kind = "seed_ids";
           } else if (key === "ANIM_FRAMES") {
-            input = createAnimFramesEditorInput(value);
+            input = createAnimFramesEditorInput(value, block?.ANIM_FIRST_SECONDS);
             input.dataset.kind = "anim_frames";
           } else if (typeof value === "number") {
             input = document.createElement("input");
@@ -1911,10 +1946,19 @@
               });
             }
 
+            const primaryInput = input.querySelector(".animFramePrimarySeconds");
+            const primaryText = String(primaryInput?.value || "").trim();
+            const primarySeconds = primaryText === "" ? 0.15 : Number(primaryText);
+            if (!Number.isFinite(primarySeconds) || primarySeconds <= 0) {
+              throw new Error("Primary frame seconds must be a number > 0");
+            }
+
             if (entries.length > 0) {
               next[key] = entries;
+              next.ANIM_FIRST_SECONDS = normalizePrimaryAnimSeconds(primarySeconds, 0.15);
             } else {
               delete next[key];
+              delete next.ANIM_FIRST_SECONDS;
             }
             continue;
           }
