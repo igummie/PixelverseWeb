@@ -86,6 +86,22 @@
       "SEED_ID": 13,
       "NAME": "Stone Seed",
       "GROWTIME": 120,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_TYPE": "block",
+          "ITEM_ID": 3,
+          "CHANCE": 1.0,
+          "MIN": 1,
+          "MAX": 3
+        },
+        {
+          "ITEM_TYPE": "seed",
+          "ITEM_ID": 13,
+          "CHANCE": 0.7,
+          "MIN": 1,
+          "MAX": 1
+        }
+      ],
       "SEED_ATLAS_ID": "seed",
       "SEED_ATLAS_TEXTURE": {
         "x": 0,
@@ -153,9 +169,16 @@
       "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
+          "ITEM_TYPE": "block",
+          "ITEM_ID": 9,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        },
+        {
           "ITEM_TYPE": "seed",
           "ITEM_ID": 14,
-          "CHANCE": 1.0,
+          "CHANCE": 0.7,
           "MIN": 1,
           "MAX": 1
         }
