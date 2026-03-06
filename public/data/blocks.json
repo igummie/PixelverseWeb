@@ -204,7 +204,7 @@
       "SEED_IDS": [
         {
           "ID": 14,
-          "CHANCE": 0.1
+          "CHANCE": 0.3
         }
       ],
       "PLACEABLE": true,
