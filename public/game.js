@@ -1298,22 +1298,7 @@ function ensureSelectedItemStillValid() {
     return;
   }
 
-  // if the exact key disappeared but we still have the same id under another type,
-  // keep the selection and switch the type accordingly (this handles legacy or
-  // mis-typed inventory keys).
-  for (const [key, cnt] of state.inventorySeeds.entries()) {
-    if (cnt > 0) {
-      const [typePart, idPart] = String(key).split(":", 2);
-      const itemType = normalizeItemType(typePart || "seed", "seed");
-      const itemId = Number(idPart);
-      if (Number.isFinite(itemId) && itemId === state.selectedItemId) {
-        // found a matching id under different type
-        state.selectedItemType = itemType;
-        state.selectedMissingSinceMs = 0;
-        return;
-      }
-    }
-  }
+  // Removed auto-switch logic: do not switch to another item with the same id when depleted.
 
   const now = Date.now();
   if (!state.selectedMissingSinceMs) {
