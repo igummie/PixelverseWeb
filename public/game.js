@@ -1533,12 +1533,20 @@ function maybeShowTreeGrowthHint(nowMs) {
   const totalMs = growSeconds * 1000;
   const elapsedMs = Math.max(0, getServerNowMs() - Number(tree.plantedAtMs || 0));
   const remainingMs = Math.max(0, totalMs - elapsedMs);
-  const activeStage = getSeedTreeStage(seed, getServerNowMs(), tree.plantedAtMs);
-  const stageNumber = Math.max(1, Number(activeStage?.STAGE ?? 1) || 1);
+  // We no longer use the individual stage number; the hint shows the
+  // tree's display name instead.
 
+  // derive a display name for the planted tree by taking the seed's
+  // name and swapping out "Seed" for "Tree". This gives us something
+  // like "Apple Tree" instead of "Apple Seed".
+  const seedName = getItemDisplayName(tree.seedId, "seed");
+  const treeName = seedName.replace(/Seed/gi, "Tree");
+
+  // the bubble used to show the current stage number; now we show the
+  // tree name and keep the readiness / time remaining information.
   const label = remainingMs <= 0
-    ? `Stage ${stageNumber} | Tree ready`
-    : `Stage ${stageNumber} | ${formatGrowthTimeRemaining(remainingMs)}`;
+    ? `${treeName} | Tree ready`
+    : `${treeName} | ${formatGrowthTimeRemaining(remainingMs)}`;
 
   const anchorX = Number(tree.x) + 0.5;
   const anchorY = Number(tree.y) - 0.1;

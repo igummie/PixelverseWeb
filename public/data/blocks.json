@@ -31,13 +31,7 @@
       "TOUGHNESS": 0,
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
-      "GEM_AMOUNT_VAR": 0,
-      "SEED_IDS": [
-        {
-          "ID": 12,
-          "CHANCE": 1
-        }
-      ]
+      "GEM_AMOUNT_VAR": 0
     },
     {
       "ITEM_ID": 1,
@@ -53,7 +47,7 @@
       "SEED_IDS": [
         {
           "ID": 12,
-          "CHANCE": 0.2
+          "CHANCE": 0.5
         }
       ],
       "PLACEABLE": true,
@@ -97,7 +91,15 @@
       "GEM_CHANCE": 0.45,
       "GEM_AMOUNT": 5,
       "GEM_AMOUNT_VAR": 3,
-      "PLACEABLE": true
+      "SEED_IDS": [
+        {
+          "ID": 13,
+          "CHANCE": 0.2
+        }
+      ],
+      "PLACEABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 0.2
     },
     {
       "ITEM_ID": 4,

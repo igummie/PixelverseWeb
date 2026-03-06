@@ -79,6 +79,87 @@
           }
         ]
       }
+    },
+    {
+      "ITEM_ID": 13,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 13,
+      "NAME": "Stone Seed",
+      "GROWTIME": 120,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_TYPE": "block",
+          "ITEM_ID": 3,
+          "CHANCE": 1.0,
+          "MIN": 1,
+          "MAX": 3
+        },
+        {
+          "ITEM_TYPE": "seed",
+          "ITEM_ID": 13,
+          "CHANCE": 0.33,
+          "MIN": 1,
+          "MAX": 1
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#e5e5e5",
+      "TREE": {
+        "NAME": "TREE_13",
+        "TINT": "#8b696a",
+        "STAGES": [
+          {
+            "STAGE": 1,
+            "GROWTH_PERCENT": 25.0,
+            "ATLAS_ID": "trees",
+            "ATLAS_TEXTURE": {
+              "x": 0,
+              "y": 16,
+              "w": 16,
+              "h": 16
+            }
+          },
+          {
+            "STAGE": 2,
+            "GROWTH_PERCENT": 50.0,
+            "ATLAS_ID": "trees",
+            "ATLAS_TEXTURE": {
+              "x": 16,
+              "y": 16,
+              "w": 16,
+              "h": 16
+            }
+          },
+          {
+            "STAGE": 3,
+            "GROWTH_PERCENT": 75.0,
+            "ATLAS_ID": "trees",
+            "ATLAS_TEXTURE": {
+              "x": 32,
+              "y": 16,
+              "w": 16,
+              "h": 16
+            }
+          },
+          {
+            "STAGE": 4,
+            "GROWTH_PERCENT": 100.0,
+            "ATLAS_ID": "trees",
+            "ATLAS_TEXTURE": {
+              "x": 48,
+              "y": 16,
+              "w": 16,
+              "h": 16
+            }
+          }
+        ]
+      }
     }
   ],
   "atlases": [
