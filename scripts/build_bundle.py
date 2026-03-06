@@ -15,6 +15,13 @@ CHAT_DEBUG_JS = PUBLIC / "game" / "chat_debug.js"
 CHAT_BUBBLES_JS = PUBLIC / "game" / "chat_bubbles.js"
 PAUSE_MENU_JS = PUBLIC / "game" / "pause_menu.js"
 INPUT_CONTROLLER_JS = PUBLIC / "game" / "input_controller.js"
+WORLD_DROPS_JS = PUBLIC / "game" / "world_drops.js"
+DAMAGE_OVERLAY_JS = PUBLIC / "game" / "damage_overlay.js"
+PHYSICS_JS = PUBLIC / "game" / "physics.js"
+WORLD_RENDER_JS = PUBLIC / "game" / "world_render.js"
+ASSETS_LOADER_JS = PUBLIC / "game" / "assets_loader.js"
+NETWORK_CLIENT_JS = PUBLIC / "game" / "network_client.js"
+AUTH_WORLD_FLOW_JS = PUBLIC / "game" / "auth_world_flow.js"
 OUT_JS = PUBLIC / "build" / "game.bundle.js"
 
 
@@ -63,6 +70,41 @@ def strip_imports(source: str) -> str:
         "",
         source,
     )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/world_drops\.js\";\s*",
+        "",
+        source,
+    )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/damage_overlay\.js\";\s*",
+        "",
+        source,
+    )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/physics\.js\";\s*",
+        "",
+        source,
+    )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/world_render\.js\";\s*",
+        "",
+        source,
+    )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/assets_loader\.js\";\s*",
+        "",
+        source,
+    )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/network_client\.js\";\s*",
+        "",
+        source,
+    )
+    source = re.sub(
+        r"(?ms)^\s*import\s*\{.*?\}\s*from\s*\"\.\/game\/auth_world_flow\.js\";\s*",
+        "",
+        source,
+    )
     return source
 
 
@@ -75,6 +117,13 @@ def main() -> None:
     chat_bubbles = strip_exports(CHAT_BUBBLES_JS.read_text(encoding="utf-8")).strip()
     pause_menu = strip_exports(PAUSE_MENU_JS.read_text(encoding="utf-8")).strip()
     input_controller = strip_exports(INPUT_CONTROLLER_JS.read_text(encoding="utf-8")).strip()
+    world_drops = strip_exports(WORLD_DROPS_JS.read_text(encoding="utf-8")).strip()
+    damage_overlay = strip_exports(DAMAGE_OVERLAY_JS.read_text(encoding="utf-8")).strip()
+    physics = strip_exports(PHYSICS_JS.read_text(encoding="utf-8")).strip()
+    world_render = strip_exports(WORLD_RENDER_JS.read_text(encoding="utf-8")).strip()
+    assets_loader = strip_exports(ASSETS_LOADER_JS.read_text(encoding="utf-8")).strip()
+    network_client = strip_exports(NETWORK_CLIENT_JS.read_text(encoding="utf-8")).strip()
+    auth_world_flow = strip_exports(AUTH_WORLD_FLOW_JS.read_text(encoding="utf-8")).strip()
     game = strip_imports(GAME_JS.read_text(encoding="utf-8")).strip()
 
     output = "\n\n".join(
@@ -88,6 +137,13 @@ def main() -> None:
             chat_bubbles,
             pause_menu,
             input_controller,
+            world_drops,
+            damage_overlay,
+            physics,
+            world_render,
+            assets_loader,
+            network_client,
+            auth_world_flow,
             game,
             "",
         ]
