@@ -1,6 +1,6 @@
 export function createWorldRenderController({ state, settings, callbacks }) {
   const { TILE_SIZE, TEXTURE47_COLS } = settings;
-  const { getAnimatedRegularTextureRect } = callbacks;
+  const { getAnimatedRegularTextureRect, getRegularTextureRect } = callbacks;
 
   function isTexture47Block(block) {
     return !!getTexture47IdFromBlock(block);
@@ -125,7 +125,15 @@ export function createWorldRenderController({ state, settings, callbacks }) {
       return;
     }
 
-    const tex = getAnimatedRegularTextureRect(block, performance.now()) || block.ATLAS_TEXTURE;
+    const tileX = Math.floor(drawX / TILE_SIZE);
+    const tileY = Math.floor(drawY / TILE_SIZE);
+    let tex = null;
+    if (typeof getRegularTextureRect === "function") {
+      tex = getRegularTextureRect(block, tileX, tileY, performance.now());
+    }
+    if (!tex) {
+      tex = getAnimatedRegularTextureRect(block, performance.now()) || block.ATLAS_TEXTURE;
+    }
     if (!tex) {
       return;
     }

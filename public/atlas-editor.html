@@ -59,8 +59,13 @@
 
         <div class="row">
           <select id="blockSelect"></select>
+          <label class="inlineCheckbox">
+            <input id="variantModeToggle" type="checkbox" />
+            Assign tile to variant
+          </label>
           <button id="assignBtn" type="button">Assign Tile To Block</button>
         </div>
+        <div id="variantList" class="variantList"></div>
 
         <div class="fieldStack">
           <label>Selected Block Fields</label>
@@ -267,6 +272,8 @@
       const zoomInfo = document.getElementById("zoomInfo");
       const selectionInfo = document.getElementById("selectionInfo");
       const blockSelect = document.getElementById("blockSelect");
+      const variantModeToggle = document.getElementById("variantModeToggle");
+      const variantList = document.getElementById("variantList");
       const assignBtn = document.getElementById("assignBtn");
       const blockFieldEditor = document.getElementById("blockFieldEditor");
       const editTexture47Btn = document.getElementById("editTexture47Btn");
@@ -1166,6 +1173,85 @@
         }
       }
 
+      // texture variant UI helpers -----------------------------------------
+      function removeVariant(blockId, index) {
+        const num = Number(blockId);
+        if (!Number.isInteger(num) || !state.blockById.has(num)) {
+          return;
+        }
+        let pending = state.pendingBlockDataById.get(num) || getEffectiveBlock(num) || {};
+        if (typeof pending !== "object") {
+          pending = {};
+        }
+        let variants = Array.isArray(pending.ATLAS_TEXTURE_VARIANTS)
+          ? pending.ATLAS_TEXTURE_VARIANTS.slice()
+          : [];
+        if (index < 0 || index >= variants.length) {
+          return;
+        }
+        variants.splice(index, 1);
+        if (variants.length) {
+          pending.ATLAS_TEXTURE_VARIANTS = variants;
+        } else {
+          delete pending.ATLAS_TEXTURE_VARIANTS;
+        }
+        state.pendingBlockDataById.set(num, pending);
+
+        // update preview texture entry
+        if (variants.length) {
+          state.pendingByBlockId.set(num, {
+            blockId: num,
+            atlasId: pending.ATLAS_ID,
+            texture: variants[0],
+          });
+        } else if (pending.ATLAS_TEXTURE && typeof pending.ATLAS_TEXTURE === "object") {
+          state.pendingByBlockId.set(num, {
+            blockId: num,
+            atlasId: pending.ATLAS_ID,
+            texture: pending.ATLAS_TEXTURE,
+          });
+        } else {
+          state.pendingByBlockId.delete(num);
+        }
+
+        syncJsonOutput();
+        refreshBlockDataEditor();
+        renderBlockList();
+      }
+
+      function renderVariantList(blockId) {
+        variantList.innerHTML = "";
+        const num = Number(blockId);
+        if (!Number.isInteger(num) || !state.blockById.has(num)) {
+          return;
+        }
+
+        const block = getEffectiveBlock(num);
+        const variants = block && Array.isArray(block.ATLAS_TEXTURE_VARIANTS)
+          ? block.ATLAS_TEXTURE_VARIANTS
+          : [];
+        for (let i = 0; i < variants.length; i += 1) {
+          const v = variants[i];
+          const wrap = document.createElement("div");
+          wrap.className = "variantItem";
+
+          const canvas = document.createElement("canvas");
+          canvas.width = 44;
+          canvas.height = 44;
+          drawBlockPreview(canvas, { atlasId: block.ATLAS_ID, texture: v });
+          wrap.appendChild(canvas);
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = "×";
+          btn.title = "Remove variant";
+          btn.addEventListener("click", () => removeVariant(num, i));
+          wrap.appendChild(btn);
+
+          variantList.appendChild(wrap);
+        }
+      }
+
       function normalizeStatusMessage(message) {
         if (typeof message === "string") {
           return message;
@@ -1419,12 +1505,14 @@
           blockDataEditor.value = "";
           blockFieldEditor.innerHTML = "";
           updateTexture47Button(null);
+          renderVariantList(null);
           return;
         }
 
         blockDataEditor.value = JSON.stringify(block, null, 2);
         renderBlockFieldEditor(block);
         updateTexture47Button(block);
+        renderVariantList(state.selectedBlockId);
       }
 
       function normalizeSeedIdsForEditor(block) {
@@ -1590,6 +1678,43 @@
         return rows;
       }
 
+      // similar to animation frames but tracks a simple list of rects that are
+      // chosen randomly per tile when the world is rendered.  There is no timing
+      // information, so the editor input helpers are correspondingly simpler.
+      function normalizeTextureVariantsForEditor(block) {
+        const rows = [];
+        const raw = block?.ATLAS_TEXTURE_VARIANTS;
+        if (!Array.isArray(raw)) {
+          return rows;
+        }
+
+        for (const entry of raw) {
+          if (!entry || typeof entry !== "object") {
+            continue;
+          }
+
+          const x = Number(entry.x);
+          const y = Number(entry.y);
+          const w = Number(entry.w);
+          const h = Number(entry.h);
+          if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) {
+            continue;
+          }
+          if (w <= 0 || h <= 0) {
+            continue;
+          }
+
+          rows.push({
+            x: String(Math.floor(x)),
+            y: String(Math.floor(y)),
+            w: String(Math.floor(w)),
+            h: String(Math.floor(h)),
+          });
+        }
+
+        return rows;
+      }
+
       function getFieldHintText(key, kind, value) {
         if (key === "ANIM_FRAMES") {
           if (!Array.isArray(value) || value.length === 0) {
@@ -1605,6 +1730,9 @@
         }
         if (key === "DROP_SELF_CHANCE") {
           return "Chance 0..1 to drop on break. Default is 0.2 (20%).";
+        }
+        if (key === "ATLAS_TEXTURE_VARIANTS") {
+          return "List of alternate atlas texture rectangles. One is chosen randomly per-tile at render time.";
         }
         if (kind === "string") {
           if (key === "NAME") {
@@ -1785,6 +1913,102 @@
         return wrap;
       }
 
+      function createTextureVariantsEditorInput(initialRows) {
+        const wrap = document.createElement("div");
+        wrap.className = "textureVariantsEditor";
+
+        const hint = document.createElement("div");
+        hint.className = "fieldHint textureVariantsHint";
+        hint.textContent = "x/y = top-left pixel in atlas. w/h = size in pixels. variants are chosen randomly per-tile.";
+        wrap.appendChild(hint);
+
+        const header = document.createElement("div");
+        header.className = "textureVariantsHeader";
+        header.innerHTML = "<span>x</span><span>y</span><span>w</span><span>h</span><span> </span>";
+        wrap.appendChild(header);
+
+        const list = document.createElement("div");
+        list.className = "textureVariantsList";
+        wrap.appendChild(list);
+
+        const addBtn = document.createElement("button");
+        addBtn.type = "button";
+        addBtn.className = "textureVariantsAddBtn";
+        addBtn.textContent = "+ Add";
+        addBtn.title = "Add a variant rectangle";
+        wrap.appendChild(addBtn);
+
+        const appendRow = (rect = { x: "", y: "", w: "", h: "" }) => {
+          const row = document.createElement("div");
+          row.className = "textureVariantsRow";
+
+          const xInput = document.createElement("input");
+          xInput.type = "number";
+          xInput.className = "blockFieldInput textureVariantX";
+          xInput.step = "1";
+          xInput.min = "0";
+          xInput.placeholder = "x";
+          xInput.value = rect.x || "";
+
+          const yInput = document.createElement("input");
+          yInput.type = "number";
+          yInput.className = "blockFieldInput textureVariantY";
+          yInput.step = "1";
+          yInput.min = "0";
+          yInput.placeholder = "y";
+          yInput.value = rect.y || "";
+
+          const wInput = document.createElement("input");
+          wInput.type = "number";
+          wInput.className = "blockFieldInput textureVariantW";
+          wInput.step = "1";
+          wInput.min = "1";
+          wInput.placeholder = "w";
+          wInput.value = rect.w || "";
+
+          const hInput = document.createElement("input");
+          hInput.type = "number";
+          hInput.className = "blockFieldInput textureVariantH";
+          hInput.step = "1";
+          hInput.min = "1";
+          hInput.placeholder = "h";
+          hInput.value = rect.h || "";
+
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "textureVariantsRemoveBtn";
+          removeBtn.textContent = "×";
+          removeBtn.title = "Remove variant";
+          removeBtn.addEventListener("click", () => {
+            row.remove();
+            refreshHelperVisibility();
+          });
+
+          row.appendChild(xInput);
+          row.appendChild(yInput);
+          row.appendChild(wInput);
+          row.appendChild(hInput);
+          row.appendChild(removeBtn);
+          list.appendChild(row);
+        };
+
+        const refreshHelperVisibility = () => {
+          const hasRows = list.querySelectorAll(".textureVariantsRow").length > 0;
+          wrap.classList.toggle("hasVariants", hasRows);
+        };
+
+        addBtn.addEventListener("click", () => appendRow());
+
+        if (Array.isArray(initialRows)) {
+          for (const r of initialRows) {
+            appendRow(r);
+          }
+        }
+        refreshHelperVisibility();
+
+        return wrap;
+      }
+
       function renderBlockFieldEditor(block) {
         blockFieldEditor.innerHTML = "";
         if (!block || typeof block !== "object") {
@@ -1800,7 +2024,7 @@
           "DROP_SELF_COUNT_VAR",
           "DROP_SELF_SEED_ID",
         ].includes(key));
-        for (const optionalKey of ["SEED_IDS", "ANIM_FRAMES", "DROP_SELF", "DROP_SELF_CHANCE"]) {
+        for (const optionalKey of ["SEED_IDS", "ANIM_FRAMES", "ATLAS_TEXTURE_VARIANTS", "DROP_SELF", "DROP_SELF_CHANCE"]) {
           if (!keys.includes(optionalKey)) {
             keys.push(optionalKey);
           }
@@ -1818,6 +2042,8 @@
             ? normalizeSeedIdsForEditor(block)
             : key === "ANIM_FRAMES"
               ? normalizeAnimFramesForEditor(block)
+            : key === "ATLAS_TEXTURE_VARIANTS"
+              ? normalizeTextureVariantsForEditor(block)
               : key === "DROP_SELF"
                 ? Boolean(block.DROP_SELF)
                 : key === "DROP_SELF_CHANCE"
@@ -1843,6 +2069,9 @@
           } else if (key === "ANIM_FRAMES") {
             input = createAnimFramesEditorInput(value, block?.ANIM_FIRST_SECONDS);
             input.dataset.kind = "anim_frames";
+          } else if (key === "ATLAS_TEXTURE_VARIANTS") {
+            input = createTextureVariantsEditorInput(value);
+            input.dataset.kind = "texture_variants";
           } else if (typeof value === "number") {
             input = document.createElement("input");
             input.className = "blockFieldInput";
@@ -1960,6 +2189,57 @@
             continue;
           }
 
+          if (kind === "texture_variants") {
+            const rows = input.querySelectorAll(".textureVariantsRow");
+            const variants = [];
+            for (const row of rows) {
+              const xInput = row.querySelector(".textureVariantX");
+              const yInput = row.querySelector(".textureVariantY");
+              const wInput = row.querySelector(".textureVariantW");
+              const hInput = row.querySelector(".textureVariantH");
+
+              const rawX = String(xInput?.value || "").trim();
+              const rawY = String(yInput?.value || "").trim();
+              const rawW = String(wInput?.value || "").trim();
+              const rawH = String(hInput?.value || "").trim();
+
+              if (rawX === "" && rawY === "" && rawW === "" && rawH === "") {
+                continue;
+              }
+
+              const x = Number(rawX);
+              const y = Number(rawY);
+              const w = Number(rawW);
+              const h = Number(rawH);
+
+              if (!Number.isFinite(x) || x < 0) {
+                throw new Error("ATLAS_TEXTURE_VARIANTS x must be a number >= 0");
+              }
+              if (!Number.isFinite(y) || y < 0) {
+                throw new Error("ATLAS_TEXTURE_VARIANTS y must be a number >= 0");
+              }
+              if (!Number.isFinite(w) || w <= 0) {
+                throw new Error("ATLAS_TEXTURE_VARIANTS w must be a number > 0");
+              }
+              if (!Number.isFinite(h) || h <= 0) {
+                throw new Error("ATLAS_TEXTURE_VARIANTS h must be a number > 0");
+              }
+
+              variants.push({
+                x: Math.floor(x),
+                y: Math.floor(y),
+                w: Math.floor(w),
+                h: Math.floor(h),
+              });
+            }
+            if (variants.length > 0) {
+              next[key] = variants;
+            } else {
+              delete next[key];
+            }
+            continue;
+          }
+
           if (kind === "anim_frames") {
             const rows = input.querySelectorAll(".animFramesRow");
             const entries = [];
@@ -2071,6 +2351,7 @@
         state.pendingBlockDataById.set(blockId, parsed);
 
         const parsedAtlasId = parsed.ATLAS_ID;
+        let sampleTex = null;
         const parsedTexture = parsed.ATLAS_TEXTURE;
         if (parsedTexture && typeof parsedTexture === "object") {
           const x = Number(parsedTexture.x);
@@ -2079,22 +2360,33 @@
           const h = Number(parsedTexture.h);
 
           if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
-            state.pendingByBlockId.set(blockId, {
-              blockId,
-              atlasId: normalizeAtlasIdValue(parsedAtlasId),
-              texture: {
-                x,
-                y,
-                w,
-                h,
-              },
-            });
+            sampleTex = { x, y, w, h };
           }
+        }
+        if (!sampleTex && Array.isArray(parsed.ATLAS_TEXTURE_VARIANTS) && parsed.ATLAS_TEXTURE_VARIANTS.length > 0) {
+          const v = parsed.ATLAS_TEXTURE_VARIANTS[0];
+          if (v && typeof v === "object") {
+            const x = Number(v.x);
+            const y = Number(v.y);
+            const w = Number(v.w);
+            const h = Number(v.h);
+            if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+              sampleTex = { x, y, w, h };
+            }
+          }
+        }
+        if (sampleTex) {
+          state.pendingByBlockId.set(blockId, {
+            blockId,
+            atlasId: normalizeAtlasIdValue(parsedAtlasId),
+            texture: sampleTex,
+          });
         }
 
         syncJsonOutput();
         refreshBlockDataEditor();
         renderBlockList();
+        renderVariantList(blockId);
       }
 
       async function selectBlock(blockId) {
@@ -2103,6 +2395,7 @@
         await syncAtlasAndTileFromBlock(state.selectedBlockId);
         refreshBlockDataEditor();
         renderBlockList();
+        renderVariantList(state.selectedBlockId);
       }
 
       function effectiveBlockAssignment(block) {
@@ -2112,7 +2405,7 @@
           return pending;
         }
 
-        const texture = effective.ATLAS_TEXTURE && typeof effective.ATLAS_TEXTURE === "object"
+        let texture = effective.ATLAS_TEXTURE && typeof effective.ATLAS_TEXTURE === "object"
           ? {
             x: Number(effective.ATLAS_TEXTURE.x) || 0,
             y: Number(effective.ATLAS_TEXTURE.y) || 0,
@@ -2120,6 +2413,18 @@
             h: Number(effective.ATLAS_TEXTURE.h) || state.tileHeight,
           }
           : { x: 0, y: 0, w: state.tileWidth, h: state.tileHeight };
+        // if there are variants show the first one as a preview
+        if (Array.isArray(effective.ATLAS_TEXTURE_VARIANTS) && effective.ATLAS_TEXTURE_VARIANTS.length > 0) {
+          const v = effective.ATLAS_TEXTURE_VARIANTS[0];
+          if (v && typeof v === "object") {
+            texture = {
+              x: Number(v.x) || texture.x,
+              y: Number(v.y) || texture.y,
+              w: Number(v.w) || texture.w,
+              h: Number(v.h) || texture.h,
+            };
+          }
+        }
 
         return {
           blockId: effective.ID,
@@ -2524,23 +2829,50 @@
         }
 
         const rect = getSelectedTextureRect();
-        state.pendingByBlockId.set(blockId, {
-          blockId,
-          atlasId,
-          texture: rect,
-        });
+        const isVariant = variantModeToggle.checked;
 
-        const pendingData = state.pendingBlockDataById.get(blockId);
-        if (pendingData && typeof pendingData === "object") {
-          pendingData.ATLAS_ID = atlasId;
-          pendingData.ATLAS_TEXTURE = deepClone(rect);
+        if (isVariant) {
+          // add to list of variants in pendingBlockData
+          let pendingData = state.pendingBlockDataById.get(blockId);
+          if (!pendingData || typeof pendingData !== "object") {
+            pendingData = getEffectiveBlock(blockId) || {};
+          }
+          const variants = Array.isArray(pendingData.ATLAS_TEXTURE_VARIANTS)
+            ? pendingData.ATLAS_TEXTURE_VARIANTS.slice()
+            : [];
+          variants.push(rect);
+          pendingData.ATLAS_TEXTURE_VARIANTS = variants;
           state.pendingBlockDataById.set(blockId, pendingData);
+
+          // preview first variant
+          state.pendingByBlockId.set(blockId, {
+            blockId,
+            atlasId,
+            texture: rect,
+          });
+
+          renderVariantList(blockId);
+          setStatus(`Queued variant for block ${blockId} @ tile ${state.selectedTileIndex}`);
+        } else {
+          state.pendingByBlockId.set(blockId, {
+            blockId,
+            atlasId,
+            texture: rect,
+          });
+
+          const pendingData = state.pendingBlockDataById.get(blockId);
+          if (pendingData && typeof pendingData === "object") {
+            pendingData.ATLAS_ID = atlasId;
+            pendingData.ATLAS_TEXTURE = deepClone(rect);
+            state.pendingBlockDataById.set(blockId, pendingData);
+          }
+
+          setStatus(`Queued update for block ${blockId}: ATLAS_ID ${formatAtlasId(atlasId)} @ tile ${state.selectedTileIndex}`);
         }
 
         syncJsonOutput();
         refreshBlockDataEditor();
         renderBlockList();
-        setStatus(`Queued update for block ${blockId}: ATLAS_ID ${formatAtlasId(atlasId)} @ tile ${state.selectedTileIndex}`);
       }
 
       function queueBlockDataChanges() {
@@ -2818,6 +3150,12 @@
       assignBtn.addEventListener("click", () => {
         assignSelectedTileToBlock();
       });
+
+      variantModeToggle.addEventListener("change", () => {
+        assignBtn.textContent = variantModeToggle.checked ? "Assign Tile To Variant" : "Assign Tile To Block";
+      });
+      // set initial state
+      assignBtn.textContent = variantModeToggle.checked ? "Assign Tile To Variant" : "Assign Tile To Block";
 
       createBlockTexture47Toggle.addEventListener("change", () => {
         updateCreateBlockAtlasModeUi();

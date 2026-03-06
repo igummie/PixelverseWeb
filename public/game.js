@@ -286,6 +286,7 @@ const worldRender = createWorldRenderController({
   },
   callbacks: {
     getAnimatedRegularTextureRect,
+    getRegularTextureRect, // handles variants + animation/base
   },
 });
 
@@ -1019,6 +1020,61 @@ function blockHasRegularAnimation(block) {
   }
 
   return Array.isArray(block.ANIM_FRAMES) && block.ANIM_FRAMES.length > 0;
+}
+
+function blockHasTextureVariants(block) {
+  return Array.isArray(block?.ATLAS_TEXTURE_VARIANTS) && block.ATLAS_TEXTURE_VARIANTS.length > 0;
+}
+
+// Choose a variant rectangle based on tile coordinates so it is stable across
+// redraws.  The simple hashing strategy mirrors the one used for texture47
+// mask variants in world_render.js.
+function getVariantTextureRect(block, tileX, tileY) {
+  if (!blockHasTextureVariants(block)) {
+    return null;
+  }
+  const variants = block.ATLAS_TEXTURE_VARIANTS;
+  const hash = Math.abs((tileX * 73856093) ^ (tileY * 19349663));
+  const idx = hash % variants.length;
+  const rect = variants[idx];
+  if (!rect || typeof rect !== "object") {
+    return null;
+  }
+  const x = Number(rect.x) || 0;
+  const y = Number(rect.y) || 0;
+  const w = Number(rect.w) || TILE_SIZE;
+  const h = Number(rect.h) || TILE_SIZE;
+  return { x, y, w, h };
+}
+
+// wrapper that applies variants first before animation or base texture
+function getRegularTextureRect(block, tileX, tileY, nowMs = performance.now()) {
+  const variant = getVariantTextureRect(block, tileX, tileY);
+  const animated = blockHasRegularAnimation(block);
+
+  if (animated) {
+    // if a variant exists use it as the base texture for the animation
+    if (variant) {
+      const temp = Object.assign({}, block);
+      temp.ATLAS_TEXTURE = variant;
+      return getAnimatedRegularTextureRect(temp, nowMs);
+    }
+    return getAnimatedRegularTextureRect(block, nowMs);
+  }
+
+  if (variant) {
+    return variant;
+  }
+
+  if (block?.ATLAS_TEXTURE && typeof block.ATLAS_TEXTURE === "object") {
+    return {
+      x: Number(block.ATLAS_TEXTURE.x) || 0,
+      y: Number(block.ATLAS_TEXTURE.y) || 0,
+      w: Number(block.ATLAS_TEXTURE.w) || TILE_SIZE,
+      h: Number(block.ATLAS_TEXTURE.h) || TILE_SIZE,
+    };
+  }
+  return null;
 }
 
 function getAnimatedRegularTextureRect(block, nowMs = performance.now()) {
@@ -2242,7 +2298,12 @@ function drawAnimatedTilesOverlay() {
           continue;
         }
 
-        const tex = getAnimatedRegularTextureRect(block, nowMs);
+        let tex = null;
+        if (typeof getRegularTextureRect === "function") {
+          tex = getRegularTextureRect(block, tileX, tileY, nowMs);
+        } else {
+          tex = getAnimatedRegularTextureRect(block, nowMs);
+        }
         if (!tex) {
           continue;
         }

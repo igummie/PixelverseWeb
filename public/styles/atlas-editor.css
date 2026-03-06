@@ -292,10 +292,113 @@ body {
 
 .animFramesEditor.hasFrames .animFramesHint {
   display: block;
+}
 .animFramesPrimaryRow {
   display: none;
   gap: 8px;
   align-items: center;
+}
+
+/* variant list preview styling */
+.variantList {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.variantItem {
+  position: relative;
+  display: inline-block;
+}
+
+.variantItem canvas {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #666;
+  background: #222;
+}
+
+.variantItem button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: rgba(0,0,0,0.6);
+  border: none;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.inlineCheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* variants editor styling mirrors animation frames but without timing column */
+.textureVariantsEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.textureVariantsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.textureVariantsRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(56px, 1fr)) 78px;
+  gap: 6px;
+  align-items: center;
+}
+
+.textureVariantsHeader {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(56px, 1fr)) 78px;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: #bfdbfe;
+  opacity: 0.95;
+}
+
+.textureVariantsHeader span {
+  padding-left: 2px;
+}
+
+.textureVariantsEditor .textureVariantsHint,
+.textureVariantsEditor .textureVariantsHeader {
+  display: none;
+}
+
+.textureVariantsEditor .textureVariantsRow .blockFieldInput {
+  padding-right: 8px;
+}
+
+/* remove number spinners */
+.textureVariantsEditor input[type="number"]::-webkit-outer-spin-button,
+.textureVariantsEditor input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.textureVariantsEditor input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.textureVariantsEditor.hasVariants .textureVariantsHint,
+.textureVariantsEditor.hasVariants .textureVariantsHeader {
+  display: grid;
+}
+
+.textureVariantsEditor.hasVariants .textureVariantsHint {
+  display: block;
 }
 
 .animFramesPrimaryLabel {

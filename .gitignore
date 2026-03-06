@@ -33,3 +33,4 @@ npm-debug.log*
 public/build/game.bundle.js
 public/assets/atlases/seeds_atlas_gt.svg
 server.log
+public/assets/atlases/gt.png

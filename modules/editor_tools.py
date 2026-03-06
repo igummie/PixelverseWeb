@@ -150,6 +150,26 @@ def normalize_atlas_texture_rect(value: Any) -> dict[str, int] | None:
         "h": h,
     }
 
+def normalize_atlas_texture_variants(value: Any) -> list[dict[str, int]] | None:
+    """Return a list of normalized texture rects or ``None`` if invalid.
+
+    Used by the atlas/block editors when users specify multiple alternate
+    textures for a single block. Each entry must be an object compatible with
+    :func:`normalize_atlas_texture_rect`.  Empty or malformed lists are treated
+    as ``None`` so that they are omitted from the final payload.
+    """
+
+    if not isinstance(value, list):
+        return None
+
+    variants: list[dict[str, int]] = []
+    for entry in value:
+        rect = normalize_atlas_texture_rect(entry)
+        if rect:
+            variants.append(rect)
+
+    return variants if variants else None
+
 
 def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
     compacted: dict[str, Any] = {}
@@ -166,6 +186,7 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
         "ATLAS_ID",
         "TEXTURE47_ID",
         "ATLAS_TEXTURE",
+        "ATLAS_TEXTURE_VARIANTS",
         "ANIM_FRAMES",
         "ANIM_FIRST_SECONDS",
         "TOUGHNESS",
@@ -204,8 +225,20 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
         if key == "TEXTURE47_ID":
             next_value = texture47_id
 
-        # Texture47 blocks derive tile data from mask config, so explicit atlas rect is redundant.
+        if key == "ATLAS_TEXTURE_VARIANTS":
+            # coerce each entry to a normalized rect list; drop if invalid/empty
+            variants = normalize_atlas_texture_variants(value)
+            if variants is None:
+                # treat as absent
+                continue
+            next_value = variants
+
+        # Texture47 blocks derive tile data from mask config, so explicit atlas
+        # rect (or any regular atlas variants) is redundant and therefore
+        # stripped out.
         if key == "ATLAS_TEXTURE" and uses_texture47:
+            continue
+        if key == "ATLAS_TEXTURE_VARIANTS" and uses_texture47:
             continue
 
         # Keep payload compact by omitting false boolean flags. BREAKABLE is intentionally

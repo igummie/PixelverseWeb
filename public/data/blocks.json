@@ -12,6 +12,12 @@
       "NAME": "GEMS_ATLAS",
       "SRC": "/assets/atlases/gems_atlas.svg",
       "TILE_SIZE": 16
+    },
+    {
+      "ATLAS_ID": "gt",
+      "NAME": "GEMS_ATLAS",
+      "SRC": "/assets/atlases/gt.png",
+      "TILE_SIZE": 32
     }
   ],
   "blocks": [
@@ -98,6 +104,14 @@
         }
       ],
       "PLACEABLE": true,
+      "ATLAS_TEXTURE_VARIANTS": [
+        {
+          "x": 48,
+          "y": 0,
+          "w": 16,
+          "h": 16
+        }
+      ],
       "DROP_SELF": true,
       "DROP_SELF_CHANCE": 0.2
     },
