@@ -785,6 +785,26 @@ def spawn_item_drop(
             if existing_tile_x == int(tile_x) and existing_tile_y == int(tile_y):
                 return None
 
+    # Ensure the item_type actually matches the item_id; if not, try to infer
+    # a correct type so client and inventory use consistent keys.
+    try:
+        desired_type = normalize_item_type(item_type)
+    except Exception:
+        desired_type = "seed"
+
+    # If the provided type doesn't resolve to a known definition for this
+    # item_id, attempt to find a matching type (prefer block then seed).
+    if get_item_definition(item_id, desired_type) is None:
+        for candidate in ("block", "seed", "furniture", "clothes"):
+            try:
+                if get_item_definition(item_id, candidate) is not None:
+                    desired_type = candidate
+                    break
+            except Exception:
+                continue
+
+    item_type = desired_type
+
     drop_id = secrets.token_hex(6)
     offset_x = random.uniform(-GEM_DROP_SPAWN_RADIUS, GEM_DROP_SPAWN_RADIUS)
     offset_y = random.uniform(-GEM_DROP_SPAWN_RADIUS, GEM_DROP_SPAWN_RADIUS)
