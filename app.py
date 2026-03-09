@@ -215,13 +215,21 @@ def get_block_seed_drop_ids(tile_id: int) -> list[int]:
             seed_id = -1
 
             if isinstance(entry, dict):
+                # allow both uppercase and lowercase keys, and accept legacy ITEM_ID/SEED_ID or new
+                # "ID" field; chance defaults to 0.2 if not provided (matching old behaviour).
                 try:
                     chance = float(entry.get("CHANCE", entry.get("chance", 0.2)))
                 except Exception:
                     chance = 0.2
 
                 try:
-                    seed_id = int(entry.get("ITEM_ID", entry.get("SEED_ID", entry.get("id", -1))))
+                    # support multiple possible keys for the seed identifier
+                    seed_id = int(
+                        entry.get("ITEM_ID",
+                                  entry.get("SEED_ID",
+                                            entry.get("id",
+                                                      entry.get("ID", -1))))
+                    )
                 except Exception:
                     seed_id = -1
             else:
@@ -256,7 +264,11 @@ def get_block_seed_drop_ids(tile_id: int) -> list[int]:
                 continue
 
             try:
-                seed_id = int(entry.get("ITEM_ID", entry.get("SEED_ID", -1)))
+                seed_id = int(
+                    entry.get("ITEM_ID",
+                              entry.get("SEED_ID",
+                                        entry.get("ID", -1)))
+                )
             except Exception:
                 seed_id = -1
 
