@@ -107,10 +107,10 @@
       }
 
       function normalizeBlock(block) {
-        const itemId = Math.max(0, Number.parseInt(block?.ITEM_ID ?? block?.ID ?? -1, 10) || 0);
+        const itemId = Math.max(0, Number.parseInt(block?.ITEM_ID ?? -1, 10) || 0);
         const next = clone(block || {});
         next.ITEM_ID = itemId;
-        // legacy "ID" is no longer used; remove it so save output only contains ITEM_ID
+        // Remove legacy ID
         delete next.ID;
         next.ITEM_TYPE = "block";
         return next;
@@ -489,7 +489,7 @@
 
           const ids = document.createElement("div");
           ids.className = "itemIds";
-          ids.textContent = `ID ${row.currentId}`;
+          ids.textContent = `ITEM_ID ${row.currentId}`;
           if (row.currentId !== row.nextId) {
             ids.classList.add("changed");
           }
@@ -506,7 +506,7 @@
           return;
         }
         // read any legacy field but map into ITEM_ID only
-        const raw = Number.parseInt(entry.ITEM_ID ?? entry.SEED_ID ?? entry.ID ?? entry.id, 10);
+        const raw = Number.parseInt(entry.ITEM_ID ?? entry.SEED_ID ?? entry.id, 10);
         if (!Number.isInteger(raw) || raw < 0) {
           return;
         }
@@ -566,7 +566,7 @@
                 continue;
               }
               const itemType = normalizeType(entry.ITEM_TYPE ?? entry.item_type ?? entry.TYPE ?? entry.type, "seed");
-              const oldItemId = Number.parseInt(entry.ITEM_ID ?? entry.item_id ?? entry.SEED_ID ?? entry.ID ?? entry.id, 10);
+              const oldItemId = Number.parseInt(entry.ITEM_ID ?? entry.item_id ?? entry.SEED_ID ?? entry.id, 10);
               if (!Number.isInteger(oldItemId) || oldItemId < 0) {
                 continue;
               }

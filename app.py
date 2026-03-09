@@ -221,7 +221,7 @@ def get_block_seed_drop_ids(tile_id: int) -> list[int]:
                     chance = 0.2
 
                 try:
-                    seed_id = int(entry.get("ITEM_ID", entry.get("ID", entry.get("SEED_ID", entry.get("id", -1)))))
+                    seed_id = int(entry.get("ITEM_ID", entry.get("SEED_ID", entry.get("id", -1))))
                 except Exception:
                     seed_id = -1
             else:
@@ -298,7 +298,7 @@ def _clamp_chance(raw_value: Any, default: float = 0.0) -> float:
 def _resolve_drop_entry_seed_id(raw_entry: Any) -> int:
     try:
         if isinstance(raw_entry, dict):
-            return int(raw_entry.get("ITEM_ID", raw_entry.get("ID", raw_entry.get("SEED_ID", raw_entry.get("id", -1)))))
+            return int(raw_entry.get("ITEM_ID", raw_entry.get("SEED_ID", raw_entry.get("id", -1))))
         return int(raw_entry)
     except Exception:
         return -1

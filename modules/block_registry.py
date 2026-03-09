@@ -65,7 +65,7 @@ def build_block_indexes(blocks: list[Any]) -> tuple[dict[int, dict[str, Any]], d
             continue
 
         try:
-            block_id = int(raw_block.get("ITEM_ID", raw_block.get("ID", 0)))
+            block_id = int(raw_block.get("ITEM_ID", -1))
         except Exception:
             continue
 
@@ -73,9 +73,10 @@ def build_block_indexes(blocks: list[Any]) -> tuple[dict[int, dict[str, Any]], d
             continue
 
         block = dict(raw_block)
-        # Keep legacy field mirrored for older clients/tools that still read ID.
         block["ITEM_ID"] = block_id
-        block["ID"] = block_id
+        # Remove legacy ID mirroring
+        if "ID" in block:
+            del block["ID"]
         blocks_by_id[block_id] = block
 
         block_name = str(block.get("NAME", "")).strip().upper()

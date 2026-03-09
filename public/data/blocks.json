@@ -14,8 +14,8 @@
       "TILE_SIZE": 16
     },
     {
-      "ATLAS_ID": "gt",
-      "NAME": "GEMS_ATLAS",
+      "ATLAS_ID": 1,
+      "NAME": "GT_ATLAS",
       "SRC": "/assets/atlases/gt.png",
       "TILE_SIZE": 32
     }
@@ -248,6 +248,26 @@
       "GEM_AMOUNT": 50,
       "GEM_AMOUNT_VAR": 15,
       "PLACEABLE": true
+    },
+    {
+      "ITEM_ID": 15,
+      "ITEM_TYPE": "block",
+      "ID": 15,
+      "NAME": "TES BLOK",
+      "BLOCK_TYPE": "DECO",
+      "ATLAS_ID": 1,
+      "ATLAS_TEXTURE": {
+        "x": 128,
+        "y": 32,
+        "w": 32,
+        "h": 32
+      },
+      "TOUGHNESS": 10,
+      "GEM_CHANCE": 100,
+      "GEM_AMOUNT": 500,
+      "GEM_AMOUNT_VAR": 200,
+      "PLACEABLE": true,
+      "BREAKABLE": true
     },
     {
       "ITEM_ID": 17,

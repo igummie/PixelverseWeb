@@ -403,7 +403,7 @@
         let candidate = 0;
         const used = new Set(
           state.blocks
-            .map((block) => Number(block.ITEM_ID ?? block.ID))
+            .map((block) => Number(block.ITEM_ID))
             .filter((value) => Number.isInteger(value) && value >= 0),
         );
         for (const seedItemId of state.usedSeedItemIds) {
@@ -1429,7 +1429,7 @@
           editTexture47Btn.href = "/texture47-editor.html";
           return;
         }
-        const blockId = Number(block.ID);
+        const blockId = Number(block.ITEM_ID);
         const params = new URLSearchParams();
         params.set("atlasId", atlasId);
         if (Number.isInteger(blockId)) {
@@ -2400,8 +2400,8 @@
       }
 
       function effectiveBlockAssignment(block) {
-        const effective = getEffectiveBlock(block.ID) || block;
-        const pending = state.pendingByBlockId.get(block.ID);
+        const effective = getEffectiveBlock(block.ITEM_ID) || block;
+        const pending = state.pendingByBlockId.get(block.ITEM_ID);
         if (pending) {
           return pending;
         }
@@ -2428,7 +2428,7 @@
         }
 
         return {
-          blockId: effective.ID,
+          blockId: effective.ITEM_ID,
           atlasId: effective.ATLAS_ID,
           texture,
         };
@@ -2443,22 +2443,22 @@
           card.type = "button";
           card.className = "blockCard";
 
-          if (Number(block.ID) === Number(state.selectedBlockId)) {
+          if (Number(block.ITEM_ID) === Number(state.selectedBlockId)) {
             card.classList.add("active");
           }
-          if (state.pendingByBlockId.has(block.ID) || state.pendingBlockDataById.has(block.ID)) {
+          if (state.pendingByBlockId.has(block.ITEM_ID) || state.pendingBlockDataById.has(block.ITEM_ID)) {
             card.classList.add("pending");
           }
 
           const title = document.createElement("div");
           title.className = "blockName";
-          title.textContent = `${block.ID} - ${block.NAME || "BLOCK"}`;
+          title.textContent = `${block.ITEM_ID} - ${block.NAME || "BLOCK"}`;
 
           const preview = document.createElement("canvas");
           preview.className = "blockPreview";
           preview.width = 44;
           preview.height = 44;
-          preview.dataset.blockId = String(block.ID);
+          preview.dataset.blockId = String(block.ITEM_ID);
 
           const header = document.createElement("div");
           header.className = "blockHeader";
@@ -2468,7 +2468,7 @@
           card.appendChild(header);
 
           card.addEventListener("click", async () => {
-            await selectBlock(block.ID);
+            await selectBlock(block.ITEM_ID);
           });
 
           blockList.appendChild(card);
@@ -2536,7 +2536,11 @@
       function syncJsonOutput() {
         const effectiveBlocks = state.blocks
           .map((block) => {
-            const effective = getEffectiveBlock(block.ID) || deepClone(block);
+            const effective = getEffectiveBlock(block.ITEM_ID) || deepClone(block);
+            // Remove legacy ID field if present
+            if (effective.ID !== undefined) {
+              delete effective.ID;
+            }
             return compactBlockForJsonOutput(effective);
           })
           .filter((block) => block && typeof block === "object");
@@ -2614,14 +2618,14 @@
 
         for (const block of state.blocks) {
           const option = document.createElement("option");
-          option.value = String(block.ID);
-          option.textContent = `${block.ID} - ${block.NAME || "BLOCK"}`;
+          option.value = String(block.ITEM_ID);
+          option.textContent = `${block.ITEM_ID} - ${block.NAME || "BLOCK"}`;
           blockSelect.appendChild(option);
         }
 
         if (state.blocks.length > 0) {
-          const hasPrevious = state.blocks.some((block) => Number(block.ID) === previousSelected);
-          state.selectedBlockId = hasPrevious ? previousSelected : Number(state.blocks[0].ID);
+          const hasPrevious = state.blocks.some((block) => Number(block.ITEM_ID) === previousSelected);
+          state.selectedBlockId = hasPrevious ? previousSelected : Number(state.blocks[0].ITEM_ID);
           blockSelect.value = String(state.selectedBlockId);
         }
       }
@@ -2632,7 +2636,7 @@
           if (!block || typeof block !== "object") {
             continue;
           }
-          state.blockById.set(Number(block.ID), block);
+          state.blockById.set(Number(block.ITEM_ID), block);
         }
       }
 
@@ -2679,7 +2683,7 @@
         } else if (state.blockById.has(selectedId)) {
           state.selectedBlockId = selectedId;
         } else {
-          state.selectedBlockId = Number(state.blocks[0]?.ID ?? 0);
+          state.selectedBlockId = Number(state.blocks[0]?.ITEM_ID ?? 0);
         }
       }
 
@@ -2781,25 +2785,28 @@
             state.atlasByKey.set(atlasKey(atlas.ATLAS_ID), atlas);
           });
 
-          state.blocks.sort((a, b) => Number(a.ITEM_ID ?? a.ID) - Number(b.ITEM_ID ?? b.ID));
+          state.blocks.sort((a, b) => Number(a.ITEM_ID) - Number(b.ITEM_ID));
           state.blocks.forEach((block) => {
             if (!block || typeof block !== "object") {
               return;
             }
-            const blockItemId = Number(block.ITEM_ID ?? block.ID);
+            const blockItemId = Number(block.ITEM_ID);
             if (!Number.isInteger(blockItemId) || blockItemId < 0) {
               return;
             }
             block.ITEM_ID = blockItemId;
-            block.ID = blockItemId;
             block.ITEM_TYPE = "block";
+            // Remove legacy ID field if present
+            if (block.ID !== undefined) {
+              delete block.ID;
+            }
             state.blockById.set(blockItemId, block);
           });
 
           renderAtlasOptions();
           renderBlockOptions();
           if (state.blocks.length > 0) {
-            await selectBlock(Number(state.blocks[0].ITEM_ID ?? state.blocks[0].ID));
+            await selectBlock(Number(state.blocks[0].ITEM_ID));
           } else {
             renderBlockList();
             refreshBlockDataEditor();
@@ -2898,22 +2905,22 @@
 
         if (!Object.prototype.hasOwnProperty.call(parsed, "ID")) {
           parsed.ITEM_ID = blockId;
-          parsed.ID = blockId;
           parsed.ITEM_TYPE = "block";
         }
 
-        const parsedId = Number(parsed.ID);
+        let parsedId = Number(parsed.ITEM_ID);
         if (!Number.isInteger(parsedId) || parsedId < 0) {
-          setStatus("Block ID must be a non-negative integer", true);
+          setStatus("Block ITEM_ID must be a non-negative integer", true);
           return false;
         }
 
         let activeId = blockId;
         if (parsedId !== blockId) {
+          // Only swap ITEM_ID, ignore legacy ID
           const result = updateBlockIdWithOptionalSwap(blockId, parsedId, "block JSON editor");
           if (!result.ok) {
             if (!result.canceled) {
-              setStatus(result.message || "Could not update block ID", true);
+              setStatus(result.message || "Could not update block ITEM_ID", true);
             }
             return false;
           }
@@ -2921,7 +2928,6 @@
         }
 
         parsed.ITEM_ID = activeId;
-        parsed.ID = activeId;
         parsed.ITEM_TYPE = "block";
         applyParsedBlockChanges(activeId, parsed);
         setStatus(`Queued block data changes for block ${activeId}`);
@@ -2943,18 +2949,19 @@
           return false;
         }
 
-        const parsedId = Number(parsed.ID);
+        let parsedId = Number(parsed.ITEM_ID);
         if (!Number.isInteger(parsedId) || parsedId < 0) {
-          setStatus("Block ID must be a non-negative integer", true);
+          setStatus("Block ITEM_ID must be a non-negative integer", true);
           return false;
         }
 
         let activeId = blockId;
         if (parsedId !== blockId) {
+          // Only swap ITEM_ID, ignore legacy ID
           const result = updateBlockIdWithOptionalSwap(blockId, parsedId, "field editor");
           if (!result.ok) {
             if (!result.canceled) {
-              setStatus(result.message || "Could not update block ID", true);
+              setStatus(result.message || "Could not update block ITEM_ID", true);
             }
             return false;
           }
@@ -2962,7 +2969,6 @@
         }
 
         parsed.ITEM_ID = activeId;
-        parsed.ID = activeId;
         parsed.ITEM_TYPE = "block";
         applyParsedBlockChanges(activeId, parsed);
         setStatus(`Queued field changes for block ${activeId}`);
@@ -3039,7 +3045,11 @@
 
           state.pendingByBlockId.clear();
           state.pendingBlockDataById.clear();
+          const prevSelectedBlockId = state.selectedBlockId;
           await loadEditorData();
+          if (prevSelectedBlockId != null && state.blockById.has(prevSelectedBlockId)) {
+            await selectBlock(prevSelectedBlockId);
+          }
           setStatus(successMessage || "Saved blocks.json");
           return true;
         } catch {
