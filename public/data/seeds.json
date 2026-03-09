@@ -89,6 +89,22 @@
       "SEED_ID": 13,
       "NAME": "Stone Seed",
       "GROWTIME": 120,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_TYPE": "block",
+          "ITEM_ID": 3,
+          "CHANCE": 1.0,
+          "MIN": 1,
+          "MAX": 3
+        },
+        {
+          "ITEM_TYPE": "seed",
+          "ITEM_ID": 13,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        }
+      ],
       "SEED_ATLAS_ID": "seed",
       "SEED_ATLAS_TEXTURE": {
         "x": 0,
@@ -146,9 +162,9 @@
             }
           }
         ],
-        "GEM_CHANCE": 0.0,
-        "GEM_AMOUNT": 0,
-        "GEM_AMOUNT_VAR": 0
+        "GEM_CHANCE": 1.0,
+        "GEM_AMOUNT": 3,
+        "GEM_AMOUNT_VAR": 2
       }
     },
     {
@@ -157,6 +173,22 @@
       "SEED_ID": 14,
       "NAME": "Cave Background Seed",
       "GROWTIME": 60,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_TYPE": "block",
+          "ITEM_ID": 9,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        },
+        {
+          "ITEM_TYPE": "seed",
+          "ITEM_ID": 14,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        }
+      ],
       "SEED_ATLAS_ID": "seed",
       "SEED_ATLAS_TEXTURE": {
         "x": 16,
@@ -214,9 +246,9 @@
             }
           }
         ],
-        "GEM_CHANCE": 0.0,
-        "GEM_AMOUNT": 0,
-        "GEM_AMOUNT_VAR": 0
+        "GEM_CHANCE": 1.0,
+        "GEM_AMOUNT": 3,
+        "GEM_AMOUNT_VAR": 2
       }
     }
   ],
