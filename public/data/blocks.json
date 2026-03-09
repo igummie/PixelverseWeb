@@ -118,7 +118,15 @@
       "GEM_CHANCE": 0.15,
       "GEM_AMOUNT": 1,
       "GEM_AMOUNT_VAR": 1,
-      "PLACEABLE": true
+      "SEED_IDS": [
+        {
+          "ID": 15,
+          "CHANCE": 0.2
+        }
+      ],
+      "PLACEABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 0.2
     },
     {
       "ITEM_ID": 5,
@@ -248,26 +256,6 @@
       "GEM_AMOUNT": 50,
       "GEM_AMOUNT_VAR": 15,
       "PLACEABLE": true
-    },
-    {
-      "ITEM_ID": 15,
-      "ITEM_TYPE": "block",
-      "ID": 15,
-      "NAME": "TES BLOK",
-      "BLOCK_TYPE": "DECO",
-      "ATLAS_ID": 1,
-      "ATLAS_TEXTURE": {
-        "x": 128,
-        "y": 32,
-        "w": 32,
-        "h": 32
-      },
-      "TOUGHNESS": 10,
-      "GEM_CHANCE": 100,
-      "GEM_AMOUNT": 500,
-      "GEM_AMOUNT_VAR": 200,
-      "PLACEABLE": true,
-      "BREAKABLE": true
     },
     {
       "ITEM_ID": 17,
