@@ -908,8 +908,30 @@
           );
           const rawSeeds = Array.isArray(payload.seeds) ? payload.seeds : [];
           state.seeds = rawSeeds.map((seed) => ensureSeed(seed));
+
+          // if atlas-editor generated a seed, merge it now and remember its id
+          let generatedId = null;
+          const pending = sessionStorage.getItem("generatedSeed");
+          if (pending) {
+            try {
+              const g = JSON.parse(pending);
+              if (g && typeof g === "object") {
+                generatedId = Number(g.ITEM_ID ?? g.SEED_ID) || null;
+                state.seeds.push(ensureSeed(g));
+              }
+            } catch {
+              // ignore parse error
+            }
+            sessionStorage.removeItem("generatedSeed");
+          }
+
           state.seeds.sort((a, b) => Number(a.ITEM_ID || 0) - Number(b.ITEM_ID || 0));
-          state.selectedIndex = state.seeds.length ? 0 : -1;
+          if (generatedId !== null) {
+            const idx = state.seeds.findIndex((s) => Number(s.ITEM_ID) === Number(generatedId));
+            state.selectedIndex = idx >= 0 ? idx : state.seeds.length - 1;
+          } else {
+            state.selectedIndex = state.seeds.length ? 0 : -1;
+          }
 
           try {
             renderFromSelected();

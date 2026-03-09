@@ -65,6 +65,9 @@
           </label>
           <button id="assignBtn" type="button">Assign Tile To Block</button>
         </div>
+        <div class="row">
+          <button id="generateSeedBtn" type="button">Generate Seed for Block</button>
+        </div>
         <div id="variantList" class="variantList"></div>
 
         <div class="fieldStack">
@@ -291,6 +294,7 @@
       const reorderBlocksBtn = document.getElementById("reorderBlocksBtn");
       const createAtlasBtn = document.getElementById("createAtlasBtn");
       const reloadBtn = document.getElementById("reloadBtn");
+      const generateSeedBtn = document.getElementById("generateSeedBtn");
       const status = document.getElementById("status");
       const blockList = document.getElementById("blockList");
       const createBlockModal = document.getElementById("createBlockModal");
@@ -434,6 +438,48 @@
           .trim()
           .toLowerCase();
         return baseName.replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
+      }
+
+      // utility to load an image as a promise
+      function loadImage(src) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = String(src || "");
+        });
+      }
+
+      function computeAverageColorFromRect(image, rect) {
+        if (!image || !rect || rect.w <= 0 || rect.h <= 0) {
+          return "#ffffff";
+        }
+        const tmp = document.createElement("canvas");
+        tmp.width = rect.w;
+        tmp.height = rect.h;
+        const ctx = tmp.getContext("2d");
+        if (!ctx) return "#ffffff";
+        ctx.drawImage(image, rect.x || 0, rect.y || 0, rect.w, rect.h, 0, 0, rect.w, rect.h);
+        const data = ctx.getImageData(0, 0, rect.w, rect.h).data;
+        let r = 0,
+          g = 0,
+          b = 0,
+          count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+          count += 1;
+        }
+        if (count) {
+          r = Math.floor(r / count);
+          g = Math.floor(g / count);
+          b = Math.floor(b / count);
+        }
+        return (
+          "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)
+        );
       }
 
       function renderCreateRegularAtlasOptions() {
@@ -1724,7 +1770,7 @@
           return "Extra animation frames after base ATLAS_TEXTURE. `seconds` = frame duration in seconds.";
         }
         if (key === "SEED_IDS") {
-          return "Drop table entries. `id` is seed block ID, `chance` accepts percent (0..100) or ratio (0..1).";
+          return "Drop table entries. `id` should be the **item ID** of the seed to drop (formerly seed block ID); `chance` accepts percent (0..100) or ratio (0..1).";
         }
         if (key === "DROP_SELF") {
           return "When enabled, this block can drop itself when broken.";
@@ -3197,6 +3243,135 @@
 
       blockSelect.addEventListener("change", async () => {
         await selectBlock(blockSelect.value);
+      });
+
+      generateSeedBtn.addEventListener("click", async () => {
+        const blockId = Number(state.selectedBlockId);
+        if (!(state.blockById.has(blockId))) {
+          setStatus("No block selected to generate seed for", true);
+          return;
+        }
+        const block = state.blockById.get(blockId);
+
+        // compute tint from block texture if possible
+        let tint = "#ffffff";
+        try {
+          const atlasEntry = state.atlasByKey.get(block?.ATLAS_ID);
+          if (atlasEntry && atlasEntry.SRC) {
+            const image = await loadImage(atlasEntry.SRC);
+            if (image && block?.ATLAS_TEXTURE) {
+              tint = computeAverageColorFromRect(image, block.ATLAS_TEXTURE);
+            }
+          }
+        } catch (err) {
+          console.error("tint computation failed", err);
+        }
+
+        // fetch current seed/editor data for defaults
+        let payload;
+        try {
+          const res = await fetch(`/api/tools/seeds/editor-data?ts=${Date.now()}`, { cache: "no-store" });
+          if (res.ok) payload = await res.json();
+        } catch {
+          /* ignore */
+        }
+        const seeds = Array.isArray(payload?.seeds) ? payload.seeds : [];
+
+        // collect default tree stage entries from existing seeds
+        // use the explicit STAGE field rather than array index, since some
+        // seeds may omit or reorder stages.  STAGE values are 1-based.
+        const defaultStages = [];
+        for (const s of seeds) {
+          if (s && typeof s === "object") {
+            const stages = s?.TREE?.STAGES;
+            if (Array.isArray(stages)) {
+              stages.forEach((st) => {
+                if (!st || typeof st !== "object") return;
+                const stageNum = Math.max(1, Number(st.STAGE) || 0);
+                if (stageNum <= 0) return;
+                const idx = stageNum - 1;
+                if (
+                  !defaultStages[idx] &&
+                  (st.ATLAS_ID || st.ATLAS_TEXTURE)
+                ) {
+                  // copy whole object so we keep STAGE and GROWTH_PERCENT
+                  defaultStages[idx] = { ...st };
+                }
+              });
+            }
+          }
+        }
+        // ensure four stages present (fill blanks with defaults)
+        for (let i = 0; i < 4; i += 1) {
+          if (!defaultStages[i]) {
+            defaultStages[i] = {
+              STAGE: i + 1,
+              GROWTH_PERCENT: i === 3 ? 100 : (i + 1) * 25,
+              ATLAS_ID: "",
+              ATLAS_TEXTURE: { x: 0, y: 0, w: 16, h: 16 },
+            };
+          }
+        }
+        // enforce y=16 for each stage and default x based on index if missing
+        for (let i = 0; i < defaultStages.length; i += 1) {
+          const st = defaultStages[i];
+          if (!st.ATLAS_TEXTURE || typeof st.ATLAS_TEXTURE !== "object") {
+            st.ATLAS_TEXTURE = { x: i * 16, y: 16, w: 16, h: 16 };
+          }
+          st.ATLAS_TEXTURE.y = 16;
+          if (!Number.isFinite(Number(st.ATLAS_TEXTURE.x))) {
+            st.ATLAS_TEXTURE.x = i * 16;
+          }
+        }
+        // ensure stage 2 explicitly uses tile index 5 (rect 16,16,16,16)
+        if (defaultStages[1]) {
+          defaultStages[1].ATLAS_TEXTURE = { x: 16, y: 16, w: 16, h: 16 };
+        }
+
+        // pick random seed atlas from payload
+        let seedAtlasId = "";
+        let seedAtlasTexture = { x: 0, y: 0, w: 16, h: 16 };
+        const atlasChoices =
+          (Array.isArray(payload?.seedAtlases) && payload.seedAtlases.length
+            ? payload.seedAtlases
+            : payload?.atlases) || [];
+        if (atlasChoices.length) {
+          const choice = atlasChoices[Math.floor(Math.random() * atlasChoices.length)];
+          seedAtlasId = choice?.ATLAS_ID ?? "";
+        }
+
+        // compute next available seed id
+        let nextSeedId = 1;
+        if (Array.isArray(seeds) && seeds.length) {
+          nextSeedId =
+            Math.max(
+              ...seeds.map((s) => Number(s?.ITEM_ID ?? s?.SEED_ID ?? 0) || 0),
+            ) + 1;
+        }
+
+        const newSeed = {
+          ITEM_ID: nextSeedId,
+          // seed name inherits block name
+          NAME: `${block?.NAME || "BLOCK"} Seed`,
+          GROWTIME: 3600,
+          SEED_ATLAS_ID: seedAtlasId,
+          SEED_ATLAS_TEXTURE: seedAtlasTexture,
+          SEED_TINT: tint,
+          FRUIT_DROPS: [
+            // 20% chance to drop itself as a seed
+            { ITEM_TYPE: "seed", ITEM_ID: nextSeedId, CHANCE: 0.2, MIN: 1, MAX: 1 },
+            // guaranteed block drops 2–5 of the source block
+            { ITEM_TYPE: "block", ITEM_ID: blockId, CHANCE: 1.0, MIN: 2, MAX: 5 },
+          ],
+          TREE: {
+            NAME: `${block?.NAME || "BLOCK"} Tree`,
+            TINT: tint,
+            STAGES: defaultStages,
+          },
+        };
+
+        sessionStorage.setItem("generatedSeed", JSON.stringify(newSeed));
+        window.location.href = "/seed-editor.html";
       });
 
       assignBtn.addEventListener("click", () => {
