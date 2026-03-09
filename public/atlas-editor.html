@@ -128,11 +128,12 @@
           </div>
           <div class="fieldStack">
             <label for="createBlockTypeSelect">BLOCK_TYPE</label>
-            <select id="createBlockTypeSelect">
-              <option value="SOLID">SOLID</option>
-              <option value="BACKGROUND">BACKGROUND</option>
-              <option value="PLATFORM">PLATFORM</option>
-            </select>
+              <select id="createBlockTypeSelect">
+                <option value="SOLID">SOLID</option>
+                <option value="BACKGROUND">BACKGROUND</option>
+                <option value="PLATFORM">PLATFORM</option>
+                <option value="DECO">DECO</option>
+              </select>
           </div>
           <div class="fieldStack">
             <label for="createBlockTexture47Toggle">Uses Texture47</label>
@@ -1739,7 +1740,7 @@
             return "Display/internal block name.";
           }
           if (key === "BLOCK_TYPE") {
-            return "Expected values: SOLID, BACKGROUND, PLATFORM.";
+            return "Expected values: SOLID, BACKGROUND, PLATFORM, DECO.";
           }
           if (key === "TEXTURE47_ID") {
             return "Texture47 config id (e.g. dirt, sand).";

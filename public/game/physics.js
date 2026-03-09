@@ -40,7 +40,7 @@ export function createPhysicsController({ state, settings }) {
     const block = state.blockDefs.get(tileId);
     const blockType = String(block?.BLOCK_TYPE || "SOLID").toUpperCase();
 
-    if (blockType === "BACKGROUND") {
+    if (blockType === "BACKGROUND" || blockType === "DECO") {
       return null;
     }
 
