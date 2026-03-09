@@ -2393,6 +2393,46 @@
       async function selectBlock(blockId) {
         state.selectedBlockId = Number(blockId);
         blockSelect.value = String(state.selectedBlockId);
+        // Get block assignment
+        const block = state.blockById.get(state.selectedBlockId);
+        if (block) {
+          const atlasId = block.ATLAS_ID;
+          const atlas = state.atlasByKey.get(atlasId);
+          let needAtlasUpdate = false;
+          let newTileSize = state.tileSize;
+          if (atlas) {
+            newTileSize = parsePositiveInt(atlas.TILE_SIZE, 16);
+            // Set tile size input to match atlas
+            tileSizeInput.value = String(newTileSize);
+            if (state.selectedAtlasKey !== atlasId || state.tileSize !== newTileSize) {
+              state.selectedAtlasKey = atlasId;
+              state.tileSize = newTileSize;
+              needAtlasUpdate = true;
+            }
+          }
+          if (needAtlasUpdate) {
+            await loadAtlasImage();
+            // Update columns, rows, tileWidth, tileHeight based on new tile size
+            const image = state.image;
+            if (atlas && image) {
+              state.columns = Math.max(1, Math.floor(image.width / state.tileSize));
+              state.rows = Math.max(1, Math.floor(image.height / state.tileSize));
+              state.tileWidth = Math.max(1, Math.floor(image.width / state.columns));
+              state.tileHeight = Math.max(1, Math.floor(image.height / state.rows));
+            }
+          }
+          // Move green box to block's assigned tile AFTER atlas and tile size update
+          if (block.ATLAS_TEXTURE && state.tileWidth && state.tileHeight) {
+            const { x, y } = block.ATLAS_TEXTURE;
+            const tileX = Math.floor(Number(x) / state.tileWidth);
+            const tileY = Math.floor(Number(y) / state.tileHeight);
+            state.selectedTileIndex = tileY * state.columns + tileX;
+          }
+          // Always refresh preview and block list after tile size/atlas update
+          updateSelectionInfo();
+          renderAtlas();
+          renderBlockList();
+        }
         await syncAtlasAndTileFromBlock(state.selectedBlockId);
         refreshBlockDataEditor();
         renderBlockList();
@@ -2573,7 +2613,8 @@
         }
 
         state.image = image;
-        state.tileSize = parsePositiveInt(tileSizeInput.value, parsePositiveInt(atlas.TILE_SIZE, 16));
+        // Always use atlas tile size when loading a new atlas
+        state.tileSize = parsePositiveInt(atlas.TILE_SIZE, 16);
         tileSizeInput.value = String(state.tileSize);
 
         state.columns = Math.max(1, Math.floor(image.width / state.tileSize));
