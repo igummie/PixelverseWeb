@@ -95,6 +95,20 @@
               <input id="treeTintColorInput" type="color" value="#ffffff" />
             </div>
           </div>
+          <div class="row">
+            <div class="fieldStack">
+              <label for="treeGemChanceInput">TREE.GEM_CHANCE</label>
+              <input id="treeGemChanceInput" type="number" min="0" max="1" step="0.01" value="0" />
+            </div>
+            <div class="fieldStack">
+              <label for="treeGemAmountInput">TREE.GEM_AMOUNT</label>
+              <input id="treeGemAmountInput" type="number" min="0" step="1" value="0" />
+            </div>
+            <div class="fieldStack">
+              <label for="treeGemAmountVarInput">TREE.GEM_AMOUNT_VAR</label>
+              <input id="treeGemAmountVarInput" type="number" min="0" step="1" value="0" />
+            </div>
+          </div>
 
           <table class="stageTable">
             <thead>
@@ -194,6 +208,9 @@
       const treeNameInput = document.getElementById("treeNameInput");
       const treeTintInput = document.getElementById("treeTintInput");
       const treeTintColorInput = document.getElementById("treeTintColorInput");
+      const treeGemChanceInput = document.getElementById("treeGemChanceInput");
+      const treeGemAmountInput = document.getElementById("treeGemAmountInput");
+      const treeGemAmountVarInput = document.getElementById("treeGemAmountVarInput");
       const stageTableBody = document.getElementById("stageTableBody");
       const treeSection = document.getElementById("treeSection");
       const treeEmptyHint = document.getElementById("treeEmptyHint");
@@ -217,7 +234,7 @@
       const resetJsonBtn = document.getElementById("resetJsonBtn");
       const copyJsonBtn = document.getElementById("copyJsonBtn");
 
-      const seedInputs = [seedIdInput, seedNameInput, growtimeInput, seedTintInput, seedTintColorInput, treeNameInput, treeTintInput, treeTintColorInput];
+      const seedInputs = [seedIdInput, seedNameInput, growtimeInput, seedTintInput, seedTintColorInput, treeNameInput, treeTintInput, treeTintColorInput, treeGemChanceInput, treeGemAmountInput, treeGemAmountVarInput];
       const seedActionButtons = [deleteSeedBtn, saveBtn, assignSeedTextureBtn, assignTreeTextureBtn, loadSeedAtlasBtn, loadTreeAtlasBtn, addFruitDropBtn];
 
       const state = {
@@ -444,6 +461,9 @@
             NAME: String(seed?.TREE?.NAME ?? "").trim(),
             TINT: normalizeTint(seed?.TREE?.TINT ?? ""),
             STAGES: stages,
+            GEM_CHANCE: Math.max(0, Math.min(1, Number(seed?.TREE?.GEM_CHANCE) || 0)),
+            GEM_AMOUNT: Math.max(0, Number(seed?.TREE?.GEM_AMOUNT) || 0),
+            GEM_AMOUNT_VAR: Math.max(0, Number(seed?.TREE?.GEM_AMOUNT_VAR) || 0),
           },
         };
       }
@@ -573,6 +593,9 @@
           treeNameInput.value = "";
           treeTintInput.value = "";
           treeTintColorInput.value = "#ffffff";
+          treeGemChanceInput.value = "0";
+          treeGemAmountInput.value = "0";
+          treeGemAmountVarInput.value = "0";
           fruitDropsEditor.innerHTML = "";
           stageTableBody.innerHTML = "";
           treeSection.hidden = true;
@@ -609,6 +632,10 @@
         if (/^#[0-9a-f]{6}$/i.test(seed.TREE.TINT || "")) {
           treeTintColorInput.value = seed.TREE.TINT;
         }
+        // gem drop inputs
+        treeGemChanceInput.value = String(Math.max(0, Math.min(1, Number(seed.TREE.GEM_CHANCE) || 0)));
+        treeGemAmountInput.value = String(Math.max(0, Number(seed.TREE.GEM_AMOUNT) || 0));
+        treeGemAmountVarInput.value = String(Math.max(0, Number(seed.TREE.GEM_AMOUNT_VAR) || 0));
 
         renderStageRows(seed);
         updateJsonOutput();
@@ -718,7 +745,11 @@
 
           const meta = document.createElement("div");
           meta.className = "seedCardMeta";
-          meta.textContent = `TREE: ${seed.TREE.NAME || "(none)"}`;
+          let metaText = `TREE: ${seed.TREE.NAME || "(none)"}`;
+          if (seed.TREE.GEM_CHANCE && seed.TREE.GEM_CHANCE > 0) {
+            metaText += ` | GEM ${Number(seed.TREE.GEM_CHANCE).toFixed(2)}x${seed.TREE.GEM_AMOUNT || 0}`;
+          }
+          meta.textContent = metaText;
           card.append(meta);
 
           const tint = document.createElement("div");
@@ -764,6 +795,9 @@
             TREE: {
               NAME: `TREE_${nextId}`,
               TINT: "",
+              GEM_CHANCE: 0,
+              GEM_AMOUNT: 0,
+              GEM_AMOUNT_VAR: 0,
             },
           })
         );
@@ -784,6 +818,9 @@
         seed.SEED_TINT = normalizeTint(seedTintInput.value);
         seed.TREE.NAME = String(treeNameInput.value || "").trim();
         seed.TREE.TINT = normalizeTint(treeTintInput.value);
+        seed.TREE.GEM_CHANCE = Math.max(0, Math.min(1, Number(treeGemChanceInput.value) || 0));
+        seed.TREE.GEM_AMOUNT = Math.max(0, Number(treeGemAmountInput.value) || 0);
+        seed.TREE.GEM_AMOUNT_VAR = Math.max(0, Number(treeGemAmountVarInput.value) || 0);
       }
 
       function drawPicker(canvas, image, selectedRect, tileSizeInputEl) {

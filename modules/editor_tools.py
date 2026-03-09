@@ -474,6 +474,11 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     fruit_drops: list[dict[str, Any]] = []
     tree_name = ""
     tree_tint = ""
+    # gem settings default to 0
+    tree_gem_chance = 0.0
+    tree_gem_amount = 0
+    tree_gem_amount_var = 0
+
     raw_tree = value.get("TREE")
     raw_stages: Any = value.get("TREE_STAGES", [])
     raw_tree_drops: Any = value.get("TREE_DROPS", [])
@@ -488,6 +493,20 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
             raw_tree_drops = raw_tree.get("DROPS", [])
         if isinstance(raw_tree.get("FRUIT_DROPS"), list):
             raw_fruit_drops = raw_tree.get("FRUIT_DROPS", [])
+
+        # gem drop settings inside TREE
+        try:
+            tree_gem_chance = float(raw_tree.get("GEM_CHANCE", raw_tree.get("TREE_GEM_CHANCE", 0.0)))
+        except Exception:
+            tree_gem_chance = 0.0
+        try:
+            tree_gem_amount = int(raw_tree.get("GEM_AMOUNT", raw_tree.get("TREE_GEM_AMOUNT", 0)))
+        except Exception:
+            tree_gem_amount = 0
+        try:
+            tree_gem_amount_var = int(raw_tree.get("GEM_AMOUNT_VAR", raw_tree.get("TREE_GEM_AMOUNT_VAR", 0)))
+        except Exception:
+            tree_gem_amount_var = 0
 
     if isinstance(raw_stages, list):
         for raw_stage in raw_stages:
@@ -526,7 +545,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
         output["SEED_ATLAS_TEXTURE"] = seed_atlas_texture
     if seed_tint:
         output["SEED_TINT"] = seed_tint
-    if tree_name or tree_tint or tree_stages or tree_drops:
+    # only create TREE object if there are any settings to persist
+    if tree_name or tree_tint or tree_stages or tree_drops or tree_gem_chance or tree_gem_amount or tree_gem_amount_var:
         output["TREE"] = {}
         if tree_name:
             output["TREE"]["NAME"] = tree_name
@@ -536,6 +556,10 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
             output["TREE"]["STAGES"] = tree_stages
         if tree_drops:
             output["TREE"]["DROPS"] = tree_drops
+        # include gem settings even if zero so they are explicit when edited
+        output["TREE"]["GEM_CHANCE"] = float(tree_gem_chance)
+        output["TREE"]["GEM_AMOUNT"] = int(tree_gem_amount)
+        output["TREE"]["GEM_AMOUNT_VAR"] = int(tree_gem_amount_var)
 
     return output
 

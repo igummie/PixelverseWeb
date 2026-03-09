@@ -197,6 +197,61 @@ def get_block_gem_drop_total(tile_id: int) -> int:
     return max(0, base_amount)
 
 
+def get_tree_gem_drop_total(tree: dict[str, Any]) -> int:
+    """Return total gem amount to spawn when a planted tree is harvested.
+
+    The configuration is stored on the seed definition under the TREE object.
+    Fields mirror the block format:
+      TREE.GEM_CHANCE          # chance 0.0-1.0
+      TREE.GEM_AMOUNT          # base amount
+      TREE.GEM_AMOUNT_VAR      # random variance +/-
+
+    Legacy support is minimal; if the TREE object is missing the keys we
+    simply return 0. The caller must handle zero appropriately.
+    """
+    if not isinstance(tree, dict):
+        return 0
+
+    try:
+        seed_id = int(tree.get("seed_id", -1))
+    except Exception:
+        seed_id = -1
+
+    if seed_id < 0:
+        return 0
+
+    seed = get_item_definition(seed_id, "seed")
+    if not isinstance(seed, dict):
+        return 0
+
+    raw_tree = seed.get("TREE") if isinstance(seed.get("TREE"), dict) else {}
+
+    try:
+        chance = float(raw_tree.get("GEM_CHANCE", 0.0))
+    except Exception:
+        chance = 0.0
+
+    chance = max(0.0, min(1.0, chance))
+    if chance <= 0.0 or random.random() > chance:
+        return 0
+
+    try:
+        base_amount = int(raw_tree.get("GEM_AMOUNT", 0))
+    except Exception:
+        base_amount = 0
+
+    try:
+        amount_var = int(raw_tree.get("GEM_AMOUNT_VAR", 0))
+    except Exception:
+        amount_var = 0
+
+    amount_var = max(0, amount_var)
+    if amount_var > 0:
+        base_amount += random.randint(-amount_var, amount_var)
+
+    return max(0, base_amount)
+
+
 def get_block_seed_drop_ids(tile_id: int) -> list[int]:
     block = BLOCKS_BY_ID.get(tile_id)
     if not block:
@@ -2036,6 +2091,23 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                             "y": float(tree_seed_drop["y"]),
                                             "itemId": int(tree_seed_drop.get("item_id", tree_seed_drop.get("seed_id", -1))),
                                             "itemType": str(tree_seed_drop.get("item_type", "seed")),
+                                        },
+                                    },
+                                )
+                        # gems from trees
+                        gem_total = get_tree_gem_drop_total(removed_tree)
+                        if gem_total > 0:
+                            spawned_drops = spawn_gem_drops(world, x, y, gem_total)
+                            for drop in spawned_drops:
+                                await broadcast_to_world(
+                                    world,
+                                    {
+                                        "type": "gem_drop_spawn",
+                                        "drop": {
+                                            "id": str(drop["id"]),
+                                            "x": float(drop["x"]),
+                                            "y": float(drop["y"]),
+                                            "value": int(drop["value"]),
                                         },
                                     },
                                 )
