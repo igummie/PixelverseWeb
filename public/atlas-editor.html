@@ -100,6 +100,8 @@
           <button id="cleanJsonBtn" type="button">Clean JSON</button>
           <button id="reorderBlocksBtn" type="button">Open Item Manager</button>
           <button id="reloadBtn" type="button">Reload Data</button>
+          <button id="enableDeleteBtn" type="button">Show Delete</button>
+          <button id="removeBlockBtn" type="button" hidden style="background-color:#dc2626;color:#fff;">Remove Block</button>
         </div>
 
         <div id="status" class="status"></div>
@@ -294,6 +296,8 @@
       const reorderBlocksBtn = document.getElementById("reorderBlocksBtn");
       const createAtlasBtn = document.getElementById("createAtlasBtn");
       const reloadBtn = document.getElementById("reloadBtn");
+      const enableDeleteBtn = document.getElementById("enableDeleteBtn");
+      const removeBlockBtn = document.getElementById("removeBlockBtn");
       const generateSeedBtn = document.getElementById("generateSeedBtn");
       const status = document.getElementById("status");
       const blockList = document.getElementById("blockList");
@@ -1518,7 +1522,7 @@
         }
 
         const targetAtlasKey = atlasKey(block.ATLAS_ID);
-        if (state.atlasByKey.has(targetAtlasKey)) {
+        if (state.atlases.some(a => a.ATLAS_ID === targetAtlasKey)) {
           const shouldReloadImage = state.selectedAtlasKey !== targetAtlasKey || !state.image;
           state.selectedAtlasKey = targetAtlasKey;
           atlasSelect.value = targetAtlasKey;
@@ -1667,6 +1671,22 @@
           removeBtn.textContent = "Remove";
           removeBtn.addEventListener("click", () => {
             row.remove();
+            // Live sync after removal
+            if (wrap && wrap.dispatchEvent) {
+              wrap.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+          });
+
+          // Live sync after edits
+          idInput.addEventListener("input", () => {
+            if (wrap && wrap.dispatchEvent) {
+              wrap.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+          });
+          chanceInput.addEventListener("input", () => {
+            if (wrap && wrap.dispatchEvent) {
+              wrap.dispatchEvent(new Event("input", { bubbles: true }));
+            }
           });
 
           row.appendChild(idInput);
@@ -2085,93 +2105,112 @@
         });
 
         for (const key of keys) {
-          const value = key === "SEED_IDS"
-            ? normalizeSeedIdsForEditor(block)
-            : key === "ANIM_FRAMES"
-              ? normalizeAnimFramesForEditor(block)
-            : key === "ATLAS_TEXTURE_VARIANTS"
-              ? normalizeTextureVariantsForEditor(block)
-              : key === "DROP_SELF"
-                ? Boolean(block.DROP_SELF)
-                : key === "DROP_SELF_CHANCE"
-                  ? Number.isFinite(Number(block.DROP_SELF_CHANCE)) ? Number(block.DROP_SELF_CHANCE) : 0.2
-              : block[key];
-          const row = document.createElement("div");
-          row.className = "blockFieldRow";
+            const value = key === "SEED_IDS"
+                ? normalizeSeedIdsForEditor(block)
+                : key === "ANIM_FRAMES"
+                    ? normalizeAnimFramesForEditor(block)
+                : key === "ATLAS_TEXTURE_VARIANTS"
+                    ? normalizeTextureVariantsForEditor(block)
+                    : key === "DROP_SELF"
+                        ? Boolean(block.DROP_SELF)
+                        : key === "DROP_SELF_CHANCE"
+                            ? Number.isFinite(Number(block.DROP_SELF_CHANCE)) ? Number(block.DROP_SELF_CHANCE) : 0.2
+                    : block[key];
+            const row = document.createElement("div");
+            row.className = "blockFieldRow";
 
-          const label = document.createElement("div");
-          label.className = "blockFieldLabel";
-          label.textContent = key;
+            const label = document.createElement("div");
+            label.className = "blockFieldLabel";
+            label.textContent = key;
 
-          let input = null;
-          if (typeof value === "boolean") {
-            input = document.createElement("select");
-            input.className = "blockFieldInput";
-            input.innerHTML = `<option value="true">true</option><option value="false">false</option>`;
-            input.value = value ? "true" : "false";
-            input.dataset.kind = "boolean";
-          } else if (key === "SEED_IDS") {
-            input = createSeedIdsEditorInput(value);
-            input.dataset.kind = "seed_ids";
-          } else if (key === "ANIM_FRAMES") {
-            input = createAnimFramesEditorInput(value, block?.ANIM_FIRST_SECONDS);
-            input.dataset.kind = "anim_frames";
-          } else if (key === "ATLAS_TEXTURE_VARIANTS") {
-            input = createTextureVariantsEditorInput(value);
-            input.dataset.kind = "texture_variants";
-          } else if (typeof value === "number") {
-            input = document.createElement("input");
-            input.className = "blockFieldInput";
-            input.type = "number";
-            if (key === "GEM_CHANCE") {
-              input.step = "0.01";
-              input.min = "0";
-              input.max = "1";
-            } else if (key === "DROP_SELF_CHANCE") {
-              input.step = "0.01";
-              input.min = "0";
-              input.max = "1";
-            } else if (["DROP_SELF_COUNT", "DROP_SELF_COUNT_VAR"].includes(key)) {
-              input.step = "1";
-              input.min = "0";
-            } else if (key === "DROP_SELF_SEED_ID") {
-              input.step = "1";
-              input.min = "-1";
+            let input = null;
+            if (typeof value === "boolean") {
+                input = document.createElement("select");
+                input.className = "blockFieldInput";
+                input.innerHTML = `<option value="true">true</option><option value="false">false</option>`;
+                input.value = value ? "true" : "false";
+                input.dataset.kind = "boolean";
+            } else if (key === "SEED_IDS") {
+                input = createSeedIdsEditorInput(value);
+                input.dataset.kind = "seed_ids";
+            } else if (key === "ANIM_FRAMES") {
+                input = createAnimFramesEditorInput(value, block?.ANIM_FIRST_SECONDS);
+                input.dataset.kind = "anim_frames";
+            } else if (key === "ATLAS_TEXTURE_VARIANTS") {
+                input = createTextureVariantsEditorInput(value);
+                input.dataset.kind = "texture_variants";
+            } else if (typeof value === "number") {
+                input = document.createElement("input");
+                input.className = "blockFieldInput";
+                input.type = "number";
+                if (key === "GEM_CHANCE") {
+                    input.step = "0.01";
+                    input.min = "0";
+                    input.max = "1";
+                } else if (key === "DROP_SELF_CHANCE") {
+                    input.step = "0.01";
+                    input.min = "0";
+                    input.max = "1";
+                } else if (["DROP_SELF_COUNT", "DROP_SELF_COUNT_VAR"].includes(key)) {
+                    input.step = "1";
+                    input.min = "0";
+                } else if (key === "DROP_SELF_SEED_ID") {
+                    input.step = "1";
+                    input.min = "-1";
+                } else {
+                    input.step = "any";
+                }
+                input.value = value == null ? "" : String(value);
+                input.dataset.kind = "number";
+            } else if (typeof value === "string") {
+                input = document.createElement("input");
+                input.className = "blockFieldInput";
+                input.type = "text";
+                input.value = value;
+                input.placeholder = key === "NAME" ? "BLOCK_NAME" : key === "TEXTURE47_ID" ? "dirt" : key;
+                input.dataset.kind = "string";
             } else {
-              input.step = "any";
+                input = document.createElement("textarea");
+                input.className = "blockFieldJson";
+                input.value = JSON.stringify(value, null, 2);
+                input.dataset.kind = "json";
             }
-            input.value = value == null ? "" : String(value);
-            input.dataset.kind = "number";
-          } else if (typeof value === "string") {
-            input = document.createElement("input");
-            input.className = "blockFieldInput";
-            input.type = "text";
-            input.value = value;
-            input.placeholder = key === "NAME" ? "BLOCK_NAME" : key === "TEXTURE47_ID" ? "dirt" : key;
-            input.dataset.kind = "string";
-          } else {
-            input = document.createElement("textarea");
-            input.className = "blockFieldJson";
-            input.value = JSON.stringify(value, null, 2);
-            input.dataset.kind = "json";
-          }
 
-          input.dataset.key = key;
-          const inputWrap = document.createElement("div");
-          inputWrap.className = "blockFieldInputWrap";
-          inputWrap.appendChild(input);
+            input.dataset.key = key;
+            const inputWrap = document.createElement("div");
+            inputWrap.className = "blockFieldInputWrap";
+            inputWrap.appendChild(input);
 
-          const fieldHintText = getFieldHintText(key, input.dataset.kind, value);
-          if (fieldHintText) {
-            const hint = document.createElement("div");
-            hint.className = "fieldHint";
-            hint.textContent = fieldHintText;
-            inputWrap.appendChild(hint);
-          }
+            const fieldHintText = getFieldHintText(key, input.dataset.kind, value);
+            if (fieldHintText) {
+                const hint = document.createElement("div");
+                hint.className = "fieldHint";
+                hint.textContent = fieldHintText;
+                inputWrap.appendChild(hint);
+            }
 
-          row.appendChild(label);
-          row.appendChild(inputWrap);
-          blockFieldEditor.appendChild(row);
+            row.appendChild(label);
+            row.appendChild(inputWrap);
+            blockFieldEditor.appendChild(row);
+
+            // Live sync: update block data editor JSON on input change
+            const syncJson = () => {
+                try {
+                    const blockId = Number(state.selectedBlockId);
+                    const parsed = buildBlockFromFieldEditor();
+                    blockDataEditor.value = JSON.stringify(parsed, null, 2);
+                } catch {}
+            };
+            if (input.tagName === "INPUT" || input.tagName === "SELECT" || input.tagName === "TEXTAREA") {
+                input.addEventListener("input", syncJson);
+                input.addEventListener("change", syncJson);
+            } else {
+                // For custom editors (seed_ids, anim_frames, texture_variants), listen for changes on their children
+                input.addEventListener("input", syncJson);
+                input.addEventListener("change", syncJson);
+                input.addEventListener("blur", syncJson);
+                input.addEventListener("keyup", syncJson);
+            }
         }
       }
 
@@ -2443,7 +2482,7 @@
         const block = state.blockById.get(state.selectedBlockId);
         if (block) {
           const atlasId = block.ATLAS_ID;
-          const atlas = state.atlasByKey.get(atlasId);
+          const atlas = state.atlases.find(a => a.ATLAS_ID === atlasId) || null;
           let needAtlasUpdate = false;
           let newTileSize = state.tileSize;
           if (atlas) {
@@ -2641,7 +2680,7 @@
       }
 
       async function loadAtlasImage() {
-        const atlas = state.atlasByKey.get(state.selectedAtlasKey);
+        const atlas = state.atlases.find(a => a.ATLAS_ID === state.selectedAtlasKey) || null;
         if (!atlas) {
           state.image = null;
           renderAtlas();
@@ -3058,23 +3097,43 @@
         parsed.ITEM_ID = activeId;
         parsed.ITEM_TYPE = "block";
         applyParsedBlockChanges(activeId, parsed);
-        setStatus(`Queued field changes for block ${activeId}`);
+        // Sync block data editor JSON to reflect field changes
+        blockDataEditor.value = JSON.stringify(parsed, null, 2);
+        setStatus(`Applied field changes for block ${activeId}`);
         return true;
       }
 
       async function saveSelectedBlockData() {
-        const queued = queueBlockFieldChanges();
-        if (!queued) {
+        const blockId = Number(state.selectedBlockId);
+        let parsed = null;
+        // Try block data editor first
+        try {
+          parsed = JSON.parse(blockDataEditor.value);
+        } catch {}
+        // If block data editor is invalid, try field editor
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          try {
+            parsed = buildBlockFromFieldEditor();
+          } catch {}
+        }
+        if (!parsed || typeof parsed !== "object") {
+          setStatus("No valid block changes to save", true);
+          console.log("[Block Save] No valid block changes to save.");
           return;
         }
-
+        parsed.ITEM_ID = blockId;
+        parsed.ITEM_TYPE = "block";
+        // Update block state directly
+        state.blockById.set(blockId, parsed);
+        console.log("[Block Save] Block data to save:", parsed);
+        // Build payload from updated block state
         const payload = buildCurrentDocumentPayload(false);
         if (!payload.blocks.length) {
           setStatus("No blocks available to save", true);
+          console.log("[Block Save] No blocks available to save.");
           return;
         }
-
-        const blockId = Number(state.selectedBlockId);
+        console.log("[Block Save] Payload to backend:", payload);
         await saveFullDocument(payload, `Saved block ${blockId} data to blocks.json`);
       }
 
@@ -3089,18 +3148,21 @@
       }
 
       function buildCurrentDocumentPayload(sortBlocksById = false) {
-        const effectiveBlocks = state.blocks
-          .map((block) => getEffectiveBlock(block.ID) || deepClone(block))
-          .filter((block) => block && typeof block === "object");
+        // Use blockById as the source of truth for blocks
+        const blockIds = Array.from(state.blockById.keys());
+        let effectiveBlocks = blockIds.map((id) => {
+            const block = state.blockById.get(id);
+            return block && typeof block === "object" ? deepClone(block) : null;
+        }).filter((block) => block && typeof block === "object");
 
         if (sortBlocksById) {
-          effectiveBlocks.sort((a, b) => Number(a.ID) - Number(b.ID));
+            effectiveBlocks.sort((a, b) => Number(a.ITEM_ID) - Number(b.ITEM_ID));
         }
 
         return {
-          VERSION: Number.isInteger(state.version) ? state.version : 1,
-          atlases: deepClone(state.atlases) || [],
-          blocks: effectiveBlocks,
+            VERSION: Number.isInteger(state.version) ? state.version : 1,
+            atlases: deepClone(state.atlases) || [],
+            blocks: effectiveBlocks,
         };
       }
 
@@ -3253,27 +3315,44 @@
         }
         const block = state.blockById.get(blockId);
 
-        // compute tint from block texture if possible
+        // compute tint from block texture or variant if possible
         let tint = "#ffffff";
         try {
-          const atlasEntry = state.atlasByKey.get(block?.ATLAS_ID);
-          if (atlasEntry && atlasEntry.SRC) {
-            const image = await loadImage(atlasEntry.SRC);
-            if (image && block?.ATLAS_TEXTURE) {
-              tint = computeAverageColorFromRect(image, block.ATLAS_TEXTURE);
+            const atlasEntry = state.atlases.find(a => a.ATLAS_ID === block.ATLAS_ID) || null;
+            if (atlasEntry && atlasEntry.SRC) {
+                console.log("[Seed Generation] Atlas image source:", atlasEntry.SRC);
+                const image = await loadImage(atlasEntry.SRC);
+                let rect = null;
+                if (block?.ATLAS_TEXTURE && typeof block.ATLAS_TEXTURE === "object") {
+                    rect = block.ATLAS_TEXTURE;
+                } else if (Array.isArray(block?.ATLAS_TEXTURE_VARIANTS) && block.ATLAS_TEXTURE_VARIANTS.length > 0) {
+                    rect = block.ATLAS_TEXTURE_VARIANTS[0];
+                } else {
+                    rect = { x: 0, y: 0, w: 16, h: 16 };
+                }
+                console.log("[Seed Generation] Texture rect used for tint:", rect);
+                if (image && rect) {
+                    const computedTint = computeAverageColorFromRect(image, rect);
+                    console.log("[Seed Generation] computeAverageColorFromRect result:", computedTint);
+                    tint = computedTint;
+                } else {
+                    console.log("[Seed Generation] Missing image or rect for tint calculation.");
+                }
+            } else {
+                console.log("[Seed Generation] No atlasEntry or SRC found for block.");
             }
-          }
         } catch (err) {
-          console.error("tint computation failed", err);
+            console.error("tint computation failed", err);
         }
+        console.log("[Seed Generation] Computed tint:", tint);
 
         // fetch current seed/editor data for defaults
         let payload;
         try {
-          const res = await fetch(`/api/tools/seeds/editor-data?ts=${Date.now()}`, { cache: "no-store" });
-          if (res.ok) payload = await res.json();
+            const res = await fetch(`/api/tools/seeds/editor-data?ts=${Date.now()}`, { cache: "no-store" });
+            if (res.ok) payload = await res.json();
         } catch {
-          /* ignore */
+            /* ignore */
         }
         const seeds = Array.isArray(payload?.seeds) ? payload.seeds : [];
 
@@ -3282,93 +3361,97 @@
         // seeds may omit or reorder stages.  STAGE values are 1-based.
         const defaultStages = [];
         for (const s of seeds) {
-          if (s && typeof s === "object") {
-            const stages = s?.TREE?.STAGES;
-            if (Array.isArray(stages)) {
-              stages.forEach((st) => {
-                if (!st || typeof st !== "object") return;
-                const stageNum = Math.max(1, Number(st.STAGE) || 0);
-                if (stageNum <= 0) return;
-                const idx = stageNum - 1;
-                if (
-                  !defaultStages[idx] &&
-                  (st.ATLAS_ID || st.ATLAS_TEXTURE)
-                ) {
-                  // copy whole object so we keep STAGE and GROWTH_PERCENT
-                  defaultStages[idx] = { ...st };
+            if (s && typeof s === "object") {
+                const stages = s?.TREE?.STAGES;
+                if (Array.isArray(stages)) {
+                    stages.forEach((st) => {
+                        if (!st || typeof st !== "object") return;
+                        const stageNum = Math.max(1, Number(st.STAGE) || 0);
+                        if (stageNum <= 0) return;
+                        const idx = stageNum - 1;
+                        if (
+                            !defaultStages[idx] &&
+                            (st.ATLAS_ID || st.ATLAS_TEXTURE)
+                        ) {
+                            // copy whole object so we keep STAGE and GROWTH_PERCENT
+                            defaultStages[idx] = { ...st };
+                        }
+                    });
                 }
-              });
             }
-          }
         }
         // ensure four stages present (fill blanks with defaults)
         for (let i = 0; i < 4; i += 1) {
-          if (!defaultStages[i]) {
-            defaultStages[i] = {
-              STAGE: i + 1,
-              GROWTH_PERCENT: i === 3 ? 100 : (i + 1) * 25,
-              ATLAS_ID: "",
-              ATLAS_TEXTURE: { x: 0, y: 0, w: 16, h: 16 },
-            };
-          }
+            if (!defaultStages[i]) {
+                defaultStages[i] = {
+                    STAGE: i + 1,
+                    GROWTH_PERCENT: i === 3 ? 100 : (i + 1) * 25,
+                    ATLAS_ID: "",
+                    ATLAS_TEXTURE: { x: 0, y: 0, w: 16, h: 16 },
+                };
+            }
         }
         // enforce y=16 for each stage and default x based on index if missing
         for (let i = 0; i < defaultStages.length; i += 1) {
-          const st = defaultStages[i];
-          if (!st.ATLAS_TEXTURE || typeof st.ATLAS_TEXTURE !== "object") {
-            st.ATLAS_TEXTURE = { x: i * 16, y: 16, w: 16, h: 16 };
-          }
-          st.ATLAS_TEXTURE.y = 16;
-          if (!Number.isFinite(Number(st.ATLAS_TEXTURE.x))) {
-            st.ATLAS_TEXTURE.x = i * 16;
-          }
+            const st = defaultStages[i];
+            if (!st.ATLAS_TEXTURE || typeof st.ATLAS_TEXTURE !== "object") {
+                st.ATLAS_TEXTURE = { x: i * 16, y: 16, w: 16, h: 16 };
+            }
+            st.ATLAS_TEXTURE.y = 16;
+            if (!Number.isFinite(Number(st.ATLAS_TEXTURE.x))) {
+                st.ATLAS_TEXTURE.x = i * 16;
+            }
         }
         // ensure stage 2 explicitly uses tile index 5 (rect 16,16,16,16)
         if (defaultStages[1]) {
-          defaultStages[1].ATLAS_TEXTURE = { x: 16, y: 16, w: 16, h: 16 };
+            defaultStages[1].ATLAS_TEXTURE = { x: 16, y: 16, w: 16, h: 16 };
         }
 
         // pick random seed atlas from payload
         let seedAtlasId = "";
         let seedAtlasTexture = { x: 0, y: 0, w: 16, h: 16 };
         const atlasChoices =
-          (Array.isArray(payload?.seedAtlases) && payload.seedAtlases.length
-            ? payload.seedAtlases
-            : payload?.atlases) || [];
+            (Array.isArray(payload?.seedAtlases) && payload.seedAtlases.length
+                ? payload.seedAtlases
+                : payload?.atlases) || [];
         if (atlasChoices.length) {
-          const choice = atlasChoices[Math.floor(Math.random() * atlasChoices.length)];
-          seedAtlasId = choice?.ATLAS_ID ?? "";
+            const choice = atlasChoices[Math.floor(Math.random() * atlasChoices.length)];
+            seedAtlasId = choice?.ATLAS_ID ?? "";
         }
 
-        // compute next available seed id
+        // compute next available seed id, must not match block ITEM_ID
         let nextSeedId = 1;
         if (Array.isArray(seeds) && seeds.length) {
-          nextSeedId =
-            Math.max(
-              ...seeds.map((s) => Number(s?.ITEM_ID ?? s?.SEED_ID ?? 0) || 0),
+            nextSeedId = Math.max(
+                ...seeds.map((s) => Number(s?.ITEM_ID ?? s?.SEED_ID ?? 0) || 0),
             ) + 1;
+        }
+        // Ensure seed ID does not match block ID
+        if (nextSeedId === blockId) {
+            nextSeedId += 1;
         }
 
         const newSeed = {
-          ITEM_ID: nextSeedId,
-          // seed name inherits block name
-          NAME: `${block?.NAME || "BLOCK"} Seed`,
-          GROWTIME: 3600,
-          SEED_ATLAS_ID: seedAtlasId,
-          SEED_ATLAS_TEXTURE: seedAtlasTexture,
-          SEED_TINT: tint,
-          FRUIT_DROPS: [
-            // 20% chance to drop itself as a seed
-            { ITEM_TYPE: "seed", ITEM_ID: nextSeedId, CHANCE: 0.2, MIN: 1, MAX: 1 },
-            // guaranteed block drops 2–5 of the source block
-            { ITEM_TYPE: "block", ITEM_ID: blockId, CHANCE: 1.0, MIN: 2, MAX: 5 },
-          ],
-          TREE: {
-            NAME: `${block?.NAME || "BLOCK"} Tree`,
-            TINT: tint,
-            STAGES: defaultStages,
-          },
+            ITEM_ID: nextSeedId,
+            // seed name inherits block name
+            NAME: `${block?.NAME || "BLOCK"} Seed`,
+            GROWTIME: 3600,
+            SEED_ATLAS_ID: seedAtlasId,
+            SEED_ATLAS_TEXTURE: seedAtlasTexture,
+            SEED_TINT: tint,
+            FRUIT_DROPS: [
+                // 20% chance to drop itself as a seed
+                { ITEM_TYPE: "seed", ITEM_ID: nextSeedId, CHANCE: 0.2, MIN: 1, MAX: 1 },
+                // guaranteed block drops 2–5 of the source block
+                { ITEM_TYPE: "block", ITEM_ID: blockId, CHANCE: 1.0, MIN: 2, MAX: 5 },
+            ],
+            TREE: {
+                NAME: `${block?.NAME || "BLOCK"} Tree`,
+                TINT: tint,
+                STAGES: defaultStages,
+            },
         };
+        console.log("[Seed Generation] Generated seed:", newSeed);
 
         sessionStorage.setItem("generatedSeed", JSON.stringify(newSeed));
         window.location.href = "/seed-editor.html";
@@ -3500,7 +3583,7 @@
         }
 
         const usesTexture47 = createBlockTexture47Toggle.value === "true";
-        const selectedRegularAtlas = state.atlasByKey.get(createRegularAtlasSelect.value);
+        const selectedRegularAtlas = state.atlases.find(a => a.ATLAS_ID === createRegularAtlasSelect.value) || null;
         const regularAtlasId = selectedRegularAtlas?.ATLAS_ID;
         const texture47AtlasId = String(createTexture47AtlasInput.value || "").trim().toLowerCase();
 
@@ -3650,6 +3733,43 @@
 
       reloadBtn.addEventListener("click", async () => {
         await loadEditorData();
+      });
+
+      // deletion workflow - show delete button when requested
+      enableDeleteBtn.addEventListener("click", () => {
+        enableDeleteBtn.hidden = true;
+        removeBlockBtn.hidden = false;
+        removeBlockBtn.disabled = false;
+        setStatus("Delete button is now visible. Click 'Remove Block' to confirm.");
+        // revert back after 2 seconds if not clicked
+        setTimeout(() => {
+          if (!removeBlockBtn.hidden) {
+            removeBlockBtn.hidden = true;
+            enableDeleteBtn.hidden = false;
+            removeBlockBtn.disabled = true;
+            setStatus("Delete button hidden");
+          }
+        }, 2000);
+      });
+
+      removeBlockBtn.addEventListener("click", () => {
+        const blockId = Number(state.selectedBlockId);
+        if (!Number.isInteger(blockId) || !state.blockById.has(blockId)) {
+          setStatus("Select a valid block to remove", true);
+          return;
+        }
+        // remove block from state
+        state.blocks = state.blocks.filter((b) => Number(b.ITEM_ID) !== blockId);
+        state.blockById.delete(blockId);
+        state.pendingByBlockId.delete(blockId);
+        state.pendingBlockDataById.delete(blockId);
+        state.selectedBlockId = null;
+        renderBlockList();
+        renderBlockOptions();
+        refreshBlockDataEditor();
+        syncJsonOutput();
+        removeBlockBtn.disabled = true;
+        setStatus(`Removed block ${blockId}. Save to persist.`);
       });
 
       setZoom(1);

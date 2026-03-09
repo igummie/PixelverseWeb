@@ -299,7 +299,7 @@
             const count = Number.parseInt(entry.COUNT ?? entry.count ?? 1, 10) || 1;
             const min = Math.max(0, Number.parseInt(entry.MIN ?? entry.min ?? count, 10) || count);
             const max = Math.max(min, Number.parseInt(entry.MAX ?? entry.max ?? count, 10) || min);
-            rows.push({ itemType, itemId, chance, min, max });
+            rows.push({ ITEM_TYPE: itemType, ITEM_ID: itemId, CHANCE: chance, MIN: min, MAX: max });
           }
         }
 
@@ -968,6 +968,8 @@
           atlases: state.seedAtlases,
           seeds: state.seeds,
         };
+        // debug log current fruit drops
+        console.log("[Seed Save] payload.seeds:", payload.seeds);
         setStatus("Saving seeds...");
         try {
           const res = await fetch("/api/tools/seeds/save-data", {
