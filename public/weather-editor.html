@@ -789,100 +789,139 @@
         updateJsonOutput();
       }
 
-      function updatePreview() {
-        const ctx = previewCanvas.getContext("2d");
-        ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-        if (!state.current) return;
-        // fill base color first
-        const base = normalizeTint(state.current.WEATHER_COLOR);
-        if (base) {
-          ctx.fillStyle = base;
-          ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+      // offscreen-buffered preview renderer (handles DPR, tiling, parallax)
+      const bufCanvas = document.createElement("canvas");
+      const bufCtx = bufCanvas.getContext("2d");
+      if (bufCtx) bufCtx.imageSmoothingEnabled = false;
+
+      function ensureCanvasSize() {
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = Math.max(1, Math.floor(previewCanvas.clientWidth));
+        const cssH = Math.max(1, Math.floor(previewCanvas.clientHeight));
+        const pixelW = Math.max(1, Math.floor(cssW * dpr));
+        const pixelH = Math.max(1, Math.floor(cssH * dpr));
+        if (previewCanvas.width !== pixelW || previewCanvas.height !== pixelH) {
+          previewCanvas.width = pixelW;
+          previewCanvas.height = pixelH;
+          previewCanvas.style.height = cssH + "px";
+          bufCanvas.width = pixelW;
+          bufCanvas.height = pixelH;
         }
-        state.current.LAYERS.forEach((layer) => {
-          let img = null;
-          if (layer.TYPE === "atlas") {
-            const key = String(normalizeAtlasId(layer.ATLAS_ID));
-            img = state.atlasImageCacheResolved[key];
-            if (!img) return;
-          }
-          drawLayer(ctx, img, layer);
-        });
       }
 
-      function drawLayer(ctx, img, layer) {
+      function updatePreview() {
+        ensureCanvasSize();
+        const ctx = previewCanvas.getContext("2d");
+        if (!ctx || !bufCtx) return;
+        bufCtx.clearRect(0, 0, bufCanvas.width, bufCanvas.height);
+        if (!state.current) {
+          ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+          return;
+        }
+
+        const base = normalizeTint(state.current.WEATHER_COLOR);
+        if (base) {
+          bufCtx.fillStyle = base;
+          bufCtx.fillRect(0, 0, bufCanvas.width, bufCanvas.height);
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const areaW = bufCanvas.width;
+        const areaH = bufCanvas.height;
+
+        state.current.LAYERS.forEach((layer) => {
+          drawLayerToBuffer(bufCtx, layer, areaW, areaH, dpr);
+        });
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        ctx.drawImage(bufCanvas, 0, 0);
+      }
+
+      function drawLayerToBuffer(ctx, layer, areaW, areaH, dpr) {
         const type = layer.TYPE || "atlas";
         if (type === "color") {
           const col = normalizeTint(layer.COLOR) || "#000";
           ctx.fillStyle = col;
-          ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+          ctx.fillRect(0, 0, areaW, areaH);
           return;
         }
         if (type === "shape") {
           const col = normalizeTint(layer.COLOR) || "#000";
           const rect = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
           if (rect.w <= 0 || rect.h <= 0) return;
+          ctx.save();
           ctx.fillStyle = col;
-          const angle = (parseFloat(layer.ROTATION) || 0) * (Math.PI / 180);
+          const angle = ((parseFloat(layer.ROTATION) || 0) * Math.PI) / 180;
+          const sx = (rect.x + (layer.offsetX || 0)) * dpr;
+          const sy = (rect.y + (layer.offsetY || 0)) * dpr;
+          const sw = rect.w * dpr;
+          const sh = rect.h * dpr;
           if (angle !== 0) {
-            // rotate around center
-            ctx.save();
-            const cx = rect.x + rect.w / 2;
-            const cy = rect.y + rect.h / 2;
-            ctx.translate(cx, cy);
+            ctx.translate(sx + sw / 2, sy + sh / 2);
             ctx.rotate(angle);
             if (layer.SHAPE === "circle") {
               ctx.beginPath();
-              ctx.ellipse(0, 0, rect.w / 2, rect.h / 2, 0, 0, 2 * Math.PI);
+              ctx.ellipse(0, 0, sw / 2, sh / 2, 0, 0, 2 * Math.PI);
               ctx.fill();
             } else {
-              ctx.fillRect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
+              ctx.fillRect(-sw / 2, -sh / 2, sw, sh);
             }
-            ctx.restore();
           } else {
             if (layer.SHAPE === "circle") {
               ctx.beginPath();
-              ctx.ellipse(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, rect.h / 2, 0, 0, 2 * Math.PI);
+              ctx.ellipse(sx + sw / 2, sy + sh / 2, sw / 2, sh / 2, 0, 0, 2 * Math.PI);
               ctx.fill();
             } else {
-              ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+              ctx.fillRect(sx, sy, sw, sh);
             }
           }
+          ctx.restore();
           return;
         }
-        // atlas case
+
         const rect = layer.ATLAS_TEXTURE || { x: 0, y: 0, w: 0, h: 0 };
         if (rect.w <= 0 || rect.h <= 0) return;
-        const temp = document.createElement("canvas");
-        temp.width = rect.w;
-        temp.height = rect.h;
-        const tctx = temp.getContext("2d");
+        const key = String(normalizeAtlasId(layer.ATLAS_ID));
+        const img = state.atlasImageCacheResolved[key];
+        if (!img) return;
+
+        const sx = rect.x || 0;
+        const sy = rect.y || 0;
+        const sw = rect.w || 0;
+        const sh = rect.h || 0;
+
+        const tmp = document.createElement("canvas");
+        tmp.width = Math.max(1, Math.floor(sw * dpr));
+        tmp.height = Math.max(1, Math.floor(sh * dpr));
+        const tctx = tmp.getContext("2d");
         if (!tctx) return;
         tctx.imageSmoothingEnabled = false;
-        tctx.clearRect(0, 0, rect.w, rect.h);
-        tctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+        tctx.clearRect(0, 0, tmp.width, tmp.height);
+        tctx.drawImage(img, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height);
 
-        const px = layer.offsetX || 0;
-        const py = layer.offsetY || 0;
+        const px = (layer.offsetX || 0) * dpr;
+        const py = (layer.offsetY || 0) * dpr;
 
         if (layer.LOOP_X || layer.LOOP_Y) {
-          const pattern = ctx.createPattern(temp, "repeat");
-          if (pattern) {
-            ctx.save();
-            ctx.translate(px, py);
-            ctx.fillStyle = pattern;
-            ctx.fillRect(-px, -py, previewCanvas.width + rect.w, previewCanvas.height + rect.h);
-            ctx.restore();
-          }
+          const pattern = ctx.createPattern(tmp, "repeat");
+          if (!pattern) return;
+          ctx.save();
+          const tx = px % (tmp.width || 1);
+          const ty = py % (tmp.height || 1);
+          ctx.translate(tx, ty);
+          ctx.fillStyle = pattern;
+          ctx.fillRect(-tx, -ty, areaW + tmp.width, areaH + tmp.height);
+          ctx.restore();
         } else {
-          ctx.drawImage(temp, px, py);
+          ctx.drawImage(tmp, px, py);
         }
       }
 
-      // animation tick for scrolling
+      // animation tick for scrolling (keeps previous behavior)
       let lastTime = performance.now();
       function tick(time) {
-        const dt = (time - lastTime) / 1000;
+        const dt = Math.max(0, (time - lastTime) / 1000);
         lastTime = time;
         if (state.current) {
           state.current.LAYERS.forEach((layer) => {
