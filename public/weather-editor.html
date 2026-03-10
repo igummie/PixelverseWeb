@@ -104,14 +104,17 @@
 
       </div>
 
-      <div class="panel">
-        <div id="previewWrap" class="atlasWrap" style="margin-bottom:12px;">
-          <canvas id="previewCanvas" width="800" height="400" style="border:1px solid #374151; width:100%; height:400px;"></canvas>
+      <div class="panel" style="resize: vertical; overflow: auto; min-height:0;">
+        <div id="previewWrap" class="atlasWrap" style="margin-bottom:12px; overflow: visible; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; position:relative;">
+          <button id="previewFullBtn" type="button" style="position:absolute; top:8px; right:8px; font-size:12px; padding:2px 6px; z-index:10;">Fullscreen</button>
+          <canvas id="previewCanvas" width="800" height="400" style="border:1px solid #374151; width:100%; flex:1 1 auto;"></canvas>
+          <div class="tiny" id="previewHint">Preview will animate based on scroll/parallax values; color/shape layers are drawn directly.</div>
         </div>
-        <div class="tiny" id="previewHint">Preview will animate based on scroll/parallax values; color/shape layers are drawn directly.</div>
-        <div class="title">Weather</div>
-        <div class="subtitle">Select a card to edit. Each card shows an ID/name.</div>
-        <div id="weatherCardList" class="seedCardList"></div>
+        <div id="cardsContainer" style="margin-top:auto;">
+          <div class="title">Weather</div>
+          <div class="subtitle">Select a card to edit. Each card shows an ID/name.</div>
+          <div id="weatherCardList" class="seedCardList"></div>
+        </div>
       </div>
     </div>
 
@@ -376,6 +379,8 @@
           SCROLL_Y: 0,
           LOOP_X: false,
           LOOP_Y: false,
+          TILE: false,
+          WRAP_BUFFER: 0,
           offsetX: 0,
           offsetY: 0,
         });
@@ -402,6 +407,8 @@
           "Rot",
           "LoopX",
           "LoopY",
+          "Tile",
+          "Buf",
           "Up",
           "Down",
           "Del",
@@ -745,6 +752,34 @@
           });
           row.append(loopY);
 
+          // tile vs wrap toggle
+          const tileChk = document.createElement("input");
+          tileChk.setAttribute("aria-label", "tile");
+          tileChk.type = "checkbox";
+          tileChk.checked = !!layer.TILE;
+          tileChk.title = "tile (repeat)";
+          tileChk.addEventListener("change", () => {
+            layer.TILE = tileChk.checked;
+            updatePreview();
+            updateJsonOutput();
+          });
+          row.append(tileChk);
+          // buffer distance for wrap mode
+          const bufferInp = document.createElement("input");
+          bufferInp.setAttribute("aria-label", "wrap buffer");
+          bufferInp.type = "number";
+          bufferInp.min = "0";
+          bufferInp.step = "1";
+          bufferInp.style.width = "50px";
+          bufferInp.value = String(Math.max(0, Number(layer.WRAP_BUFFER || 0)));
+          bufferInp.placeholder = "buf";
+          bufferInp.addEventListener("input", () => {
+            layer.WRAP_BUFFER = Math.max(0, Number.parseFloat(bufferInp.value) || 0);
+            updatePreview();
+            updateJsonOutput();
+          });
+          row.append(bufferInp);
+
           const upBtn = document.createElement("button");
           upBtn.type = "button";
           upBtn.textContent = "↑";
@@ -850,33 +885,71 @@
           const col = normalizeTint(layer.COLOR) || "#000";
           const rect = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
           if (rect.w <= 0 || rect.h <= 0) return;
-          ctx.save();
-          ctx.fillStyle = col;
-          const angle = ((parseFloat(layer.ROTATION) || 0) * Math.PI) / 180;
-          const sx = (rect.x + (layer.offsetX || 0)) * dpr;
-          const sy = (rect.y + (layer.offsetY || 0)) * dpr;
+
+          // compute raw offset in pixels (including any scrolling/parallax contributions)
+          let px = (rect.x + (layer.offsetX || 0)) * dpr;
+          let py = (rect.y + (layer.offsetY || 0)) * dpr;
           const sw = rect.w * dpr;
           const sh = rect.h * dpr;
-          if (angle !== 0) {
-            ctx.translate(sx + sw / 2, sy + sh / 2);
-            ctx.rotate(angle);
-            if (layer.SHAPE === "circle") {
-              ctx.beginPath();
-              ctx.ellipse(0, 0, sw / 2, sh / 2, 0, 0, 2 * Math.PI);
-              ctx.fill();
+          const angle = ((parseFloat(layer.ROTATION) || 0) * Math.PI) / 180;
+
+          // helper draws a single copy of the shape at the given top-left coordinates
+          const drawSingle = (dx, dy) => {
+            ctx.save();
+            ctx.fillStyle = col;
+            if (angle !== 0) {
+              ctx.translate(dx + sw / 2, dy + sh / 2);
+              ctx.rotate(angle);
+              if (layer.SHAPE === "circle") {
+                ctx.beginPath();
+                ctx.ellipse(0, 0, sw / 2, sh / 2, 0, 0, 2 * Math.PI);
+                ctx.fill();
+              } else {
+                ctx.fillRect(-sw / 2, -sh / 2, sw, sh);
+              }
             } else {
-              ctx.fillRect(-sw / 2, -sh / 2, sw, sh);
+              if (layer.SHAPE === "circle") {
+                ctx.beginPath();
+                ctx.ellipse(dx + sw / 2, dy + sh / 2, sw / 2, sh / 2, 0, 0, 2 * Math.PI);
+                ctx.fill();
+              } else {
+                ctx.fillRect(dx, dy, sw, sh);
+              }
+            }
+            ctx.restore();
+          };
+
+          if (layer.LOOP_X || layer.LOOP_Y) {
+            const buf = Number(layer.WRAP_BUFFER || 0) * dpr;
+            if (layer.TILE) {
+              // tile the shape across the preview area, wrapping using modulo maths
+              const w = sw || 1;
+              const h = sh || 1;
+              const tx = ((px % w) + w) % w;
+              const ty = ((py % h) + h) % h;
+              for (let xx = -tx; xx < areaW; xx += w) {
+                for (let yy = -ty; yy < areaH; yy += h) {
+                  drawSingle(xx, yy);
+                }
+              }
+            } else {
+              // wrap mode – single object teleports after buffer
+              let x = px;
+              let y = py;
+              if (layer.LOOP_X) {
+                if (x > areaW + buf) x = -buf + (x - (areaW + buf));
+                else if (x < -buf) x = areaW + buf + (x + buf);
+              }
+              if (layer.LOOP_Y) {
+                if (y > areaH + buf) y = -buf + (y - (areaH + buf));
+                else if (y < -buf) y = areaH + buf + (y + buf);
+              }
+              drawSingle(x, y);
             }
           } else {
-            if (layer.SHAPE === "circle") {
-              ctx.beginPath();
-              ctx.ellipse(sx + sw / 2, sy + sh / 2, sw / 2, sh / 2, 0, 0, 2 * Math.PI);
-              ctx.fill();
-            } else {
-              ctx.fillRect(sx, sy, sw, sh);
-            }
+            // single copy
+            drawSingle(px, py);
           }
-          ctx.restore();
           return;
         }
 
@@ -900,21 +973,42 @@
         tctx.clearRect(0, 0, tmp.width, tmp.height);
         tctx.drawImage(img, sx, sy, sw, sh, 0, 0, tmp.width, tmp.height);
 
-        const px = (layer.offsetX || 0) * dpr;
-        const py = (layer.offsetY || 0) * dpr;
+        let px = (layer.offsetX || 0) * dpr;
+        let py = (layer.offsetY || 0) * dpr;
 
         if (layer.LOOP_X || layer.LOOP_Y) {
-          const pattern = ctx.createPattern(tmp, "repeat");
-          if (!pattern) return;
-          ctx.save();
-          const w = tmp.width || 1;
-          const h = tmp.height || 1;
-          const tx = ((px % w) + w) % w;
-          const ty = ((py % h) + h) % h;
-          ctx.translate(tx, ty);
-          ctx.fillStyle = pattern;
-          ctx.fillRect(-tx, -ty, areaW + tmp.width, areaH + tmp.height);
-          ctx.restore();
+          const buf = Number(layer.WRAP_BUFFER || 0) * dpr;
+          if (layer.TILE) {
+            // normalize offsets so they don't drift arbitrarily far; keeps pattern transforms stable
+            // (not strictly necessary but avoids huge numbers after long preview sessions)
+            const w = tmp.width || 1;
+            const h = tmp.height || 1;
+            px = ((px % w) + w) % w;
+            py = ((py % h) + h) % h;
+
+            const pattern = ctx.createPattern(tmp, "repeat");
+            if (!pattern) return;
+            ctx.save();
+            const tx = px;
+            const ty = py;
+            ctx.translate(tx, ty);
+            ctx.fillStyle = pattern;
+            ctx.fillRect(-tx, -ty, areaW + tmp.width, areaH + tmp.height);
+            ctx.restore();
+          } else {
+            // wrap mode: draw one copy and teleport after buffer
+            let x = px;
+            let y = py;
+            if (layer.LOOP_X) {
+              if (x > areaW + buf) x = -buf + (x - (areaW + buf));
+              else if (x < -buf) x = areaW + buf + (x + buf);
+            }
+            if (layer.LOOP_Y) {
+              if (y > areaH + buf) y = -buf + (y - (areaH + buf));
+              else if (y < -buf) y = areaH + buf + (y + buf);
+            }
+            ctx.drawImage(tmp, x, y);
+          }
         } else {
           ctx.drawImage(tmp, px, py);
         }
@@ -926,6 +1020,11 @@
       function tick(time) {
         const dt = Math.max(0, (time - lastTime) / 1000);
         lastTime = time;
+        const dpr = window.devicePixelRatio || 1; // needed for buffer math
+        // ensure canvas dimensions are up to date (might change if container resized)
+        ensureCanvasSize();
+        const areaW = previewCanvas.width;
+        const areaH = previewCanvas.height;
         if (state.current) {
           // simulate a simple camera/player velocity when `state.simulate` is enabled
           let camX = 0, camY = 0;
@@ -964,6 +1063,45 @@
 
             layer.offsetX = (layer.offsetX || 0) + scrollX + camContribX;
             layer.offsetY = (layer.offsetY || 0) + scrollY + camContribY;
+
+            // keep offsets bounded when looping (wrap uses canvas bounds + buffer)
+            if (layer.LOOP_X) {
+              if (layer.TILE) {
+                if (layer.TYPE === "atlas") {
+                  const rect = layer.ATLAS_TEXTURE || {w:0};
+                  const w = rect.w || 0;
+                  if (w) layer.offsetX = ((layer.offsetX % w) + w) % w;
+                } else {
+                  const w = layer.RECT?.w || 0;
+                  if (w) layer.offsetX = ((layer.offsetX % w) + w) % w;
+                }
+              } else {
+                const buf = Number(layer.WRAP_BUFFER || 0) * dpr;
+                const viewW = areaW + buf * 2;
+                if (viewW) {
+                  // normalize into [-buf, areaW+buf)
+                  layer.offsetX = ((layer.offsetX + buf) % viewW + viewW) % viewW - buf;
+                }
+              }
+            }
+            if (layer.LOOP_Y) {
+              if (layer.TILE) {
+                if (layer.TYPE === "atlas") {
+                  const rect = layer.ATLAS_TEXTURE || {h:0};
+                  const h = rect.h || 0;
+                  if (h) layer.offsetY = ((layer.offsetY % h) + h) % h;
+                } else {
+                  const h = layer.RECT?.h || 0;
+                  if (h) layer.offsetY = ((layer.offsetY % h) + h) % h;
+                }
+              } else {
+                const buf = Number(layer.WRAP_BUFFER || 0) * dpr;
+                const viewH = areaH + buf * 2;
+                if (viewH) {
+                  layer.offsetY = ((layer.offsetY + buf) % viewH + viewH) % viewH - buf;
+                }
+              }
+            }
           });
 
           updatePreview();
@@ -971,6 +1109,19 @@
         requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
+
+      // keep preview canvas sized when its container resizes
+      try {
+        const previewWrapEl = document.getElementById("previewWrap");
+        if (previewWrapEl) {
+          new ResizeObserver(() => {
+            ensureCanvasSize();
+            updatePreview();
+          }).observe(previewWrapEl);
+        }
+      } catch (e) {
+        // ResizeObserver not supported
+      }
 
       // listeners
       weatherSelect.addEventListener("change", () => {
@@ -1030,6 +1181,29 @@
       resetJsonBtn.addEventListener("click", () => {
         renderFromSelected();
         setStatus("JSON reset to current state.");
+      });
+
+      // fullscreen/resize support for preview
+      const previewFullBtn = document.getElementById("previewFullBtn");
+      previewFullBtn.addEventListener("click", async () => {
+        const elem = document.getElementById("previewWrap");
+        if (!document.fullscreenElement) {
+          try {
+            await elem.requestFullscreen();
+            previewFullBtn.textContent = "Exit fullscreen";
+          } catch (e) {
+            console.warn("fullscreen request failed", e);
+          }
+        } else {
+          await document.exitFullscreen();
+          previewFullBtn.textContent = "Fullscreen";
+        }
+      });
+
+      document.addEventListener("fullscreenchange", () => {
+        if (!document.fullscreenElement) {
+          previewFullBtn.textContent = "Fullscreen";
+        }
       });
 
       // kick off

@@ -2228,6 +2228,28 @@ function update() {
           } catch (e) {
             // ignore if state.velocity/HORIZONTAL_SPEED not available
           }
+          // clamp offsets when looping so they don't drift to huge numbers
+          if (layer.LOOP_X) {
+            if (layer.TILE) {
+              const w = layer.TYPE === "atlas" ? Number(layer.ATLAS_TEXTURE?.w || 0) : Number(layer.RECT?.w || 0);
+              if (w) offs.x = ((offs.x % w) + w) % w;
+            } else {
+              // wrap mode: bound by view width plus buffer
+              const buf = Number(layer.WRAP_BUFFER || 0);
+              const viewW = (canvas.width || 0) + buf * 2;
+              if (viewW) offs.x = ((offs.x + buf) % viewW + viewW) % viewW - buf;
+            }
+          }
+          if (layer.LOOP_Y) {
+            if (layer.TILE) {
+              const h = layer.TYPE === "atlas" ? Number(layer.ATLAS_TEXTURE?.h || 0) : Number(layer.RECT?.h || 0);
+              if (h) offs.y = ((offs.y % h) + h) % h;
+            } else {
+              const buf = Number(layer.WRAP_BUFFER || 0);
+              const viewH = (canvas.height || 0) + buf * 2;
+              if (viewH) offs.y = ((offs.y + buf) % viewH + viewH) % viewH - buf;
+            }
+          }
           state.weatherOffsets[idx] = offs;
         });
       }
@@ -2728,7 +2750,7 @@ function drawWeather() {
 
   const layers = Array.isArray(def.LAYERS) ? def.LAYERS : [];
   layers.forEach((layer, idx) => {
-    const offs = (state.weatherOffsets && state.weatherOffsets[idx]) || { x: 0, y: 0 };
+    let offs = (state.weatherOffsets && state.weatherOffsets[idx]) || { x: 0, y: 0 };
     const type = layer.TYPE || "atlas";
     if (type === "color") {
       const col = normalizeTint(layer.COLOR);
@@ -2740,19 +2762,56 @@ function drawWeather() {
       const col = normalizeTint(layer.COLOR) || "#000";
       const rect = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
       if (rect.w > 0 && rect.h > 0) {
+        // convert offset to pixel space, include shape origin
+        let px = rect.x + offs.x;
+        let py = rect.y + offs.y;
+        const w = rect.w;
+        const h = rect.h;
         const angle = (parseFloat(layer.ROTATION) || 0) * (Math.PI / 180);
-        ctx.save();
-        ctx.translate(rect.x + rect.w / 2 + offs.x, rect.y + rect.h / 2 + offs.y);
-        ctx.rotate(angle);
-        ctx.fillStyle = col;
-        if (layer.SHAPE === "circle") {
-          ctx.beginPath();
-          ctx.ellipse(0, 0, rect.w / 2, rect.h / 2, 0, 0, 2 * Math.PI);
-          ctx.fill();
+
+        const drawShape = (dx, dy) => {
+          ctx.save();
+          ctx.translate(dx + w / 2, dy + h / 2);
+          ctx.rotate(angle);
+          ctx.fillStyle = col;
+          if (layer.SHAPE === "circle") {
+            ctx.beginPath();
+            ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, 2 * Math.PI);
+            ctx.fill();
+          } else {
+            ctx.fillRect(-w / 2, -h / 2, w, h);
+          }
+          ctx.restore();
+        };
+
+        if (layer.LOOP_X || layer.LOOP_Y) {
+          const buf = Number(layer.WRAP_BUFFER || 0);
+          if (layer.TILE) {
+            // tile version: repeat shape across canvas
+            const tx = ((px % w) + w) % w;
+            const ty = ((py % h) + h) % h;
+            for (let xx = -tx; xx < canvas.width; xx += w) {
+              for (let yy = -ty; yy < canvas.height; yy += h) {
+                drawShape(xx, yy);
+              }
+            }
+          } else {
+            // wrap mode: single object teleports after buffer
+            let x = px;
+            let y = py;
+            if (layer.LOOP_X) {
+              if (x > canvas.width + buf) x = -buf + (x - (canvas.width + buf));
+              else if (x < -buf) x = canvas.width + buf + (x + buf);
+            }
+            if (layer.LOOP_Y) {
+              if (y > canvas.height + buf) y = -buf + (y - (canvas.height + buf));
+              else if (y < -buf) y = canvas.height + buf + (y + buf);
+            }
+            drawShape(x, y);
+          }
         } else {
-          ctx.fillRect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
+          drawShape(px, py);
         }
-        ctx.restore();
       }
     } else if (type === "atlas") {
       const atlasId = layer.ATLAS_ID;
@@ -2767,18 +2826,41 @@ function drawWeather() {
       if (!pctx) return;
       pctx.imageSmoothingEnabled = false;
       pctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, 0, 0, tex.w, tex.h);
-      const pattern = ctx.createPattern(patternCanvas, "repeat");
-      if (pattern) {
-        ctx.save();
-        const w = tex.w || 1;
-        const h = tex.h || 1;
-        // normalize offsets to a positive modulo so tiling seams never jump
-        const tx = ((offs.x % w) + w) % w;
-        const ty = ((offs.y % h) + h) % h;
-        ctx.translate(tx, ty);
-        ctx.fillStyle = pattern;
-        ctx.fillRect(-tx, -ty, canvas.width + w, canvas.height + h);
-        ctx.restore();
+
+      const w = tex.w || 1;
+      const h = tex.h || 1;
+      // normalize offsets only when looping; otherwise draw single copy
+      const tx = ((offs.x % w) + w) % w;
+      const ty = ((offs.y % h) + h) % h;
+
+      if (layer.LOOP_X || layer.LOOP_Y) {
+        const buf = Number(layer.WRAP_BUFFER || 0);
+        if (layer.TILE) {
+          const pattern = ctx.createPattern(patternCanvas, "repeat");
+          if (pattern) {
+            ctx.save();
+            ctx.translate(tx, ty);
+            ctx.fillStyle = pattern;
+            ctx.fillRect(-tx, -ty, canvas.width + w, canvas.height + h);
+            ctx.restore();
+          }
+        } else {
+          // wrap mode: draw single copy and teleport when offset crosses bounds
+          let x = offs.x;
+          let y = offs.y;
+          if (layer.LOOP_X) {
+            if (x > canvas.width + buf) x = -buf + (x - (canvas.width + buf));
+            else if (x < -buf) x = canvas.width + buf + (x + buf);
+          }
+          if (layer.LOOP_Y) {
+            if (y > canvas.height + buf) y = -buf + (y - (canvas.height + buf));
+            else if (y < -buf) y = canvas.height + buf + (y + buf);
+          }
+          ctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, x, y, tex.w, tex.h);
+        }
+      } else {
+        // draw single tile at computed offset (no wrapping)
+        ctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, offs.x, offs.y, tex.w, tex.h);
       }
     }
   });

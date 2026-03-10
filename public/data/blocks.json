@@ -239,7 +239,7 @@
         "h": 16
       },
       "TOUGHNESS": 5,
-      "GEM_CHANCE": 0.35,
+      "GEM_CHANCE": 0.75,
       "GEM_AMOUNT": 10,
       "GEM_AMOUNT_VAR": 4,
       "SEED_IDS": [

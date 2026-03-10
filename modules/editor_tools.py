@@ -623,6 +623,13 @@ def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
                 common["SCROLL_Y"] = 0
             common["LOOP_X"] = bool(raw.get("LOOP_X", False))
             common["LOOP_Y"] = bool(raw.get("LOOP_Y", False))
+            # existing behaviour: LOOP flags enabled
+            # new option: TILE controls whether layer is tiled repeatedly
+            common["TILE"] = bool(raw.get("TILE", False))
+            try:
+                common["WRAP_BUFFER"] = round(float(raw.get("WRAP_BUFFER", 0)) or 0, 4)
+            except Exception:
+                common["WRAP_BUFFER"] = 0
 
             if typ == "atlas":
                 atlas_id = normalize_atlas_id_value(raw.get("ATLAS_ID"))

@@ -10,34 +10,38 @@
           "COLOR": "#2e297c",
           "RECT": {
             "x": 55,
-            "y": 153,
+            "y": 500,
             "w": 200,
             "h": 200
           },
           "ROTATION": 122.0,
-          "PARALLAX_X": 1.0,
-          "PARALLAX_Y": 2.2,
-          "SCROLL_X": 0,
-          "SCROLL_Y": 10.0,
-          "LOOP_X": false,
-          "LOOP_Y": false
+          "PARALLAX_X": 0,
+          "PARALLAX_Y": 0,
+          "SCROLL_X": 200.0,
+          "SCROLL_Y": 0,
+          "LOOP_X": true,
+          "LOOP_Y": false,
+          "TILE": false,
+          "WRAP_BUFFER": 500.0
         },
         {
           "TYPE": "shape",
           "SHAPE": "circle",
           "COLOR": "#f3b907",
           "RECT": {
-            "x": 30,
-            "y": 31,
+            "x": 100,
+            "y": 100,
             "w": 200,
             "h": 200
           },
-          "PARALLAX_X": 5.0,
-          "PARALLAX_Y": 5.0,
-          "SCROLL_X": 10.0,
-          "SCROLL_Y": 10.0,
-          "LOOP_X": false,
-          "LOOP_Y": false
+          "PARALLAX_X": -10.0,
+          "PARALLAX_Y": -10.0,
+          "SCROLL_X": 0,
+          "SCROLL_Y": 0,
+          "LOOP_X": true,
+          "LOOP_Y": true,
+          "TILE": false,
+          "WRAP_BUFFER": 500.0
         }
       ],
       "WEATHER_COLOR": "#4597d3"
