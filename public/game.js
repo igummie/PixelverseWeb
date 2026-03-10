@@ -2173,6 +2173,11 @@ function update() {
   // movement vector
   let moveX = 0;
   if (state.keys.has("a") || state.keys.has("arrowleft")) moveX -= 1;
+  if (state.keys.has("d") || state.keys.has("arrowright")) moveX += 1;
+  // vertical movement input for parallax (w/s or up/down)
+  let moveY = 0;
+  if (state.keys.has("w") || state.keys.has("arrowup")) moveY -= 1;
+  if (state.keys.has("s") || state.keys.has("arrowdown")) moveY += 1;
 
     // update weather layer offsets (scrolling/parallax)
     if (state.world) {
@@ -2186,13 +2191,48 @@ function update() {
           const py = Number(layer.PARALLAX_Y || 1);
           const sx = Number(layer.SCROLL_X || 0);
           const sy = Number(layer.SCROLL_Y || 0);
-          offs.x += sx * deltaSeconds * px;
-          offs.y += sy * deltaSeconds * py;
+
+          // SCROLL_X/Y drive autonomous scrolling (pixels per second)
+          offs.x += sx * deltaSeconds;
+          offs.y += sy * deltaSeconds;
+
+          // camera/player contribution: when the player moves, layers with high parallax
+          // should shift slightly (opposite to camera) to create parallax effect.
+          // rel = 1 - parallax (so parallax=1 => rel=0 => no camera movement; parallax=0 => rel=1 => full camera movement)
+          // use current input-derived movement (moveX) so parallax reacts immediately
+          // moveX is the horizontal input (-1..1) computed earlier in this update tick
+          try {
+            // Prefer actual player/camera velocity so parallax doesn't move
+            // when input is blocked by collisions (e.g. walking into walls).
+            let camVx = 0;
+            if (state && state.velocity && typeof state.velocity.x === 'number') {
+              camVx = state.velocity.x;
+            } else {
+              camVx = (typeof moveX !== 'undefined' ? moveX * (typeof HORIZONTAL_SPEED !== 'undefined' ? HORIZONTAL_SPEED : 0) : 0);
+            }
+
+            // vertical: prefer physics velocity (jump/fall) as before
+            let camVy = 0;
+            if (state && state.velocity && typeof state.velocity.y === 'number') {
+              camVy = state.velocity.y;
+            } else {
+              camVy = (typeof moveY !== 'undefined' ? moveY * (typeof HORIZONTAL_SPEED !== 'undefined' ? HORIZONTAL_SPEED : 0) : 0);
+            }
+
+            const relX = 1 - px;
+            const relY = 1 - py;
+            // small multiplier to keep motion subtle in-game
+            const CAM_FACTOR = 0.5;
+            offs.x += -camVx * deltaSeconds * relX * CAM_FACTOR;
+            offs.y += -camVy * deltaSeconds * relY * CAM_FACTOR;
+          } catch (e) {
+            // ignore if state.velocity/HORIZONTAL_SPEED not available
+          }
           state.weatherOffsets[idx] = offs;
         });
       }
     }
-  if (state.keys.has("d") || state.keys.has("arrowright")) moveX += 1;
+  
 
   if (state.flyEnabled) {
     let moveY = 0;
@@ -2220,6 +2260,9 @@ function update() {
       state.me.y = vertical.y;
       state.velocity.y = vertical.vy;
     }
+    // update actual horizontal velocity based on resolved movement so parallax
+    // reacts to true player movement (zero when blocked by collisions)
+    state.velocity.x = (state.me.x - oldX) / Math.max(1e-6, deltaSeconds);
   } else {
     state.velocity.x = moveX * HORIZONTAL_SPEED;
 
@@ -2241,6 +2284,9 @@ function update() {
     state.me.y = vertical.y;
     state.velocity.y = vertical.vy;
     state.onGround = vertical.onGround;
+    // update actual horizontal velocity based on resolved movement so parallax
+    // reacts to true player movement (zero when blocked by collisions)
+    state.velocity.x = (state.me.x - oldX) / Math.max(1e-6, deltaSeconds);
   }
 
   const me = state.players.get(state.selfId);
@@ -2724,9 +2770,14 @@ function drawWeather() {
       const pattern = ctx.createPattern(patternCanvas, "repeat");
       if (pattern) {
         ctx.save();
-        ctx.translate(offs.x, offs.y);
+        const w = tex.w || 1;
+        const h = tex.h || 1;
+        // normalize offsets to a positive modulo so tiling seams never jump
+        const tx = ((offs.x % w) + w) % w;
+        const ty = ((offs.y % h) + h) % h;
+        ctx.translate(tx, ty);
         ctx.fillStyle = pattern;
-        ctx.fillRect(-offs.x, -offs.y, canvas.width + tex.w, canvas.height + tex.h);
+        ctx.fillRect(-tx, -ty, canvas.width + w, canvas.height + h);
         ctx.restore();
       }
     }

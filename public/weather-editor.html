@@ -616,8 +616,8 @@
           const parx = document.createElement("input");
           parx.setAttribute("aria-label", "parallax x");
           parx.type = "range";
-          parx.min = "-5";
-          parx.max = "5";
+          parx.min = "-20";
+          parx.max = "20";
           parx.step = "0.1";
           parx.value = String(layer.PARALLAX_X || 1);
           parx.style.width = "80px";
@@ -645,8 +645,8 @@
           const pary = document.createElement("input");
           pary.setAttribute("aria-label", "parallax y");
           pary.type = "range";
-          pary.min = "-5";
-          pary.max = "5";
+          pary.min = "-20";
+          pary.max = "20";
           pary.step = "0.1";
           pary.value = String(layer.PARALLAX_Y || 1);
           pary.style.width = "80px";
@@ -674,8 +674,8 @@
           const sx = document.createElement("input");
           sx.setAttribute("aria-label", "scroll x");
           sx.type = "range";
-          sx.min = "-10";
-          sx.max = "10";
+          sx.min = "-200";
+          sx.max = "200";
           sx.step = "0.1";
           sx.value = String(layer.SCROLL_X || 0);
           sx.style.width = "80px";
@@ -703,8 +703,8 @@
           const sy = document.createElement("input");
           sy.setAttribute("aria-label", "scroll y");
           sy.type = "range";
-          sy.min = "-10";
-          sy.max = "10";
+          sy.min = "-200";
+          sy.max = "200";
           sy.step = "0.1";
           sy.value = String(layer.SCROLL_Y || 0);
           sy.style.width = "80px";
@@ -907,8 +907,10 @@
           const pattern = ctx.createPattern(tmp, "repeat");
           if (!pattern) return;
           ctx.save();
-          const tx = px % (tmp.width || 1);
-          const ty = py % (tmp.height || 1);
+          const w = tmp.width || 1;
+          const h = tmp.height || 1;
+          const tx = ((px % w) + w) % w;
+          const ty = ((py % h) + h) % h;
           ctx.translate(tx, ty);
           ctx.fillStyle = pattern;
           ctx.fillRect(-tx, -ty, areaW + tmp.width, areaH + tmp.height);
@@ -918,16 +920,52 @@
         }
       }
 
-      // animation tick for scrolling (keeps previous behavior)
+      // animation tick: includes camera simulation to better mimic walking through the world
       let lastTime = performance.now();
+      let simStart = performance.now();
       function tick(time) {
         const dt = Math.max(0, (time - lastTime) / 1000);
         lastTime = time;
         if (state.current) {
+          // simulate a simple camera/player velocity when `state.simulate` is enabled
+          let camX = 0, camY = 0;
+          if (state.simulate) {
+            const t = (time - simStart) / 1000;
+            camX = Math.cos(t * 0.6) * 60; // px/sec horizontal camera motion
+            camY = Math.sin(t * 0.4) * 8;  // small vertical bob
+          }
+
           state.current.LAYERS.forEach((layer) => {
-            layer.offsetX = (layer.offsetX || 0) + (layer.SCROLL_X || 0) * dt * (layer.PARALLAX_X || 1);
-            layer.offsetY = (layer.offsetY || 0) + (layer.SCROLL_Y || 0) * dt * (layer.PARALLAX_Y || 1);
+            const parx = Number(layer.PARALLAX_X ?? 1);
+            const pary = Number(layer.PARALLAX_Y ?? 1);
+
+            // scroll contribution: SCROLL_X/Y are pixels-per-second
+            const scrollX = (layer.SCROLL_X || 0) * dt;
+            const scrollY = (layer.SCROLL_Y || 0) * dt;
+
+            // camera velocity (px/sec) when simulating movement; parallax affects camera influence
+            let camVx = 0, camVy = 0;
+            if (state.simulate) {
+              const t2 = (time - simStart) / 1000;
+              // smaller base amplitude so motion is subtle
+              const baseX = Math.cos(t2 * 0.6) * 20;
+              const baseY = Math.sin(t2 * 0.4) * 3;
+              if (layer._phase === undefined) layer._phase = Math.random() * Math.PI * 2;
+              // per-layer phase variation makes objects move slightly out-of-sync
+              camVx = Math.cos(t2 * 0.6 + layer._phase) * (0.6 * Math.abs(baseX));
+              camVy = Math.sin(t2 * 0.4 + layer._phase) * (0.6 * Math.abs(baseY));
+            }
+
+            const relX = 1 - parx;
+            const relY = 1 - pary;
+            // apply a small factor so parallax-induced motion is subtle
+            const camContribX = -camVx * dt * relX * 0.25 * (state.globalParallaxX ?? 1);
+            const camContribY = -camVy * dt * relY * 0.25 * (state.globalParallaxY ?? 1);
+
+            layer.offsetX = (layer.offsetX || 0) + scrollX + camContribX;
+            layer.offsetY = (layer.offsetY || 0) + scrollY + camContribY;
           });
+
           updatePreview();
         }
         requestAnimationFrame(tick);
