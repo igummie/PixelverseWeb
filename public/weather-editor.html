@@ -214,8 +214,10 @@
 
       <div class="panel" style="resize: vertical; overflow: auto; min-height:0;">
         <div id="previewWrap" class="atlasWrap" style="margin-bottom:12px; overflow: visible; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; position:relative;">
-          <button id="previewSimBtn" type="button" style="position:absolute; top:8px; right:70px; font-size:12px; padding:2px 6px; z-index:10;">Play</button>
-          <button id="previewFullBtn" type="button" style="position:absolute; top:8px; right:8px; font-size:12px; padding:2px 6px; z-index:10;">Fullscreen</button>
+          <div id="previewControls" style="position:absolute; top:8px; right:8px; display:flex; gap:8px; z-index:10;">
+            <button id="previewSimBtn" type="button" style="font-size:12px; padding:2px 6px;">Play</button>
+            <button id="previewFullBtn" type="button" style="font-size:12px; padding:2px 6px;">Fullscreen</button>
+          </div>
           <canvas id="previewCanvas" width="800" height="400" style="border:1px solid #374151; width:100%; flex:1 1 auto;"></canvas>
           <!-- <div class="tiny" id="previewHint">Preview will animate based on scroll/parallax values; color/shape layers are drawn directly.</div> -->
         </div>
