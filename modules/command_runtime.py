@@ -92,6 +92,21 @@ async def apply_command_result(
             broadcast_to_world=broadcast_to_world,
         )
 
+    # handle weather change regardless of door movement
+    weather_change = command_result.get("weather_change")
+    if weather_change is not None:
+        world["weather"] = int(weather_change)
+        await broadcast_to_world(
+            world,
+            {
+                "type": "weather_changed",
+                "weather": int(weather_change),
+            },
+        )
+        # Save only weather state, not door or tiles
+        await schedule_world_save(world["name"], only_weather=True)
+        # continue on so door_move might still be processed if present
+
     door_move = command_result.get("door_move")
     if not isinstance(door_move, dict):
         return
@@ -114,21 +129,6 @@ async def apply_command_result(
 
     changed_tiles: set[tuple[int, int]] = set()
     for door_pos in (previous_door, current_door):
-
-        # Handle weather_change independently
-        weather_change = command_result.get("weather_change")
-        if weather_change is not None:
-            world["weather"] = int(weather_change)
-            await broadcast_to_world(
-                world,
-                {
-                    "type": "weather_changed",
-                    "weather": int(weather_change),
-                },
-            )
-            # Save only weather state, not door or tiles
-            await schedule_world_save(world["name"], only_weather=True)
-            return
         changed_tiles.add((door_pos["x"], door_pos["y"]))
         floor_y = door_pos["y"] + 1
         if 0 <= floor_y < height:
