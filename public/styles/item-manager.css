@@ -161,6 +161,27 @@ button:hover {
   background: linear-gradient(180deg, rgba(20, 60, 52, 0.9), rgba(15, 45, 40, 0.9));
 }
 
+/* block-type colors */
+.itemCard.block-solid {
+  /* default solid block color (blue-ish) */
+  background: linear-gradient(180deg, rgba(33, 33, 80, 0.9), rgba(20, 20, 60, 0.9));
+}
+
+.itemCard.block-background {
+  /* background tiles are grey/dark */
+  background: linear-gradient(180deg, rgba(45, 45, 45, 0.9), rgba(25, 25, 25, 0.9));
+}
+
+.itemCard.block-platform {
+  /* platform tiles are brown/orange-ish */
+  background: linear-gradient(180deg, rgba(60, 45, 20, 0.9), rgba(45, 30, 15, 0.9));
+}
+
+.itemCard.block-deco {
+  /* decorative tiles (purple) */
+  background: linear-gradient(180deg, rgba(50, 20, 60, 0.9), rgba(35, 15, 45, 0.9));
+}
+
 .itemPreview {
   width: 64px;
   height: 64px;

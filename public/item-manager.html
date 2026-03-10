@@ -11,6 +11,7 @@
       <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
       <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
       <a class="switchBtn" href="/seed-editor.html">Seed Editor</a>
+      <a class="switchBtn " href="/weather-editor.html">Weather Editor</a>
       <a class="switchBtn active" href="/item-manager.html">Item Manager</a>
     </div>
 
@@ -466,7 +467,16 @@
         state.rows.forEach((row, index) => {
           const card = document.createElement("button");
           card.type = "button";
-          card.className = `itemCard ${row.itemType}`;
+          // add additional class for blocks so we can color by BLOCK_TYPE
+          const classes = ["itemCard", row.itemType];
+          if (row.itemType === "block") {
+            const btype = String(row.source?.BLOCK_TYPE || "").toLowerCase();
+            if (btype) {
+              // sanitize type string (should only be word characters)
+              classes.push(`block-${btype}`);
+            }
+          }
+          card.className = classes.join(" ");
           card.addEventListener("click", () => {
             openModal(index);
           });
