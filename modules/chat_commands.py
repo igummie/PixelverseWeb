@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>, /weather [id|clear]"
+COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>, /weather <id>"
 
 
 def _normalize_name(value: Any) -> str:
@@ -174,6 +174,35 @@ def process_chat_command(
             "state_update": None,
         }
 
+    if command == "weather":
+        # change the weather ID for the current world and persist it
+        if len(args) != 1:
+            return {
+                "sender_message": "Usage: /weather <id>",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+        try:
+            new_weather = int(args[0])
+        except Exception:
+            return {
+                "sender_message": "Weather must be an integer ID. Usage: /weather <id>",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+
+        # update the in‑memory world value; command_runtime will handle persistence
+        world["weather"] = new_weather
+        return {
+            "sender_message": f"Weather set to {new_weather}.",
+            "direct_messages": [],
+            "teleports": [],
+            "state_update": None,
+            "weather_change": new_weather,
+        }
+
     if command in {"door", "movedoor"}:
         if len(args) != 2:
             return {
@@ -208,50 +237,6 @@ def process_chat_command(
                 "x": clamped_x,
                 "y": clamped_y,
             },
-        }
-
-    if command in {"weather", "w"}:
-        if len(args) == 0:
-            try:
-                current = int(world.get("weather", 0))
-            except Exception:
-                current = 0
-            return {
-                "sender_message": f"World weather is {max(0, current)}. Usage: /weather <id> or /weather clear",
-                "direct_messages": [],
-                "teleports": [],
-                "state_update": None,
-            }
-
-        raw = str(args[0]).strip().lower()
-        if raw in {"clear", "off", "none", "0"}:
-            return {
-                "sender_message": "Weather cleared for this world.",
-                "direct_messages": [],
-                "teleports": [],
-                "state_update": None,
-                "weather_change": 0,
-            }
-
-        try:
-            weather_id = int(raw)
-        except Exception:
-            return {
-                "sender_message": "Usage: /weather <id> or /weather clear",
-                "direct_messages": [],
-                "teleports": [],
-                "state_update": None,
-            }
-
-        if weather_id < 0:
-            weather_id = 0
-
-        return {
-            "sender_message": f"Weather set to {weather_id} for this world.",
-            "direct_messages": [],
-            "teleports": [],
-            "state_update": None,
-            "weather_change": int(weather_id),
         }
 
     return {

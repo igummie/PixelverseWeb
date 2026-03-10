@@ -17,7 +17,6 @@ async def apply_command_result(
     broadcast_to_world: Callable[..., Awaitable[Any]],
     clear_tile_damage: Callable[..., list[dict[str, Any]]],
     schedule_world_save: Callable[..., Awaitable[Any]],
-    schedule_world_weather_save: Callable[..., Awaitable[Any]],
     sanitize_door: Callable[..., dict[str, int]],
     enforce_bedrock_under_door: Callable[..., bool],
     get_spawn_from_door: Callable[..., tuple[float, float]],
@@ -93,25 +92,6 @@ async def apply_command_result(
             broadcast_to_world=broadcast_to_world,
         )
 
-    # Weather changes are independent of door moves/teleports.
-    weather_change = command_result.get("weather_change")
-    if weather_change is not None:
-        try:
-            next_weather = int(weather_change)
-        except Exception:
-            next_weather = 0
-        next_weather = max(0, next_weather)
-        world["weather"] = next_weather
-        await broadcast_to_world(
-            world,
-            {
-                "type": "weather_changed",
-                "weather": int(next_weather),
-            },
-        )
-        await schedule_world_weather_save(world["name"])
-        return
-
     door_move = command_result.get("door_move")
     if not isinstance(door_move, dict):
         return
@@ -134,6 +114,21 @@ async def apply_command_result(
 
     changed_tiles: set[tuple[int, int]] = set()
     for door_pos in (previous_door, current_door):
+
+        # Handle weather_change independently
+        weather_change = command_result.get("weather_change")
+        if weather_change is not None:
+            world["weather"] = int(weather_change)
+            await broadcast_to_world(
+                world,
+                {
+                    "type": "weather_changed",
+                    "weather": int(weather_change),
+                },
+            )
+            # Save only weather state, not door or tiles
+            await schedule_world_save(world["name"], only_weather=True)
+            return
         changed_tiles.add((door_pos["x"], door_pos["y"]))
         floor_y = door_pos["y"] + 1
         if 0 <= floor_y < height:

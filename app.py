@@ -1265,6 +1265,8 @@ def create_world(name: str) -> dict[str, Any]:
         "foreground": generated["foreground"],
         "background": generated["background"],
         "door": door,
+        # each world has a persistent weather ID; default to 1
+        "weather": 1,
         "players": {},
         "tile_damage": {},
         "gem_drops": {},
@@ -1280,6 +1282,10 @@ def save_world(world: dict[str, Any]) -> None:
     now = int(time.time())
     # Support saving only weather (for /weather command)
     only_weather = getattr(world, "_only_weather", False)
+    # consume the flag so future saves without the explicit
+    # only_weather parameter perform a full save
+    if only_weather and "_only_weather" in world:
+        del world["_only_weather"]
     with get_db() as conn:
         existing = conn.execute("SELECT * FROM worlds WHERE name = ?", (world["name"],)).fetchone()
         if only_weather and existing:
@@ -1397,6 +1403,12 @@ def load_world(name: str) -> dict[str, Any]:
     seed_drops = parse_world_seed_drops(parsed_seed_drops, width, height)
     planted_trees = parse_world_planted_trees(parsed_planted_trees, width, height)
 
+    # read weather from database column, fallback to 1 if missing/invalid
+    try:
+        weather_val = int(row["weather"] or 1)
+    except Exception:
+        weather_val = 1
+
     return {
         "name": name,
         "width": width,
@@ -1405,6 +1417,7 @@ def load_world(name: str) -> dict[str, Any]:
         "background": background,
         "door": resolved_door,
         "previous_door": parsed_door,
+        "weather": weather_val,
         "players": {},
         "tile_damage": {},
         "gem_drops": gem_drops,
@@ -1483,7 +1496,7 @@ register_editor_routes(
 )
 
 
-async def schedule_world_save(world_name: str) -> None:
+async def schedule_world_save(world_name: str, only_weather: bool = False) -> None:
     existing = save_tasks.get(world_name)
     if existing and not existing.done():
         existing.cancel()
@@ -1492,6 +1505,9 @@ async def schedule_world_save(world_name: str) -> None:
         await asyncio.sleep(0.25)
         world = world_cache.get(world_name)
         if world:
+            # if caller requested only-weather, mark flag on world
+            if only_weather:
+                world["_only_weather"] = True
             await asyncio.to_thread(save_world, world)
 
     save_tasks[world_name] = asyncio.create_task(_run())
@@ -1813,6 +1829,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "background": world["background"],
                             "door": sanitize_door(world.get("door"), world["width"], world["height"]),
                             "tiles": world["foreground"],
+                            "weather": int(world.get("weather", 1)),
                             "players": [
                                 {
                                     "id": p["id"],

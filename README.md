@@ -19,6 +19,7 @@ multiplayer 2D build/break game using a custom canvas engine and a Python backen
   textures.  Backgrounds are identified by their own `BACKGROUND_ID` field.
 - Persistent world and user data in SQLite (`data/db/game.db`)
 - If a world does not exist, it is created automatically when entered
+- Chat command `/weather <id>` lets a player set the current world's weather ID; the value is saved per-world and survives restarts
 
 ## Run
 
