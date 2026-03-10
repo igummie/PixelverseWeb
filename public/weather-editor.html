@@ -507,6 +507,7 @@
 
         state.current.LAYERS.forEach((layer, i) => {
           const tr = document.createElement("tr");
+          tr.dataset.layerIndex = String(i);
 
           // type cell
           const typeCell = document.createElement("td");
@@ -703,6 +704,8 @@
             posX.value = String(layer.offsetX || 0);
             posX.addEventListener("input", () => {
               layer.offsetX = Number.parseFloat(posX.value) || 0;
+              // mark that the user manually edited the offset so saves persist it
+              layer._manualOffset = true;
               updatePreview();
               updateJsonOutput();
             });
@@ -718,6 +721,8 @@
             posY.value = String(layer.offsetY || 0);
             posY.addEventListener("input", () => {
               layer.offsetY = Number.parseFloat(posY.value) || 0;
+              // mark that the user manually edited the offset so saves persist it
+              layer._manualOffset = true;
               updatePreview();
               updateJsonOutput();
             });
@@ -1579,17 +1584,56 @@
       saveBtn.addEventListener("click", async () => {
         applyCurrentWeatherFields();
         try {
+          // Deep-copy state.weather so we can strip transient runtime fields
+          const weatherCopy = JSON.parse(JSON.stringify(state.weather || []));
+          // Read manual offset inputs from the UI to capture user edits that
+          // may have been overwritten by the running preview. Use the row's
+          // dataset.layerIndex to map inputs back to weatherCopy entries.
+          document.querySelectorAll('#layerTable tbody tr').forEach((row) => {
+            const ri = Number.parseInt(row.dataset.layerIndex || '-1', 10);
+            if (!Number.isFinite(ri) || ri < 0) return;
+            // ensure weatherCopy has this entry and layer
+            const entry = (weatherCopy[state.selectedIndex] && weatherCopy[state.selectedIndex].LAYERS) ? weatherCopy[state.selectedIndex] : null;
+            // fall back: try to locate layer by index across all entries (safe-guard)
+            let layerObj = null;
+            if (weatherCopy[state.selectedIndex] && Array.isArray(weatherCopy[state.selectedIndex].LAYERS)) {
+              layerObj = weatherCopy[state.selectedIndex].LAYERS[ri] || null;
+            }
+            if (!layerObj) return;
+            const xInp = row.querySelector('input[aria-label="offset x"]');
+            const yInp = row.querySelector('input[aria-label="offset y"]');
+            if (xInp) {
+              const v = Number.parseFloat(xInp.value);
+              if (Number.isFinite(v)) {
+                layerObj.offsetX = v;
+                layerObj._manualOffset = true;
+              }
+            }
+            if (yInp) {
+              const v = Number.parseFloat(yInp.value);
+              if (Number.isFinite(v)) {
+                layerObj.offsetY = v;
+                layerObj._manualOffset = true;
+              }
+            }
+            // remove any internal flags before saving (we'll strip later again)
+            for (const k of Object.keys(layerObj || {})) {
+              if (String(k).startsWith("_")) delete layerObj[k];
+            }
+          });
+
           const payload = {
-            weather: state.weather,
+            weather: weatherCopy,
             atlases: state.atlases,
           };
+
           const res = await fetch("/api/tools/weather/save-data", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
           if (!res.ok) throw new Error(`status ${res.status}`);
-          const data = await res.json();
+          await res.json();
           setStatus("Saved successfully.");
         } catch (err) {
           setStatus(String(err), true);

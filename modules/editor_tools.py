@@ -7,9 +7,6 @@ from typing import Any, Callable
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def _extract_number(value: Any, default: float = 0.0) -> float:
@@ -1198,16 +1195,11 @@ def register_editor_routes(
 
     @app.post("/api/tools/weather/save-data")
     def save_weather_data(payload: SaveWeatherDataBody) -> dict[str, Any]:
-        # Debug: log incoming payload (truncated) to help diagnose missing fields
+        # compute incoming counts (no debug logging)
         try:
             incoming_weather_count = len(payload.weather) if isinstance(payload.weather, list) else 0
         except Exception:
             incoming_weather_count = 0
-        try:
-            logger.info("save_weather_data called: weather_count=%d, atlases_count=%d", incoming_weather_count, len(payload.atlases) if isinstance(payload.atlases, list) else 0)
-            logger.debug("incoming payload (truncated): %s", json.dumps({"weather": payload.weather[:5], "atlases": (payload.atlases or [])[:5]}, default=str)[:4000])
-        except Exception:
-            logger.exception("Error logging incoming payload")
 
         existing = load_weather_payload()
         output: dict[str, Any] = {}
@@ -1241,11 +1233,7 @@ def register_editor_routes(
             if "atlases" not in output and isinstance(existing.get("atlases"), list):
                 output["atlases"] = [dict(entry) for entry in existing.get("atlases", []) if isinstance(entry, dict)]
 
-        # Debug: log sanitized output before writing
-        try:
-            logger.debug("sanitized output preview: %s", json.dumps({"weather": output.get("weather")[:5], "atlases": output.get("atlases")[:5]}, default=str)[:4000])
-        except Exception:
-            logger.exception("Error logging sanitized output")
+        # finished sanitizing output
 
         with weather_path.open("w", encoding="utf-8") as handle:
             json.dump(output, handle, indent=2)
