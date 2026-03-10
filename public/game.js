@@ -87,6 +87,7 @@ const joinWorldBtn = document.getElementById("joinWorldBtn");
 const refreshWorldsBtn = document.getElementById("refreshWorldsBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const worldError = document.getElementById("worldError");
+const mainError = document.getElementById("mainError");
 
 const gameStatus = document.getElementById("gameStatus");
 const gemCount = document.getElementById("gemCount");
@@ -141,7 +142,7 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
-const RECONNECT_INTERVAL_MS = 5000;
+const RECONNECT_INTERVAL_MS = 3000; // try every 3 seconds per new requirement
 const MAX_RECONNECT_ATTEMPTS = 5;
 
 // helper used for weather colours and shapes
@@ -550,6 +551,10 @@ async function repullGameBundle() {
   // If the server explicitly asked clients to reload on reconnect, treat
   // that as a bundle update so the reconnect flow forces a page reload.
   if (state.reloadOnReconnect) {
+    // persist log before we force a reload
+    try {
+      sessionStorage.setItem("chatLogLines", JSON.stringify(state.chatLogLines));
+    } catch {}
     state.reloadOnReconnect = false;
     return true;
   }
@@ -633,6 +638,13 @@ function returnToWorldSelectAfterReconnectFailure() {
   loadWorldList();
 }
 
+function returnToMainMenuAfterReconnectFailure() {
+  clearActiveWorldRuntimeState();
+  if (mainError) {
+    mainError.textContent = "Reconnect timed out. Please click Play to try again.";
+  }
+  showScreen("main");
+} 
 async function performReconnectAttempt() {
   if (!state.reconnect.active || !state.token) {
     return false;
@@ -669,9 +681,9 @@ function scheduleReconnectAttempt() {
   }
 
   if (state.reconnect.attempt >= MAX_RECONNECT_ATTEMPTS) {
-    appendChatLine("system", "Reconnect timed out. Returning to world select.");
+    appendChatLine("system", "Reconnect timed out. Returning to main menu.");
     resetReconnectState();
-    returnToWorldSelectAfterReconnectFailure();
+    returnToMainMenuAfterReconnectFailure();
     return;
   }
 
@@ -826,7 +838,7 @@ function appendChatLine(kind, text, username = "") {
 }
 
 function renderChatLog() {
-  chatDebug.renderChatLog();
+  chatDebug.renderChatLog(true);
 }
 
 function getChatDrawerMaxHeight() {
@@ -842,11 +854,21 @@ function updateDebugOverlayPosition() {
 }
 
 function applyChatDrawerPosition(nextOffsetY, immediate = false) {
+  const wasOpen = state.chatDrawerOffsetY > getChatDrawerHiddenOffset() + 0.5;
   hud.applyChatDrawerPosition(nextOffsetY, immediate);
+  const hidden = getChatDrawerHiddenOffset();
+  const nowOpen = state.chatDrawerOffsetY > hidden + 0.5;
+  // only force when transitioning from closed to open
+  if (!wasOpen && nowOpen) {
+    requestAnimationFrame(() => renderChatLog(true));
+  }
 }
 
 function setChatLogOpen(open) {
   hud.setChatLogOpen(open);
+  if (open) {
+    requestAnimationFrame(() => renderChatLog(true));
+  }
 }
 
 function setChatInputOpen(open) {
@@ -863,6 +885,7 @@ function applyWorldChatDrawerPosition(nextOffsetY, immediate = false) {
 
 function setWorldChatLogOpen(open) {
   hud.setWorldChatLogOpen(open);
+  if (open) requestAnimationFrame(() => renderChatLog(true));
 }
 
 function getLoadingChatDrawerHiddenOffset() {
@@ -875,6 +898,7 @@ function applyLoadingChatDrawerPosition(nextOffsetY, immediate = false) {
 
 function setLoadingChatLogOpen(open) {
   hud.setLoadingChatLogOpen(open);
+  if (open) requestAnimationFrame(() => renderChatLog(true));
 }
 
 function getInventoryDrawerHiddenOffset() {
@@ -1182,6 +1206,24 @@ function resolveVertical(world, currentX, oldY, proposedY, currentVelocityY) {
 function showScreen(name) {
   for (const [screenName, screenEl] of Object.entries(screens)) {
     screenEl.classList.toggle("active", screenName === name);
+  }
+
+  // hide the page‑level scrollbar when we're in one of the full‑screen
+  // interactive modes; ancestors (chat drawers, canvases) handle their own
+  // scrolling. editors and menus are allowed to scroll normally.
+  if (name === "game" || name === "world" || name === "loading") {
+    document.body.style.overflow = "hidden";
+  } else {
+    document.body.style.overflow = "auto";
+  }
+
+  // force a scroll when we switch into a screen that can show chat; this
+  // ensures the main log (hidden while on world/loading screens) is pinned
+  // once the element has its proper size.
+  if (name === "game" || name === "world") {
+    // World screen uses worldChatLog, game screen uses chatLog.  Either way
+    // force pinning so that the moment the drawer opens the bottom is shown.
+    renderChatLog(true);
   }
 
   if (name === "game") {
@@ -1932,7 +1974,9 @@ function handleSocketMessage(msg) {
   }
 
   if (msg.type === "server_update") {
-    const messageText = String(msg.message || "Server is updating. Disconnecting...");
+    const messageText = String(msg.message || "Game is updating. You will be disconnected and should reload when reconnecting; you'll be reconnected automatically.");
+
+    // show in chat drawer if in-game / loading / world
     appendChatLine("system", messageText);
     state.reloadOnReconnect = true;
     try {
@@ -1942,18 +1986,25 @@ function handleSocketMessage(msg) {
     } catch (e) {
       // ignore
     }
-    // Ensure the message is visible to the player in the appropriate drawer.
+
+    // ensure chat drawer is visible if available
     try {
       if (screens.loading && screens.loading.classList.contains("active")) {
         setLoadingChatLogOpen(true);
       } else if (screens.world && screens.world.classList.contains("active")) {
         setWorldChatLogOpen(true);
-      } else {
+      } else if (screens.game && screens.game.classList.contains("active")) {
         setChatLogOpen(true);
       }
     } catch (e) {
       // ignore
     }
+
+    // also show a banner on main/login screens so users waiting at menu see it
+    if (mainError && (screens.main.classList.contains("active") || screens.login.classList.contains("active"))) {
+      mainError.textContent = messageText;
+    }
+
     return;
   }
 
@@ -2075,7 +2126,10 @@ function logout() {
   authWorldFlow.logout();
 }
 
-playBtn.addEventListener("click", () => showScreen("login"));
+playBtn.addEventListener("click", () => {
+  if (mainError) mainError.textContent = "";
+  showScreen("login");
+});
 backToMainBtn.addEventListener("click", () => showScreen("main"));
 loginBtn.addEventListener("click", () => auth("login"));
 registerBtn.addEventListener("click", () => auth("register"));

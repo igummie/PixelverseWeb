@@ -118,15 +118,8 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
 
   function shouldDropSimulatedPacket(payloadType = "") {
     const dropPercent = Math.max(0, Number(state.netSimLossPercent) || 0);
-    if (dropPercent <= 0) {
-      return false;
-    }
-
-    // Keep pings flowing so debug RTT remains visible while simulating packet loss.
-    if (payloadType === "ping") {
-      return false;
-    }
-
+    if (dropPercent <= 0) return false;
+    if (payloadType === "ping") return false;
     return Math.random() < dropPercent / 100;
   }
 
@@ -137,13 +130,65 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
       .replaceAll(">", "&gt;");
   }
 
-  function renderChatLog() {
+  const autoScrollMap = new Map();
+
+  function getPausedIndicator(target) {
+    let ind = target.parentElement.querySelector('.chatPausedIndicator');
+    if (!ind) {
+      ind = document.createElement('div');
+      ind.className = 'chatPausedIndicator hidden';
+      ind.textContent = 'log paused due to scrolling';
+      target.parentElement.appendChild(ind);
+    }
+    return ind;
+  }
+
+  function setupAutoScroll(target) {
+    if (!target || autoScrollMap.has(target)) {
+      return;
+    }
+    autoScrollMap.set(target, true);
+    target.addEventListener('scroll', () => {
+      const atBottom =
+        target.scrollTop + target.clientHeight >= target.scrollHeight - 2;
+      if (atBottom) {
+        autoScrollMap.set(target, true);
+        const ind = getPausedIndicator(target);
+        ind.classList.add('hidden');
+      } else {
+        if (autoScrollMap.get(target)) {
+          // just moved off the bottom
+          autoScrollMap.set(target, false);
+          const ind = getPausedIndicator(target);
+          ind.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  // `force` pins to bottom regardless of pause state.
+  function renderChatLog(force = false) {
     const targets = [chatLog, worldChatLog, loadingChatLog].filter(Boolean);
     if (targets.length === 0) {
       return;
     }
 
     for (const target of targets) {
+      setupAutoScroll(target);
+      let shouldAuto = autoScrollMap.get(target);
+      if (force) {
+        shouldAuto = true;
+        // also clear paused indicator just in case
+        const ind = getPausedIndicator(target);
+        ind.classList.add('hidden');
+        autoScrollMap.set(target, true);
+      }
+
+      // remember scroll state before we rebuild the DOM
+      const prevScrollTop = target.scrollTop;
+      const prevScrollHeight = target.scrollHeight;
+      const distanceFromBottom = prevScrollHeight - prevScrollTop;
+
       target.innerHTML = "";
       for (const line of state.chatLogLines) {
         const row = document.createElement("div");
@@ -155,7 +200,16 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
         }
         target.appendChild(row);
       }
-      target.scrollTop = target.scrollHeight;
+
+      if (shouldAuto) {
+        target.scrollTop = target.scrollHeight;
+        const ind = getPausedIndicator(target);
+        ind.classList.add('hidden');
+      } else {
+        // maintain distance from bottom so the user's viewport doesn't jump
+        const newScrollHeight = target.scrollHeight;
+        target.scrollTop = Math.max(0, newScrollHeight - distanceFromBottom);
+      }
     }
   }
 
@@ -176,7 +230,8 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
       state.chatLogLines.splice(0, state.chatLogLines.length - MAX_CHAT_LOG_LINES);
     }
 
-    renderChatLog();
+    const anyOpen = state.chatLogOpen || state.worldChatLogOpen || state.loadingChatLogOpen;
+    renderChatLog(anyOpen);
   }
 
   function drawDebugGrid() {
@@ -285,9 +340,15 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
       // Keep the drawer exactly where the user dropped it (no snap open/closed).
       applyChatDrawerPosition(state.chatDrawerOffsetY);
       const hiddenOffset = getChatDrawerHiddenOffset();
+      const wasOpen = state.chatLogOpen;
       state.chatLogOpen = state.chatDrawerOffsetY > hiddenOffset + 0.5;
       if (!state.chatLogOpen && state.chatInputOpen) {
         setChatInputOpen(false);
+      }
+      // if the drawer was closed but is now open, ensure we pin to bottom
+      if (!wasOpen && state.chatLogOpen) {
+        // use raf in case the layout hasn't settled yet
+        requestAnimationFrame(() => renderChatLog(true));
       }
     };
 
@@ -390,6 +451,37 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     });
 
     applyPingToolsVisibility();
+  }
+
+  // override scroll restoration and restore persisted log
+  if (typeof window !== "undefined") {
+    try {
+      history.scrollRestoration = "manual";
+    } catch {}
+
+    // pull any saved lines from previous session/reload
+    try {
+      const saved = sessionStorage.getItem("chatLogLines");
+      if (saved) {
+        state.chatLogLines = JSON.parse(saved);
+        sessionStorage.removeItem("chatLogLines");
+        renderChatLog(true);
+      }
+    } catch {}
+
+    window.addEventListener("load", () => {
+      renderChatLog(true);
+    });
+    window.addEventListener("pageshow", () => {
+      renderChatLog(true);
+    });
+
+    // keep chat log around when the page unloads or is about to reload
+    window.addEventListener("beforeunload", () => {
+      try {
+        sessionStorage.setItem("chatLogLines", JSON.stringify(state.chatLogLines));
+      } catch {}
+    });
   }
 
   return {

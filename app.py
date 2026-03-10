@@ -1547,7 +1547,7 @@ async def prepare_restart() -> JSONResponse:
     """
     payload = {
         "type": "server_update",
-        "message": "Server is updating. You will be disconnected and should reload when reconnecting.",
+        "message": "Game is updating. You will be disconnected and should reload when reconnecting; you'll be reconnected automatically.",
     }
 
     # Broadcast to all players in every world

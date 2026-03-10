@@ -31,8 +31,8 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
   } = callbacks;
 
   function beginLoadingForUser(username) {
-    state.chatLogLines = [];
-    renderChatLog();
+    // do not wipe existing log; keep historical messages across reconnects
+    renderChatLog(true);
     appendChatLine("system", `attempting to log into ${username}...`);
     if (loadingStatus) {
       loadingStatus.textContent = "Preparing assets...";
@@ -250,7 +250,7 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     leaveWorld();
     setPauseMenuOpen(false);
     state.chatLogLines = [];
-    renderChatLog();
+    renderChatLog(true);
     state.token = null;
     state.user = null;
     clearAuthSession();
