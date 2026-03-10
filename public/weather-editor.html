@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixelverse Weather Editor</title>
+    <!-- reuse atlas-editor stylesheet for layout and common controls -->
+    <link rel="stylesheet" href="/styles/atlas-editor.css" />
+    <style>
+      /* make layers section resizable and scrolling when necessary */
+      #layersSection {
+        resize: both;
+        overflow: auto;
+        max-height: 50vh;
+      }
+      /* layer list column wrapping and sizing */
+      #layerList {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        overflow: auto;
+      }
+      #layerList .row {
+        flex-wrap: wrap;
+      }
+      #layerList .row > * {
+        flex: 0 0 auto;
+      }
+      #layerList .header span {
+        font-weight: 700;
+        margin-right: 4px;
+        flex: 0 0 auto;
+        font-size: 12px;
+        color: #cbd5e1;
+      }
+      /* compact slider inputs and space their output */
+      #layerList input[type=range] {
+        margin-right: 4px;
+      }
+      #layerList span {
+        margin-right: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="editorSwitcher" aria-label="Editor Switcher">
+      <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
+      <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
+      <a class="switchBtn" href="/seed-editor.html">Seed Editor</a>
+      <a class="switchBtn active" href="/weather-editor.html">Weather Editor</a>
+      <a class="switchBtn" href="/item-manager.html">Item Manager</a>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="title">Pixelverse Weather Editor</div>
+        <div class="subtitle">Define layered weather with parallax, scrolling and looping effects.</div>
+
+        <div class="row">
+          <div class="fieldStack" style="min-width: 250px">
+            <label for="weatherSelect">Weather Entry</label>
+            <select id="weatherSelect"></select>
+          </div>
+          <button id="createWeatherBtn" type="button">Create Weather</button>
+          <button id="deleteWeatherBtn" class="secondary" type="button">Delete Weather</button>
+          <button id="reloadBtn" class="secondary" type="button">Reload</button>
+        </div>
+
+        <div class="row">
+          <div class="fieldStack">
+            <label for="weatherIdInput">WEATHER_ID</label>
+            <input id="weatherIdInput" type="number" min="0" step="1" />
+          </div>
+          <div class="fieldStack" style="min-width: 220px">
+            <label for="weatherNameInput">NAME</label>
+            <input id="weatherNameInput" type="text" maxlength="80" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="fieldStack">
+            <label for="weatherColorInput">WEATHER_COLOR</label>
+            <input id="weatherColorInput" type="text" placeholder="#000000" />
+          </div>
+          <div class="fieldStack">
+            <label for="weatherColorPicker">Color Picker</label>
+            <input id="weatherColorPicker" type="color" value="#000000" />
+          </div>
+        </div>
+
+        <div id="layersSection">
+          <div class="title small">Layers</div>
+          <button id="addLayerBtn" class="secondary" type="button">+ Add Layer</button>
+          <div id="layerList"></div>
+        </div>
+
+        <div class="row" style="margin-top: 8px">
+          <button id="saveBtn" type="button">Save weather.json</button>
+          <button id="resetJsonBtn" class="secondary" type="button">Reset JSON To State</button>
+          <button id="copyJsonBtn" class="secondary" type="button">Copy JSON</button>
+        </div>
+
+        <textarea id="jsonOutput" spellcheck="false" readonly style="height:120px;"></textarea>
+        <div id="status" class="status"></div>
+
+      </div>
+
+      <div class="panel">
+        <div id="previewWrap" class="atlasWrap" style="margin-bottom:12px;">
+          <canvas id="previewCanvas" width="800" height="400" style="border:1px solid #374151; width:100%; height:400px;"></canvas>
+        </div>
+        <div class="tiny" id="previewHint">Preview will animate based on scroll/parallax values; color/shape layers are drawn directly.</div>
+        <div class="title">Weather</div>
+        <div class="subtitle">Select a card to edit. Each card shows an ID/name.</div>
+        <div id="weatherCardList" class="seedCardList"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      // state object holds all data
+      const state = {
+        weather: [],
+        atlases: [],
+        atlasImageCache: {},      // key->Promise<Image|null>
+        atlasImageCacheResolved: {},
+        selectedIndex: -1,
+      };
+
+      // basic utilities copied from other editors
+      function normalizeAtlasId(value) {
+        if (typeof value === "number" && Number.isInteger(value)) return value;
+        const text = String(value ?? "").trim();
+        if (!text) return "";
+        if (/^-?\d+$/.test(text)) return Number.parseInt(text, 10);
+        return text.toLowerCase();
+      }
+
+      function normalizeTint(value) {
+        const text = String(value ?? "").trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{8}$/.test(text)) {
+          return text.toLowerCase();
+        }
+        return "";
+      }
+
+      function getAtlasById(atlasId) {
+        const key = String(normalizeAtlasId(atlasId));
+        return state.atlases.find((a) => String(normalizeAtlasId(a?.ATLAS_ID)) === key);
+      }
+
+      function getAtlasImage(atlasId) {
+        const key = String(normalizeAtlasId(atlasId));
+        if (state.atlasImageCacheResolved[key]) {
+          return Promise.resolve(state.atlasImageCacheResolved[key]);
+        }
+        if (state.atlasImageCache[key]) {
+          return state.atlasImageCache[key];
+        }
+        const atlas = getAtlasById(key);
+        if (!atlas || !atlas.SRC) {
+          return Promise.resolve(null);
+        }
+        state.atlasImageCache[key] = new Promise((resolve) => {
+          const image = new Image();
+          image.decoding = "async";
+          image.onload = () => {
+            state.atlasImageCacheResolved[key] = image;
+            resolve(image);
+          };
+          image.onerror = () => resolve(null);
+          image.src = String(atlas.SRC);
+        });
+        return state.atlasImageCache[key];
+      }
+
+      function drawLayerThumbnail(canvas, layer) {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const type = layer.TYPE || "atlas";
+        if (type === "atlas") {
+          const rect = layer.ATLAS_TEXTURE || { x: 0, y: 0, w: 0, h: 0 };
+          const normalized = {
+            x: Math.max(0, Number(rect?.x || 0)),
+            y: Math.max(0, Number(rect?.y || 0)),
+            w: Math.max(1, Number(rect?.w || 1)),
+            h: Math.max(1, Number(rect?.h || 1)),
+          };
+          if (normalized.w <= 0 || normalized.h <= 0) return;
+          getAtlasImage(layer.ATLAS_ID).then((img) => {
+            if (!img) return;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(
+              img,
+              normalized.x,
+              normalized.y,
+              normalized.w,
+              normalized.h,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+          });
+        } else if (type === "color") {
+          const col = normalizeTint(layer.COLOR) || "#000";
+          ctx.fillStyle = col;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else if (type === "shape") {
+          const col = normalizeTint(layer.COLOR) || "#000";
+          const rect = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
+          if (rect.w <= 0 || rect.h <= 0) return;
+          ctx.fillStyle = col;
+          if (layer.SHAPE === "circle") {
+            ctx.beginPath();
+            ctx.ellipse(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, rect.h / 2, 0, 0, 2 * Math.PI);
+            ctx.fill();
+          } else {
+            ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+          }
+        }
+      }
+
+      // DOM elements
+      const weatherSelect = document.getElementById("weatherSelect");
+      const createWeatherBtn = document.getElementById("createWeatherBtn");
+      const deleteWeatherBtn = document.getElementById("deleteWeatherBtn");
+      const reloadBtn = document.getElementById("reloadBtn");
+      const weatherIdInput = document.getElementById("weatherIdInput");
+      const weatherNameInput = document.getElementById("weatherNameInput");
+      const weatherColorInput = document.getElementById("weatherColorInput");
+      const weatherColorPicker = document.getElementById("weatherColorPicker");
+      const addLayerBtn = document.getElementById("addLayerBtn");
+      const layerList = document.getElementById("layerList");
+      const previewCanvas = document.getElementById("previewCanvas");
+      const jsonOutput = document.getElementById("jsonOutput");
+      const saveBtn = document.getElementById("saveBtn");
+      const copyJsonBtn = document.getElementById("copyJsonBtn");
+      const resetJsonBtn = document.getElementById("resetJsonBtn");
+      const statusEl = document.getElementById("status");
+      const weatherCardList = document.getElementById("weatherCardList");
+
+      // helper to set status text
+      function setStatus(text, isError = false) {
+        statusEl.textContent = text;
+        statusEl.style.color = isError ? "#f87171" : "#a3e635";
+      }
+
+      async function loadData() {
+        setStatus("Loading weather data...");
+        try {
+          const res = await fetch(`/api/tools/weather/editor-data?ts=${Date.now()}`, { cache: "no-store" });
+          if (!res.ok) throw new Error(`status ${res.status}`);
+          const payload = await res.json();
+          state.weather = Array.isArray(payload.weather) ? payload.weather : [];
+          state.atlases = Array.isArray(payload.atlases) ? payload.atlases : [];
+          // prefetch atlas images
+          state.atlases.forEach((a) => getAtlasImage(a.ATLAS_ID));
+          state.selectedIndex = state.weather.length ? 0 : -1;
+          renderWeatherSelect();
+          renderWeatherCards();
+          renderFromSelected();
+          setStatus("Weather data loaded.");
+        } catch (err) {
+          setStatus(String(err), true);
+        }
+      }
+
+      function renderWeatherSelect() {
+        weatherSelect.innerHTML = "";
+        state.weather.forEach((w, i) => {
+          const opt = document.createElement("option");
+          opt.value = String(i);
+          opt.textContent = `${w.WEATHER_ID || "?"} - ${w.NAME || ""}`;
+          weatherSelect.append(opt);
+        });
+        if (weatherSelect.options.length) {
+          weatherSelect.value = String(state.selectedIndex >= 0 ? state.selectedIndex : 0);
+        }
+      }
+
+      function renderWeatherCards() {
+        weatherCardList.innerHTML = "";
+        const addCard = document.createElement("button");
+        addCard.type = "button";
+        addCard.className = "seedCard addSeedCard";
+        addCard.innerHTML = '<div class="addSeedPlus">+</div><div class="seedCardMeta">Create Weather</div>';
+        addCard.addEventListener("click", () => createWeatherEntry());
+        weatherCardList.append(addCard);
+
+        state.weather.forEach((w, idx) => {
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = `seedCard${idx === state.selectedIndex ? " active" : ""}`;
+          const title = document.createElement("div");
+          title.className = "seedCardName";
+          title.textContent = `${w.WEATHER_ID || "?"} - ${w.NAME || ""}`;
+          card.append(title);
+          card.addEventListener("click", () => {
+            applyCurrentWeatherFields();
+            state.selectedIndex = idx;
+            renderFromSelected();
+          });
+          weatherCardList.append(card);
+        });
+      }
+
+      function renderFromSelected() {
+        const weather = state.weather[state.selectedIndex];
+        if (!weather) {
+          weatherIdInput.value = "";
+          weatherNameInput.value = "";
+          weatherColorInput.value = "";
+          weatherColorPicker.value = "#000000";
+          layerList.innerHTML = "";
+          state.current = null;
+          updateJsonOutput();
+          updatePreview();
+          renderWeatherSelect();
+          renderWeatherCards();
+          return;
+        }
+        state.current = weather;
+        weatherIdInput.value = String(weather.WEATHER_ID || "");
+        weatherNameInput.value = weather.NAME || "";
+        weatherColorInput.value = weather.WEATHER_COLOR || "";
+        if (/^#[0-9a-f]{6}$/i.test(weather.WEATHER_COLOR || "")) {
+          weatherColorPicker.value = weather.WEATHER_COLOR;
+        }
+        renderLayerList();
+        updateJsonOutput();
+        updatePreview();
+        renderWeatherSelect();
+        renderWeatherCards();
+      }
+
+      function applyCurrentWeatherFields() {
+        const weather = state.current;
+        if (!weather) return;
+        const idval = Math.max(0, Number.parseInt(weatherIdInput.value, 10) || 0);
+        weather.WEATHER_ID = idval;
+        weather.NAME = String(weatherNameInput.value || "").trim() || `WEATHER_${idval}`;
+        weather.WEATHER_COLOR = normalizeTint(weatherColorInput.value);
+      }
+
+      function updateJsonOutput() {
+        jsonOutput.value = JSON.stringify({ weather: state.weather, atlases: state.atlases }, null, 2);
+      }
+
+      function createWeatherEntry() {
+        applyCurrentWeatherFields();
+        const used = new Set(state.weather.map((b) => Number(b.WEATHER_ID || 0)));
+        let nextId = 1;
+        while (used.has(nextId)) nextId += 1;
+        const entry = { WEATHER_ID: nextId, NAME: `WEATHER_${nextId}`, WEATHER_COLOR: "", LAYERS: [] };
+        state.weather.push(entry);
+        state.selectedIndex = state.weather.length - 1;
+        renderFromSelected();
+      }
+
+      function deleteCurrentWeather() {
+        if (state.selectedIndex < 0 || state.selectedIndex >= state.weather.length) return;
+        state.weather.splice(state.selectedIndex, 1);
+        state.selectedIndex = Math.max(0, Math.min(state.selectedIndex, state.weather.length - 1));
+        renderFromSelected();
+      }
+
+      function addLayer() {
+        if (!state.current) return;
+        state.current.LAYERS.push({
+          TYPE: "atlas",
+          ATLAS_ID: "",
+          ATLAS_TEXTURE: { x: 0, y: 0, w: 16, h: 16 },
+          PARALLAX_X: 1,
+          PARALLAX_Y: 1,
+          SCROLL_X: 0,
+          SCROLL_Y: 0,
+          LOOP_X: false,
+          LOOP_Y: false,
+          offsetX: 0,
+          offsetY: 0,
+        });
+        renderLayerList();
+        updateJsonOutput();
+      }
+
+      function renderLayerList() {
+        layerList.innerHTML = "";
+        if (!state.current) return;
+        // add a header row with labels for each column
+        const header = document.createElement("div");
+        header.className = "row header";
+        header.style = "align-items:center; gap:4px; margin-bottom:4px;";
+        [
+          "Type",
+          "Atlas/Texture",
+          "Coords",
+          "Color/Shape",
+          "Parallax X",
+          "Parallax Y",
+          "Scroll X",
+          "Scroll Y",
+          "Rot",
+          "LoopX",
+          "LoopY",
+          "Up",
+          "Down",
+          "Del",
+        ].forEach((txt) => {
+          const span = document.createElement("span");
+          span.textContent = txt;
+          header.append(span);
+        });
+        layerList.append(header);
+        state.current.LAYERS.forEach((layer, i) => {
+          const row = document.createElement("div");
+          row.className = "row";
+          row.style = "align-items:center; gap:4px; margin-bottom:4px;";
+
+          // layer type
+          const typeSel = document.createElement("select");
+          typeSel.setAttribute("aria-label", "layer type");
+          ["atlas", "color", "shape"].forEach((t) => {
+            const o = document.createElement("option");
+            o.value = t;
+            o.textContent = t;
+            typeSel.append(o);
+          });
+          typeSel.value = layer.TYPE || "atlas";
+          typeSel.addEventListener("change", () => {
+            layer.TYPE = typeSel.value;
+            if (layer.TYPE === "atlas") {
+              layer.ATLAS_ID = layer.ATLAS_ID || "";
+              layer.ATLAS_TEXTURE = layer.ATLAS_TEXTURE || { x: 0, y: 0, w: 0, h: 0 };
+            } else if (layer.TYPE === "color") {
+              layer.COLOR = layer.COLOR || "";
+            } else if (layer.TYPE === "shape") {
+              layer.SHAPE = layer.SHAPE || "rect";
+              layer.COLOR = layer.COLOR || "";
+              layer.RECT = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
+            }
+            renderLayerList();
+            updatePreview();
+            updateJsonOutput();
+          });
+          row.append(typeSel);
+
+          let thumbnailCnv = null;
+          if (layer.TYPE === "atlas") {
+            thumbnailCnv = document.createElement("canvas");
+            thumbnailCnv.width = 40;
+            thumbnailCnv.height = 40;
+            thumbnailCnv.style.border = "1px solid #374151";
+            thumbnailCnv.style.marginRight = "4px";
+            drawLayerThumbnail(thumbnailCnv, layer);
+            row.append(thumbnailCnv);
+
+            const atlasSel = document.createElement("select");
+            atlasSel.setAttribute("aria-label", "atlas id");
+            atlasSel.style.width = "120px";
+            const emptyOpt = document.createElement("option");
+            emptyOpt.value = "";
+            emptyOpt.textContent = "(atlas)";
+            atlasSel.append(emptyOpt);
+            state.atlases.forEach((a) => {
+              const opt = document.createElement("option");
+              opt.value = String(a.ATLAS_ID);
+              opt.textContent = String(a.ATLAS_ID);
+              atlasSel.append(opt);
+            });
+            atlasSel.value = String(layer.ATLAS_ID || "");
+            atlasSel.addEventListener("change", () => {
+              layer.ATLAS_ID = normalizeAtlasId(atlasSel.value);
+              getAtlasImage(layer.ATLAS_ID).then(() => {
+                updatePreview();
+                drawLayerThumbnail(thumbnailCnv, layer);
+              });
+              updateJsonOutput();
+            });
+            row.append(atlasSel);
+
+            ["x", "y", "w", "h"].forEach((coord) => {
+              const inp = document.createElement("input");
+              inp.setAttribute("aria-label", "texture " + coord);
+              inp.type = "number";
+              inp.min = "0";
+              inp.step = "1";
+              inp.style.width = "50px";
+              inp.value = String(layer.ATLAS_TEXTURE[coord] || 0);
+              inp.placeholder = coord;
+              inp.addEventListener("input", () => {
+                layer.ATLAS_TEXTURE[coord] = Math.max(0, Number.parseInt(inp.value, 10) || 0);
+                updatePreview();
+                drawLayerThumbnail(thumbnailCnv, layer);
+                updateJsonOutput();
+              });
+              row.append(inp);
+            });
+          } else if (layer.TYPE === "color") {
+            const colorInp = document.createElement("input");
+            colorInp.type = "text";
+            colorInp.placeholder = "#ffffff";
+            colorInp.style.width = "80px";
+            colorInp.value = layer.COLOR || "";
+            colorInp.addEventListener("input", () => {
+              layer.COLOR = normalizeTint(colorInp.value);
+              updatePreview();
+              updateJsonOutput();
+            });
+            row.append(colorInp);
+            const colorPicker = document.createElement("input");
+            colorPicker.setAttribute("aria-label", "color picker");
+            colorPicker.type = "color";
+            colorPicker.value = layer.COLOR || "#000000";
+            colorPicker.addEventListener("input", () => {
+              colorInp.value = colorPicker.value;
+              layer.COLOR = normalizeTint(colorPicker.value);
+              updatePreview();
+              updateJsonOutput();
+            });
+            row.append(colorPicker);
+          } else if (layer.TYPE === "shape") {
+            const shapeSel = document.createElement("select");
+            shapeSel.setAttribute("aria-label", "shape");
+            ["rect", "circle"].forEach((s) => {
+              const o = document.createElement("option");
+              o.value = s;
+              o.textContent = s;
+              shapeSel.append(o);
+            });
+            shapeSel.value = layer.SHAPE || "rect";
+            shapeSel.addEventListener("change", () => {
+              layer.SHAPE = shapeSel.value;
+              updatePreview();
+              updateJsonOutput();
+            });
+            row.append(shapeSel);
+
+            const colorInp = document.createElement("input");
+            colorInp.type = "text";
+            colorInp.placeholder = "#ffffff";
+            colorInp.style.width = "80px";
+            colorInp.value = layer.COLOR || "";
+            colorInp.addEventListener("input", () => {
+              layer.COLOR = normalizeTint(colorInp.value);
+              updatePreview();
+              updateJsonOutput();
+            });
+            row.append(colorInp);
+            const colorPicker = document.createElement("input");
+            colorPicker.setAttribute("aria-label", "color picker");
+            colorPicker.type = "color";
+            colorPicker.value = layer.COLOR || "#000000";
+            colorPicker.addEventListener("input", () => {
+              colorInp.value = colorPicker.value;
+              layer.COLOR = normalizeTint(colorPicker.value);
+              updatePreview();
+              updateJsonOutput();
+            });
+            row.append(colorPicker);
+
+            ["x", "y", "w", "h"].forEach((coord) => {
+              const inp = document.createElement("input");
+              inp.setAttribute("aria-label", coord === "w" ? "width" : coord === "h" ? "height" : coord);
+              inp.type = "number";
+              inp.min = "0";
+              inp.step = "1";
+              inp.style.width = "50px";
+              inp.value = String((layer.RECT || {})[coord] || 0);
+              inp.placeholder = coord;
+              inp.addEventListener("input", () => {
+                layer.RECT = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
+                layer.RECT[coord] = Math.max(0, Number.parseInt(inp.value, 10) || 0);
+                updatePreview();
+                updateJsonOutput();
+              });
+              row.append(inp);
+            });
+            // add rotation control
+            const rotWrap = document.createElement("div");
+            rotWrap.style.display = "flex";
+            rotWrap.style.alignItems = "center";
+            const rotLabel = document.createElement("span");
+            rotLabel.textContent = "Rot:";
+            rotLabel.style.fontSize = "11px";
+            rotLabel.style.marginRight = "2px";
+            const rot = document.createElement("input");
+            rot.setAttribute("aria-label", "rotation");
+            rot.type = "range";
+            rot.min = "0";
+            rot.max = "360";
+            rot.step = "1";
+            rot.value = String(layer.ROTATION || 0);
+            rot.style.width = "80px";
+            const rotVal = document.createElement("span");
+            rotVal.textContent = rot.value;
+            rotVal.style.marginLeft = "2px";
+            rot.addEventListener("input", () => {
+              const num = parseFloat(rot.value) || 0;
+              layer.ROTATION = num;
+              rotVal.textContent = num.toFixed(0);
+              updatePreview();
+              updateJsonOutput();
+            });
+            rotWrap.append(rotLabel, rot, rotVal);
+            row.append(rotWrap);
+          }
+
+          // parallax x slider
+          const parxWrap = document.createElement("div");
+          parxWrap.style.display = "flex";
+          parxWrap.style.alignItems = "center";
+          const parxLabel = document.createElement("span");
+          parxLabel.textContent = "PX:";
+          parxLabel.style.fontSize = "11px";
+          parxLabel.style.marginRight = "2px";
+          const parx = document.createElement("input");
+          parx.setAttribute("aria-label", "parallax x");
+          parx.type = "range";
+          parx.min = "-5";
+          parx.max = "5";
+          parx.step = "0.1";
+          parx.value = String(layer.PARALLAX_X || 1);
+          parx.style.width = "80px";
+          const parxVal = document.createElement("span");
+          parxVal.textContent = parx.value;
+          parxVal.style.marginLeft = "2px";
+          parx.addEventListener("input", () => {
+            const num = parseFloat(parx.value) || 0;
+            layer.PARALLAX_X = num;
+            parxVal.textContent = num.toFixed(1);
+            updatePreview();
+            updateJsonOutput();
+          });
+          parxWrap.append(parxLabel, parx, parxVal);
+          row.append(parxWrap);
+
+          // parallax y slider
+          const paryWrap = document.createElement("div");
+          paryWrap.style.display = "flex";
+          paryWrap.style.alignItems = "center";
+          const paryLabel = document.createElement("span");
+          paryLabel.textContent = "PY:";
+          paryLabel.style.fontSize = "11px";
+          paryLabel.style.marginRight = "2px";
+          const pary = document.createElement("input");
+          pary.setAttribute("aria-label", "parallax y");
+          pary.type = "range";
+          pary.min = "-5";
+          pary.max = "5";
+          pary.step = "0.1";
+          pary.value = String(layer.PARALLAX_Y || 1);
+          pary.style.width = "80px";
+          const paryVal = document.createElement("span");
+          paryVal.textContent = pary.value;
+          paryVal.style.marginLeft = "2px";
+          pary.addEventListener("input", () => {
+            const num = parseFloat(pary.value) || 0;
+            layer.PARALLAX_Y = num;
+            paryVal.textContent = num.toFixed(1);
+            updatePreview();
+            updateJsonOutput();
+          });
+          paryWrap.append(paryLabel, pary, paryVal);
+          row.append(paryWrap);
+
+          // scroll x slider
+          const sxWrap = document.createElement("div");
+          sxWrap.style.display = "flex";
+          sxWrap.style.alignItems = "center";
+          const sxLabel = document.createElement("span");
+          sxLabel.textContent = "SX:";
+          sxLabel.style.fontSize = "11px";
+          sxLabel.style.marginRight = "2px";
+          const sx = document.createElement("input");
+          sx.setAttribute("aria-label", "scroll x");
+          sx.type = "range";
+          sx.min = "-10";
+          sx.max = "10";
+          sx.step = "0.1";
+          sx.value = String(layer.SCROLL_X || 0);
+          sx.style.width = "80px";
+          const sxVal = document.createElement("span");
+          sxVal.textContent = sx.value;
+          sxVal.style.marginLeft = "2px";
+          sx.addEventListener("input", () => {
+            const num = parseFloat(sx.value) || 0;
+            layer.SCROLL_X = num;
+            sxVal.textContent = num.toFixed(1);
+            updatePreview();
+            updateJsonOutput();
+          });
+          sxWrap.append(sxLabel, sx, sxVal);
+          row.append(sxWrap);
+
+          // scroll y slider
+          const syWrap = document.createElement("div");
+          syWrap.style.display = "flex";
+          syWrap.style.alignItems = "center";
+          const syLabel = document.createElement("span");
+          syLabel.textContent = "SY:";
+          syLabel.style.fontSize = "11px";
+          syLabel.style.marginRight = "2px";
+          const sy = document.createElement("input");
+          sy.setAttribute("aria-label", "scroll y");
+          sy.type = "range";
+          sy.min = "-10";
+          sy.max = "10";
+          sy.step = "0.1";
+          sy.value = String(layer.SCROLL_Y || 0);
+          sy.style.width = "80px";
+          const syVal = document.createElement("span");
+          syVal.textContent = sy.value;
+          syVal.style.marginLeft = "2px";
+          sy.addEventListener("input", () => {
+            const num = parseFloat(sy.value) || 0;
+            layer.SCROLL_Y = num;
+            syVal.textContent = num.toFixed(1);
+            updatePreview();
+            updateJsonOutput();
+          });
+          syWrap.append(syLabel, sy, syVal);
+          row.append(syWrap);
+
+          const loopX = document.createElement("input");
+          loopX.setAttribute("aria-label", "loop x");
+          loopX.type = "checkbox";
+          loopX.checked = !!layer.LOOP_X;
+          loopX.title = "loop x";
+          loopX.addEventListener("change", () => {
+            layer.LOOP_X = loopX.checked;
+            updatePreview();
+            updateJsonOutput();
+          });
+          row.append(loopX);
+
+          const loopY = document.createElement("input");
+          loopY.setAttribute("aria-label", "loop y");
+          loopY.type = "checkbox";
+          loopY.checked = !!layer.LOOP_Y;
+          loopY.title = "loop y";
+          loopY.addEventListener("change", () => {
+            layer.LOOP_Y = loopY.checked;
+            updatePreview();
+            updateJsonOutput();
+          });
+          row.append(loopY);
+
+          const upBtn = document.createElement("button");
+          upBtn.type = "button";
+          upBtn.textContent = "↑";
+          upBtn.title = "move up";
+          upBtn.addEventListener("click", () => moveLayer(i, -1));
+          row.append(upBtn);
+
+          const downBtn = document.createElement("button");
+          downBtn.type = "button";
+          downBtn.textContent = "↓";
+          downBtn.title = "move down";
+          downBtn.addEventListener("click", () => moveLayer(i, 1));
+          row.append(downBtn);
+
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.textContent = "✕";
+          delBtn.title = "remove layer";
+          delBtn.addEventListener("click", () => removeLayer(i));
+          row.append(delBtn);
+
+          layerList.append(row);
+        });
+      }
+
+      function moveLayer(index, dir) {
+        if (!state.current) return;
+        const n = state.current.LAYERS.length;
+        const newIndex = index + dir;
+        if (newIndex < 0 || newIndex >= n) return;
+        const list = state.current.LAYERS;
+        const [item] = list.splice(index, 1);
+        list.splice(newIndex, 0, item);
+        renderLayerList();
+        updateJsonOutput();
+      }
+
+      function removeLayer(index) {
+        if (!state.current) return;
+        state.current.LAYERS.splice(index, 1);
+        renderLayerList();
+        updateJsonOutput();
+      }
+
+      function updatePreview() {
+        const ctx = previewCanvas.getContext("2d");
+        ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+        if (!state.current) return;
+        // fill base color first
+        const base = normalizeTint(state.current.WEATHER_COLOR);
+        if (base) {
+          ctx.fillStyle = base;
+          ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+        }
+        state.current.LAYERS.forEach((layer) => {
+          let img = null;
+          if (layer.TYPE === "atlas") {
+            const key = String(normalizeAtlasId(layer.ATLAS_ID));
+            img = state.atlasImageCacheResolved[key];
+            if (!img) return;
+          }
+          drawLayer(ctx, img, layer);
+        });
+      }
+
+      function drawLayer(ctx, img, layer) {
+        const type = layer.TYPE || "atlas";
+        if (type === "color") {
+          const col = normalizeTint(layer.COLOR) || "#000";
+          ctx.fillStyle = col;
+          ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+          return;
+        }
+        if (type === "shape") {
+          const col = normalizeTint(layer.COLOR) || "#000";
+          const rect = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
+          if (rect.w <= 0 || rect.h <= 0) return;
+          ctx.fillStyle = col;
+          const angle = (parseFloat(layer.ROTATION) || 0) * (Math.PI / 180);
+          if (angle !== 0) {
+            // rotate around center
+            ctx.save();
+            const cx = rect.x + rect.w / 2;
+            const cy = rect.y + rect.h / 2;
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+            if (layer.SHAPE === "circle") {
+              ctx.beginPath();
+              ctx.ellipse(0, 0, rect.w / 2, rect.h / 2, 0, 0, 2 * Math.PI);
+              ctx.fill();
+            } else {
+              ctx.fillRect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
+            }
+            ctx.restore();
+          } else {
+            if (layer.SHAPE === "circle") {
+              ctx.beginPath();
+              ctx.ellipse(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, rect.h / 2, 0, 0, 2 * Math.PI);
+              ctx.fill();
+            } else {
+              ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+            }
+          }
+          return;
+        }
+        // atlas case
+        const rect = layer.ATLAS_TEXTURE || { x: 0, y: 0, w: 0, h: 0 };
+        if (rect.w <= 0 || rect.h <= 0) return;
+        const temp = document.createElement("canvas");
+        temp.width = rect.w;
+        temp.height = rect.h;
+        const tctx = temp.getContext("2d");
+        if (!tctx) return;
+        tctx.imageSmoothingEnabled = false;
+        tctx.clearRect(0, 0, rect.w, rect.h);
+        tctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+
+        const px = layer.offsetX || 0;
+        const py = layer.offsetY || 0;
+
+        if (layer.LOOP_X || layer.LOOP_Y) {
+          const pattern = ctx.createPattern(temp, "repeat");
+          if (pattern) {
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.fillStyle = pattern;
+            ctx.fillRect(-px, -py, previewCanvas.width + rect.w, previewCanvas.height + rect.h);
+            ctx.restore();
+          }
+        } else {
+          ctx.drawImage(temp, px, py);
+        }
+      }
+
+      // animation tick for scrolling
+      let lastTime = performance.now();
+      function tick(time) {
+        const dt = (time - lastTime) / 1000;
+        lastTime = time;
+        if (state.current) {
+          state.current.LAYERS.forEach((layer) => {
+            layer.offsetX = (layer.offsetX || 0) + (layer.SCROLL_X || 0) * dt * (layer.PARALLAX_X || 1);
+            layer.offsetY = (layer.offsetY || 0) + (layer.SCROLL_Y || 0) * dt * (layer.PARALLAX_Y || 1);
+          });
+          updatePreview();
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      // listeners
+      weatherSelect.addEventListener("change", () => {
+        applyCurrentWeatherFields();
+        state.selectedIndex = Number.parseInt(weatherSelect.value, 10) || 0;
+        renderFromSelected();
+      });
+      createWeatherBtn.addEventListener("click", () => createWeatherEntry());
+      deleteWeatherBtn.addEventListener("click", () => deleteCurrentWeather());
+      reloadBtn.addEventListener("click", loadData);
+
+      weatherColorInput.addEventListener("input", () => {
+        if (/^#[0-9a-fA-F]{6}$/.test(weatherColorInput.value)) {
+          weatherColorPicker.value = weatherColorInput.value;
+        }
+        if (state.current) {
+          state.current.WEATHER_COLOR = normalizeTint(weatherColorInput.value);
+          updatePreview();
+        }
+      });
+      weatherColorPicker.addEventListener("input", () => {
+        weatherColorInput.value = weatherColorPicker.value;
+        if (state.current) {
+          state.current.WEATHER_COLOR = normalizeTint(weatherColorPicker.value);
+          updatePreview();
+        }
+      });
+
+      addLayerBtn.addEventListener("click", addLayer);
+      saveBtn.addEventListener("click", async () => {
+        applyCurrentWeatherFields();
+        try {
+          const payload = {
+            weather: state.weather,
+            atlases: state.atlases,
+          };
+          const res = await fetch("/api/tools/weather/save-data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error(`status ${res.status}`);
+          const data = await res.json();
+          setStatus("Saved successfully.");
+        } catch (err) {
+          setStatus(String(err), true);
+        }
+      });
+      copyJsonBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(jsonOutput.value || "");
+          setStatus("JSON copied to clipboard.");
+        } catch (err) {
+          setStatus(String(err), true);
+        }
+      });
+      resetJsonBtn.addEventListener("click", () => {
+        renderFromSelected();
+        setStatus("JSON reset to current state.");
+      });
+
+      // kick off
+      loadData();
+    </script>
+  </body>
+</html>

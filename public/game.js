@@ -164,6 +164,7 @@ const state = {
   blockDefs: new Map(),
   animatedBlockIds: new Set(),
   seedDefs: new Map(),
+  weatherDefs: new Map(),
   inventorySeeds: new Map(),
   atlases: new Map(),
   seedDropSpriteCache: new Map(),
@@ -1667,6 +1668,11 @@ function drawPlantedTrees() {
   }
 
   const serverNowMs = getServerNowMs();
+  // compute the logical dimensions once per frame so browser zoom / DPR
+  // doesn’t make our visibility clipping values inconsistent.
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+
   for (const tree of state.plantedTrees.values()) {
     const seed = state.seedDefs.get(tree.seedId);
     if (!seed) {
@@ -1691,8 +1697,8 @@ function drawPlantedTrees() {
     if (
       screenX + drawWidth < -8 ||
       screenY + drawHeight < -8 ||
-      screenX > canvas.width + 8 ||
-      screenY > canvas.height + 8
+      screenX > cssW + 8 ||
+      screenY > cssH + 8
     ) {
       continue;
     }
@@ -2216,8 +2222,11 @@ function update() {
     state.lastMoveSentAt = now;
   }
 
-  const viewportWorldW = canvas.width / state.camera.zoom;
-  const viewportWorldH = canvas.height / state.camera.zoom;
+  // use logical (CSS) canvas size rather than the scaled width/height
+  const cssW = canvas.clientWidth || window.innerWidth;
+  const cssH = canvas.clientHeight || Math.max(1, window.innerHeight - (gameTopbar ? gameTopbar.offsetHeight : 58));
+  const viewportWorldW = cssW / state.camera.zoom;
+  const viewportWorldH = cssH / state.camera.zoom;
   state.camera.x = state.me.x * TILE_SIZE - viewportWorldW / 2;
   state.camera.y = state.me.y * TILE_SIZE - viewportWorldH / 2;
 
@@ -2248,9 +2257,14 @@ function drawWorld() {
   const fracY = cameraY - sourceY;
   const maxSourceW = state.worldRender.canvas.width - sourceX;
   const maxSourceH = state.worldRender.canvas.height - sourceY;
+
+  // logical canvas size for clipping / viewport (handles browser zoom)
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+
   // Pull a small extra margin so fractional camera offsets never expose gaps.
-  const sourceW = Math.max(0, Math.min(Math.ceil(canvas.width / state.camera.zoom) + 2, maxSourceW));
-  const sourceH = Math.max(0, Math.min(Math.ceil(canvas.height / state.camera.zoom) + 2, maxSourceH));
+  const sourceW = Math.max(0, Math.min(Math.ceil(cssW / state.camera.zoom) + 2, maxSourceW));
+  const sourceH = Math.max(0, Math.min(Math.ceil(cssH / state.camera.zoom) + 2, maxSourceH));
 
   if (sourceW <= 0 || sourceH <= 0) {
     return;
@@ -2279,8 +2293,10 @@ function drawAnimatedTilesOverlay() {
   const zoom = Math.max(0.0001, state.camera.zoom);
   const startTileX = Math.max(0, Math.floor(state.camera.x / TILE_SIZE));
   const startTileY = Math.max(0, Math.floor(state.camera.y / TILE_SIZE));
-  const endTileX = Math.min(state.world.width - 1, Math.ceil((state.camera.x + canvas.width / zoom) / TILE_SIZE));
-  const endTileY = Math.min(state.world.height - 1, Math.ceil((state.camera.y + canvas.height / zoom) / TILE_SIZE));
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+  const endTileX = Math.min(state.world.width - 1, Math.ceil((state.camera.x + cssW / zoom) / TILE_SIZE));
+  const endTileY = Math.min(state.world.height - 1, Math.ceil((state.camera.y + cssH / zoom) / TILE_SIZE));
   const nowMs = performance.now();
 
   const drawLayer = (layer) => {
@@ -2364,11 +2380,14 @@ function drawGemDrops() {
     const drawX = screenX - drawSize / 2;
     const drawY = screenY - drawSize / 2 + bobOffset;
 
+    // use CSS dims for clipping
+    const cssW = canvas.clientWidth || canvas.width;
+    const cssH = canvas.clientHeight || canvas.height;
     if (
       drawX + drawSize < -8 ||
       drawY + drawSize < -8 ||
-      drawX > canvas.width + 8 ||
-      drawY > canvas.height + 8
+      drawX > cssW + 8 ||
+      drawY > cssH + 8
     ) {
       continue;
     }
@@ -2412,11 +2431,13 @@ function drawSeedDrops() {
     const drawX = screenX - drawWidth / 2;
     const drawY = screenY - drawHeight / 2 + bobOffset;
 
+    const cssW = canvas.clientWidth || canvas.width;
+    const cssH = canvas.clientHeight || canvas.height;
     if (
       drawX + drawWidth < -8 ||
       drawY + drawHeight < -8 ||
-      drawX > canvas.width + 8 ||
-      drawY > canvas.height + 8
+      drawX > cssW + 8 ||
+      drawY > cssH + 8
     ) {
       continue;
     }
@@ -2474,8 +2495,10 @@ function drawDebugHitboxes() {
 
   const viewLeft = Math.max(0, Math.floor(cameraX / TILE_SIZE));
   const viewTop = Math.max(0, Math.floor(cameraY / TILE_SIZE));
-  const viewRight = Math.min(state.world.width - 1, Math.ceil((cameraX + canvas.width / zoom) / TILE_SIZE));
-  const viewBottom = Math.min(state.world.height - 1, Math.ceil((cameraY + canvas.height / zoom) / TILE_SIZE));
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+  const viewRight = Math.min(state.world.width - 1, Math.ceil((cameraX + cssW / zoom) / TILE_SIZE));
+  const viewBottom = Math.min(state.world.height - 1, Math.ceil((cameraY + cssH / zoom) / TILE_SIZE));
 
   ctx.save();
   ctx.lineWidth = Math.max(1, Math.round(zoom));

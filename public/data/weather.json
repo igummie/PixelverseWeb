@@ -1,0 +1,73 @@
+{
+  "weather": [
+    {
+      "WEATHER_ID": 1,
+      "NAME": "Sunny",
+      "LAYERS": [
+        {
+          "TYPE": "shape",
+          "SHAPE": "rect",
+          "COLOR": "#2e297c",
+          "RECT": {
+            "x": 55,
+            "y": 153,
+            "w": 200,
+            "h": 200
+          },
+          "ROTATION": 122.0,
+          "PARALLAX_X": 1.0,
+          "PARALLAX_Y": 2.2,
+          "SCROLL_X": 0,
+          "SCROLL_Y": 10.0,
+          "LOOP_X": false,
+          "LOOP_Y": false
+        },
+        {
+          "TYPE": "shape",
+          "SHAPE": "circle",
+          "COLOR": "#f3b907",
+          "RECT": {
+            "x": 30,
+            "y": 31,
+            "w": 200,
+            "h": 200
+          },
+          "PARALLAX_X": 5.0,
+          "PARALLAX_Y": 5.0,
+          "SCROLL_X": 10.0,
+          "SCROLL_Y": 10.0,
+          "LOOP_X": false,
+          "LOOP_Y": false
+        }
+      ],
+      "WEATHER_COLOR": "#4597d3"
+    },
+    {
+      "WEATHER_ID": 2,
+      "NAME": "Darkness",
+      "LAYERS": [],
+      "WEATHER_COLOR": "#000000"
+    }
+  ],
+  "atlases": [
+    {
+      "ATLAS_ID": 0,
+      "NAME": "BASIC_ATLAS",
+      "SRC": "/assets/atlases/basic_atlas.svg",
+      "TILE_SIZE": 16
+    },
+    {
+      "ATLAS_ID": "gems",
+      "NAME": "GEMS_ATLAS",
+      "SRC": "/assets/atlases/gems_atlas.svg",
+      "TILE_SIZE": 16
+    },
+    {
+      "ATLAS_ID": 1,
+      "NAME": "GT_ATLAS",
+      "SRC": "/assets/atlases/gt.png",
+      "TILE_SIZE": 32
+    }
+  ],
+  "backgrounds": []
+}

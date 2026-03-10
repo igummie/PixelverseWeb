@@ -12,6 +12,11 @@ multiplayer 2D build/break game using a custom canvas engine and a Python backen
 - **Atlas texture variants** – blocks can specify multiple atlas rectangles and the engine
   picks one deterministically per‑tile, reducing visual repetition.  Variants can be
   edited in the atlas editor alongside the existing animation frame support.
+- **Weather editor** – define multi‑layered world weather with parallax,
+  scrolling and looping effects using a new web UI (`/weather-editor.html`).
+  The editor now supports a global background color and layers that can be
+  simple solid fills or basic shapes (rectangles/circles) in addition to atlas
+  textures.  Backgrounds are identified by their own `BACKGROUND_ID` field.
 - Persistent world and user data in SQLite (`data/db/game.db`)
 - If a world does not exist, it is created automatically when entered
 

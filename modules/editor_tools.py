@@ -58,6 +58,12 @@ class SaveSeedsDataBody(BaseModel):
     seeds: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class SaveWeatherDataBody(BaseModel):
+    # mirrors seeds body but for weather definitions
+    atlases: list[dict[str, Any]] | None = None
+    weather: list[dict[str, Any]] = Field(default_factory=list)
+
+
 def normalize_name(value: str | None, fallback: str = "") -> str:
     return (value or fallback).strip().lower()
 
@@ -469,6 +475,7 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     seed_atlas_texture = normalize_atlas_texture_rect(value.get("SEED_ATLAS_TEXTURE"))
     seed_tint = normalize_tint_color(value.get("SEED_TINT"))
 
+    # tree-related fields
     tree_stages: list[dict[str, Any]] = []
     tree_drops: list[dict[str, Any]] = []
     fruit_drops: list[dict[str, Any]] = []
@@ -564,6 +571,103 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     return output
 
 
+def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
+    """Ensure a single background spec conforms to expected structure.
+
+    Backdrops are now independent resources with their own BACKGROUND_ID
+    and optional BACKGROUND_COLOR.  Layers can be of type "atlas", "color",
+    or "shape".  Parallax/scroll/loop effects apply to all layer types except
+    simple full-color fills.
+    """
+    if not isinstance(value, dict):
+        return None
+
+    # prefer explicit WEATHER_ID, fall back to legacy ITEM_ID
+    try:
+        weather_id = int(value.get("WEATHER_ID", value.get("ITEM_ID", -1)))
+    except Exception:
+        weather_id = -1
+    if weather_id < 0:
+        return None
+
+    name = str(value.get("NAME", "")).strip()
+    if not name:
+        name = f"WEATHER_{weather_id}"
+
+    weather_color = normalize_tint_color(value.get("WEATHER_COLOR"))
+
+    raw_layers = value.get("LAYERS", [])
+    layers: list[dict[str, Any]] = []
+    if isinstance(raw_layers, list):
+        for raw in raw_layers:
+            if not isinstance(raw, dict):
+                continue
+            typ = str(raw.get("TYPE", "atlas")).lower()
+            common: dict[str, Any] = {}
+            # parse universal effects
+            try:
+                common["PARALLAX_X"] = round(float(raw.get("PARALLAX_X", 0)) or 0, 4)
+            except Exception:
+                common["PARALLAX_X"] = 0
+            try:
+                common["PARALLAX_Y"] = round(float(raw.get("PARALLAX_Y", 0)) or 0, 4)
+            except Exception:
+                common["PARALLAX_Y"] = 0
+            try:
+                common["SCROLL_X"] = round(float(raw.get("SCROLL_X", 0)) or 0, 4)
+            except Exception:
+                common["SCROLL_X"] = 0
+            try:
+                common["SCROLL_Y"] = round(float(raw.get("SCROLL_Y", 0)) or 0, 4)
+            except Exception:
+                common["SCROLL_Y"] = 0
+            common["LOOP_X"] = bool(raw.get("LOOP_X", False))
+            common["LOOP_Y"] = bool(raw.get("LOOP_Y", False))
+
+            if typ == "atlas":
+                atlas_id = normalize_atlas_id_value(raw.get("ATLAS_ID"))
+                texture = normalize_atlas_texture_rect(raw.get("ATLAS_TEXTURE"))
+                if atlas_id is None or texture is None:
+                    continue
+                layer = {"TYPE": "atlas", "ATLAS_ID": atlas_id, "ATLAS_TEXTURE": texture}
+                layer.update(common)
+                layers.append(layer)
+            elif typ == "color":
+                color = normalize_tint_color(raw.get("COLOR"))
+                if not color:
+                    continue
+                layer = {"TYPE": "color", "COLOR": color}
+                layer.update(common)
+                layers.append(layer)
+            elif typ == "shape":
+                shape = str(raw.get("SHAPE", "rect")).lower()
+                if shape not in {"rect", "circle"}:
+                    shape = "rect"
+                color = normalize_tint_color(raw.get("COLOR"))
+                if not color:
+                    continue
+                rect = normalize_atlas_texture_rect(raw.get("RECT") or raw.get("ATLAS_TEXTURE") or {}) or {"x": 0, "y": 0, "w": 0, "h": 0}
+                # rotation in degrees
+                try:
+                    rot = float(raw.get("ROTATION", raw.get("rotation", 0)) or 0)
+                except Exception:
+                    rot = 0.0
+                rot = rot % 360
+                layer = {"TYPE": "shape", "SHAPE": shape, "COLOR": color, "RECT": rect}
+                if rot != 0:
+                    layer["ROTATION"] = round(rot, 2)
+                layer.update(common)
+                layers.append(layer)
+            else:
+                # unknown type
+                continue
+
+    output: dict[str, Any] = {"WEATHER_ID": weather_id, "NAME": name, "LAYERS": layers}
+    if weather_color:
+        output["WEATHER_COLOR"] = weather_color
+    return output
+
+
 def load_texture47_configs(public_dir: Path, atlas_ids: set[str]) -> dict[str, dict[str, Any]]:
     configs: dict[str, dict[str, Any]] = {}
     config_dir = public_dir / "assets" / "texture47" / "configs"
@@ -611,8 +715,10 @@ def register_editor_routes(
     public_dir: Path,
     blocks_path: Path,
     seeds_path: Path,
+    weather_path: Path,
     load_blocks_payload: Callable[[], dict[str, Any]],
     load_seeds_payload: Callable[[], dict[str, Any]],
+    load_weather_payload: Callable[[], dict[str, Any]],
     refresh_block_definitions_if_changed: Callable[..., None],
 ) -> None:
     @app.post("/api/tools/atlases/upload")
@@ -1007,7 +1113,10 @@ def register_editor_routes(
         for raw_seed in payload.seeds:
             seed = sanitize_seed_entry(raw_seed)
             if seed is None:
-                raise HTTPException(status_code=400, detail="Each seed must include a valid non-negative SEED_ID")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Each seed must include a valid non-negative ITEM_ID (legacy SEED_ID also accepted)",
+                )
 
             seed_id = int(seed.get("ITEM_ID", seed.get("SEED_ID", -1)))
             if seed_id in seen_ids:
@@ -1035,9 +1144,69 @@ def register_editor_routes(
             json.dump(output, handle, indent=2)
             handle.write("\n")
 
-        return {
+        result = {
             "ok": True,
             "path": "data/seeds.json",
             "atlasCount": len(output.get("atlases", [])) if isinstance(output.get("atlases", []), list) else 0,
             "seedCount": len(sanitized_seeds),
+        }
+        return result
+
+    @app.get("/api/tools/weather/editor-data")
+    def get_weather_editor_data() -> dict[str, Any]:
+        # make atlas list available for texture pickers
+        blocks_payload = load_blocks_payload()
+        backgrounds_payload = load_weather_payload()
+
+        atlases = blocks_payload.get("atlases", []) if isinstance(blocks_payload, dict) else []
+        backgrounds = backgrounds_payload.get("weather", []) if isinstance(backgrounds_payload, dict) else []
+
+        return {
+            "atlases": atlases,
+            "weather": backgrounds,
+        }
+
+    @app.post("/api/tools/weather/save-data")
+    def save_weather_data(payload: SaveWeatherDataBody) -> dict[str, Any]:
+        existing = load_weather_payload()
+        output: dict[str, Any] = {}
+
+        sanitized_list: list[dict[str, Any]] = []
+        seen_ids: set[int] = set()
+        for raw_entry in payload.weather:
+            entry = sanitize_weather_entry(raw_entry)
+            if entry is None:
+                raise HTTPException(status_code=400, detail="Each weather entry must include a valid non-negative WEATHER_ID")
+
+            weather_id = int(entry.get("ITEM_ID", entry.get("WEATHER_ID", -1)))
+            if weather_id in seen_ids:
+                raise HTTPException(status_code=400, detail=f"Duplicate weather id: {weather_id}")
+            seen_ids.add(weather_id)
+            sanitized_list.append(entry)
+
+        sanitized_list.sort(key=lambda entry: int(entry.get("ITEM_ID", entry.get("WEATHER_ID", 0))))
+        output["weather"] = sanitized_list
+
+        if isinstance(payload.atlases, list):
+            output["atlases"] = [dict(entry) for entry in payload.atlases if isinstance(entry, dict)]
+
+        # preserve any future metadata except VERSION
+        if isinstance(existing, dict):
+            for key, value in existing.items():
+                if key in {"weather", "atlases", "VERSION"}:
+                    continue
+                output[key] = value
+
+            if "atlases" not in output and isinstance(existing.get("atlases"), list):
+                output["atlases"] = [dict(entry) for entry in existing.get("atlases", []) if isinstance(entry, dict)]
+
+        with weather_path.open("w", encoding="utf-8") as handle:
+            json.dump(output, handle, indent=2)
+            handle.write("\n")
+
+        return {
+            "ok": True,
+            "path": "data/weather.json",
+            "atlasCount": len(output.get("atlases", [])) if isinstance(output.get("atlases", []), list) else 0,
+            "weatherCount": len(sanitized_list),
         }

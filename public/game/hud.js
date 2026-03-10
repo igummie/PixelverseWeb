@@ -228,8 +228,20 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
 
     const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
     screens.game.style.setProperty("--hud-height", `${topbarHeight}px`);
-    canvas.width = window.innerWidth;
-    canvas.height = Math.max(1, window.innerHeight - topbarHeight);
+
+    // account for devicePixelRatio so that zooming the browser (or using
+    // a high‑DPI monitor) doesn’t leave the internal drawing surface at a
+    // different resolution.  If we simply set width/height to CSS pixels the
+    // browser will scale the canvas visually and small rounding errors when
+    // we compute tile positions can make layers appear to hop around.
+    const dpr = window.devicePixelRatio || 1;
+    const cw = window.innerWidth;
+    const ch = Math.max(1, window.innerHeight - topbarHeight);
+    canvas.width = Math.round(cw * dpr);
+    canvas.height = Math.round(ch * dpr);
+    // scale future drawing operations automatically
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
     // Resizing resets canvas context state, so restore pixel-art rendering.
     ctx.imageSmoothingEnabled = false;
     updateDebugOverlayPosition();

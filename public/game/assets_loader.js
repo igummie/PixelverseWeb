@@ -107,6 +107,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     });
     const data = bootstrap?.blocks || { atlases: [], blocks: [] };
     const seedsPayload = bootstrap?.seeds || { seeds: [], atlases: [] };
+    const weatherPayload = bootstrap?.weather || { weather: [] };
     const texture47Configs = bootstrap?.texture47Configs && typeof bootstrap.texture47Configs === "object"
       ? bootstrap.texture47Configs
       : {};
@@ -114,6 +115,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     state.blockDefs.clear();
     state.animatedBlockIds.clear();
     state.seedDefs.clear();
+    state.weatherDefs?.clear?.();
     state.atlases.clear();
     state.seedDropSpriteCache.clear();
     state.treeSpriteCache.clear();
@@ -210,6 +212,16 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       delete seed.SEED_ID;
       seed.ITEM_TYPE = "seed";
       state.seedDefs.set(normalizedSeedId, seed);
+    }
+
+    if (state.weatherDefs && typeof state.weatherDefs.set === "function") {
+      for (const entry of weatherPayload.weather || []) {
+        const weatherId = Number(entry?.WEATHER_ID ?? entry?.ITEM_ID);
+        if (!Number.isFinite(weatherId) || weatherId < 0) {
+          continue;
+        }
+        state.weatherDefs.set(Math.floor(weatherId), entry);
+      }
     }
 
     if (itemSelectHud) {

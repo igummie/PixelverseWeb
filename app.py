@@ -61,6 +61,7 @@ BASE_DIR = Path(__file__).resolve().parent
 PUBLIC_DIR = BASE_DIR / "public"
 BLOCKS_PATH = PUBLIC_DIR / "data" / "blocks.json"
 SEEDS_PATH = PUBLIC_DIR / "data" / "seeds.json"
+WEATHER_PATH = PUBLIC_DIR / "data" / "weather.json"
 
 
 BLOCK_CATALOG = BlockCatalog(BLOCKS_PATH, required_roles=DEFAULT_RUNTIME_BLOCK_ROLES)
@@ -83,6 +84,57 @@ def refresh_block_definitions_if_changed(force: bool = False) -> None:
 
 def load_blocks_payload() -> dict[str, Any]:
     return BLOCK_CATALOG.load_payload()
+
+def load_seeds_payload() -> dict[str, Any]:
+    try:
+        with SEEDS_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return {"seeds": []}
+
+    if not isinstance(payload, dict):
+        return {"seeds": []}
+
+    seeds = payload.get("seeds", [])
+    output = {"seeds": seeds if isinstance(seeds, list) else []}
+
+    # Preserve future metadata fields while intentionally omitting VERSION.
+    for key, value in payload.items():
+        if key in {"seeds", "VERSION"}:
+            continue
+        output[key] = value
+
+    return output
+
+def load_weather_payload() -> dict[str, Any]:
+    # loader for weather.json. preserve metadata and convert legacy
+    # ITEM_ID fields to WEATHER_ID so UI remains consistent.
+    try:
+        with WEATHER_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception:
+        return {"weather": []}
+
+    if not isinstance(payload, dict):
+        return {"weather": []}
+
+    raw = payload.get("weather", []) if isinstance(payload.get("weather"), list) else []
+    weather_list: list[Any] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        if "WEATHER_ID" not in entry and "ITEM_ID" in entry:
+            entry["WEATHER_ID"] = entry.get("ITEM_ID")
+        weather_list.append(entry)
+
+    output: dict[str, Any] = {"weather": weather_list}
+
+    for key, value in payload.items():
+        if key in {"weather", "VERSION"}:
+            continue
+        output[key] = value
+
+    return output
 
 
 def load_seeds_payload() -> dict[str, Any]:
@@ -1226,37 +1278,46 @@ def create_world(name: str) -> dict[str, Any]:
 
 def save_world(world: dict[str, Any]) -> None:
     now = int(time.time())
-    door = sanitize_door(world.get("door"), world["width"], world["height"])
-    world["door"] = door
-    tiles_json = json.dumps(
-        {
-            "foreground": world["foreground"],
-            "background": world["background"],
-            "door": door,
-            "gem_drops": serialize_gem_drops(world),
-            "seed_drops": serialize_seed_drops(world),
-            "planted_trees": serialize_planted_trees(world),
-        }
-    )
-
+    # Support saving only weather (for /weather command)
+    only_weather = getattr(world, "_only_weather", False)
     with get_db() as conn:
-        existing = conn.execute("SELECT id, created_at FROM worlds WHERE name = ?", (world["name"],)).fetchone()
+        existing = conn.execute("SELECT * FROM worlds WHERE name = ?", (world["name"],)).fetchone()
+        if only_weather and existing:
+            # Update only weather property, do not touch door or tiles
+            conn.execute(
+                "UPDATE worlds SET weather = ?, updated_at = ? WHERE name = ?",
+                (int(world.get("weather", 0)), now, world["name"]),
+            )
+            return
+
+        door = sanitize_door(world.get("door"), world["width"], world["height"])
+        world["door"] = door
+        tiles_json = json.dumps(
+            {
+                "foreground": world["foreground"],
+                "background": world["background"],
+                "door": door,
+                "gem_drops": serialize_gem_drops(world),
+                "seed_drops": serialize_seed_drops(world),
+                "planted_trees": serialize_planted_trees(world),
+            }
+        )
         if existing:
             conn.execute(
                 """
                 UPDATE worlds
-                SET width = ?, height = ?, tiles_json = ?, door_x = ?, door_y = ?, updated_at = ?
+                SET width = ?, height = ?, tiles_json = ?, door_x = ?, door_y = ?, weather = ?, updated_at = ?
                 WHERE name = ?
                 """,
-                (world["width"], world["height"], tiles_json, door["x"], door["y"], now, world["name"]),
+                (world["width"], world["height"], tiles_json, door["x"], door["y"], int(world.get("weather", 0)), now, world["name"]),
             )
         else:
             conn.execute(
                 """
-                INSERT INTO worlds (name, width, height, tiles_json, door_x, door_y, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO worlds (name, width, height, tiles_json, door_x, door_y, weather, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (world["name"], world["width"], world["height"], tiles_json, door["x"], door["y"], now, now),
+                (world["name"], world["width"], world["height"], tiles_json, door["x"], door["y"], int(world.get("weather", 0)), now, now),
             )
 
 
@@ -1414,8 +1475,10 @@ register_editor_routes(
     public_dir=PUBLIC_DIR,
     blocks_path=BLOCKS_PATH,
     seeds_path=SEEDS_PATH,
+    weather_path=WEATHER_PATH,
     load_blocks_payload=load_blocks_payload,
     load_seeds_payload=load_seeds_payload,
+    load_weather_payload=load_weather_payload,
     refresh_block_definitions_if_changed=refresh_block_definitions_if_changed,
 )
 
@@ -1607,6 +1670,7 @@ def bootstrap_payload(authorization: str | None = Header(default=None)) -> dict[
     payload = {
         "blocks": blocks_payload,
         "seeds": load_seeds_payload(),
+        "weather": load_weather_payload(),
         "texture47Configs": load_texture47_configs(PUBLIC_DIR, texture47_atlas_ids),
     }
     return JSONResponse(

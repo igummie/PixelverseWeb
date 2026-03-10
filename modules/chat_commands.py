@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>"
+COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>, /weather [id|clear]"
 
 
 def _normalize_name(value: Any) -> str:
@@ -208,6 +208,50 @@ def process_chat_command(
                 "x": clamped_x,
                 "y": clamped_y,
             },
+        }
+
+    if command in {"weather", "w"}:
+        if len(args) == 0:
+            try:
+                current = int(world.get("weather", 0))
+            except Exception:
+                current = 0
+            return {
+                "sender_message": f"World weather is {max(0, current)}. Usage: /weather <id> or /weather clear",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+
+        raw = str(args[0]).strip().lower()
+        if raw in {"clear", "off", "none", "0"}:
+            return {
+                "sender_message": "Weather cleared for this world.",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+                "weather_change": 0,
+            }
+
+        try:
+            weather_id = int(raw)
+        except Exception:
+            return {
+                "sender_message": "Usage: /weather <id> or /weather clear",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+
+        if weather_id < 0:
+            weather_id = 0
+
+        return {
+            "sender_message": f"Weather set to {weather_id} for this world.",
+            "direct_messages": [],
+            "teleports": [],
+            "state_update": None,
+            "weather_change": int(weather_id),
         }
 
     return {
