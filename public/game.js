@@ -144,6 +144,15 @@ ctx.imageSmoothingEnabled = false;
 const RECONNECT_INTERVAL_MS = 5000;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
+// helper used for weather colours and shapes
+function normalizeTint(value) {
+  const text = String(value || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{8}$/.test(text)) {
+    return text.toLowerCase();
+  }
+  return "";
+}
+
 const state = {
   token: null,
   user: null,
@@ -1753,6 +1762,8 @@ function handleSocketMessage(msg) {
 
   if (msg.type === "world_snapshot") {
     state.world = msg.world;
+    // initialize weather offsets for layer animation
+    state.weatherOffsets = [];
     state.serverTimeOffsetMs = Number(msg.serverTimeMs || Date.now()) - Date.now();
     if (!Array.isArray(state.world.foreground)) {
       state.world.foreground = Array.isArray(state.world.tiles) ? state.world.tiles : [];
@@ -1794,6 +1805,14 @@ function handleSocketMessage(msg) {
 
     gameStatus.textContent = `World: ${msg.world.name} | Players: ${state.players.size}`;
     showScreen("game");
+    return;
+  }
+
+  if (msg.type === "weather_changed") {
+    if (state.world) {
+      state.world.weather = Number(msg.weather || 0);
+      state.weatherOffsets = [];
+    }
     return;
   }
 
@@ -2151,8 +2170,28 @@ function update() {
   const deltaSeconds = Math.min(0.05, Math.max(0.001, (now - (state.lastUpdateAt || now)) / 1000));
   state.lastUpdateAt = now;
 
+  // movement vector
   let moveX = 0;
   if (state.keys.has("a") || state.keys.has("arrowleft")) moveX -= 1;
+
+    // update weather layer offsets (scrolling/parallax)
+    if (state.world) {
+      const id = Number(state.world.weather || 0);
+      const def = state.weatherDefs.get(id);
+      if (def && Array.isArray(def.LAYERS)) {
+        state.weatherOffsets = state.weatherOffsets || [];
+        def.LAYERS.forEach((layer, idx) => {
+          const offs = state.weatherOffsets[idx] || { x: 0, y: 0 };
+          const px = Number(layer.PARALLAX_X || 1);
+          const py = Number(layer.PARALLAX_Y || 1);
+          const sx = Number(layer.SCROLL_X || 0);
+          const sy = Number(layer.SCROLL_Y || 0);
+          offs.x += sx * deltaSeconds * px;
+          offs.y += sy * deltaSeconds * py;
+          state.weatherOffsets[idx] = offs;
+        });
+      }
+    }
   if (state.keys.has("d") || state.keys.has("arrowright")) moveX += 1;
 
   if (state.flyEnabled) {
@@ -2610,6 +2649,8 @@ function loop() {
       ctx.font = "20px \"Segoe UI\", Tahoma, sans-serif";
       ctx.fillText("Loading world...", 30, 50);
     } else {
+      // render weather first so world tiles appear on top
+      drawWeather();
       drawWorld();
       drawDebugGrid();
       drawPlantedTrees();
@@ -2623,6 +2664,73 @@ function loop() {
   }
 
   requestAnimationFrame(loop);
+}
+
+// render active weather definition on top of world
+function drawWeather() {
+  if (!state.world) return;
+  const id = Number(state.world.weather || 0);
+  const def = state.weatherDefs.get(id);
+  if (!def) return;
+
+  // base fill color
+  const base = normalizeTint(def.WEATHER_COLOR);
+  if (base) {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  const layers = Array.isArray(def.LAYERS) ? def.LAYERS : [];
+  layers.forEach((layer, idx) => {
+    const offs = (state.weatherOffsets && state.weatherOffsets[idx]) || { x: 0, y: 0 };
+    const type = layer.TYPE || "atlas";
+    if (type === "color") {
+      const col = normalizeTint(layer.COLOR);
+      if (col) {
+        ctx.fillStyle = col;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    } else if (type === "shape") {
+      const col = normalizeTint(layer.COLOR) || "#000";
+      const rect = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
+      if (rect.w > 0 && rect.h > 0) {
+        const angle = (parseFloat(layer.ROTATION) || 0) * (Math.PI / 180);
+        ctx.save();
+        ctx.translate(rect.x + rect.w / 2 + offs.x, rect.y + rect.h / 2 + offs.y);
+        ctx.rotate(angle);
+        ctx.fillStyle = col;
+        if (layer.SHAPE === "circle") {
+          ctx.beginPath();
+          ctx.ellipse(0, 0, rect.w / 2, rect.h / 2, 0, 0, 2 * Math.PI);
+          ctx.fill();
+        } else {
+          ctx.fillRect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
+        }
+        ctx.restore();
+      }
+    } else if (type === "atlas") {
+      const atlasId = layer.ATLAS_ID;
+      const atlas = state.atlases.get(atlasId);
+      if (!atlas || !atlas.image) return;
+      const tex = layer.ATLAS_TEXTURE || { x: 0, y: 0, w: 0, h: 0 };
+      if (tex.w <= 0 || tex.h <= 0) return;
+      const patternCanvas = document.createElement("canvas");
+      patternCanvas.width = tex.w;
+      patternCanvas.height = tex.h;
+      const pctx = patternCanvas.getContext("2d");
+      if (!pctx) return;
+      pctx.imageSmoothingEnabled = false;
+      pctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, 0, 0, tex.w, tex.h);
+      const pattern = ctx.createPattern(patternCanvas, "repeat");
+      if (pattern) {
+        ctx.save();
+        ctx.translate(offs.x, offs.y);
+        ctx.fillStyle = pattern;
+        ctx.fillRect(-offs.x, -offs.y, canvas.width + tex.w, canvas.height + tex.h);
+        ctx.restore();
+      }
+    }
+  });
 }
 
 (async () => {
