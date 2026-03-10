@@ -190,6 +190,7 @@
                 <th>Scroll</th>
                 <th>Rot</th>
                 <th>Loop</th>
+                <th>Front</th>
                 <th>Tile</th>
                 <th>Buf</th>
                 <th>Order</th>
@@ -213,6 +214,7 @@
 
       <div class="panel" style="resize: vertical; overflow: auto; min-height:0;">
         <div id="previewWrap" class="atlasWrap" style="margin-bottom:12px; overflow: visible; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; position:relative;">
+          <button id="previewSimBtn" type="button" style="position:absolute; top:8px; right:70px; font-size:12px; padding:2px 6px; z-index:10;">Play</button>
           <button id="previewFullBtn" type="button" style="position:absolute; top:8px; right:8px; font-size:12px; padding:2px 6px; z-index:10;">Fullscreen</button>
           <canvas id="previewCanvas" width="800" height="400" style="border:1px solid #374151; width:100%; flex:1 1 auto;"></canvas>
           <!-- <div class="tiny" id="previewHint">Preview will animate based on scroll/parallax values; color/shape layers are drawn directly.</div> -->
@@ -233,6 +235,7 @@
         atlasImageCache: {},      // key->Promise<Image|null>
         atlasImageCacheResolved: {},
         selectedIndex: -1,
+        simulate: false,          // play/pause preview camera movement
       };
 
       // basic utilities copied from other editors
@@ -341,8 +344,7 @@
       const weatherColorPicker = document.getElementById("weatherColorPicker");
       const addLayerBtn = document.getElementById("addLayerBtn");
       const previewCanvas = document.getElementById("previewCanvas");
-      const jsonOutput = document.getElementById("jsonOutput");
-      const saveBtn = document.getElementById("saveBtn");
+          const previewSimBtn = document.getElementById("previewSimBtn");
       const copyJsonBtn = document.getElementById("copyJsonBtn");
       const resetJsonBtn = document.getElementById("resetJsonBtn");
       const statusEl = document.getElementById("status");
@@ -495,6 +497,7 @@
           ROTATION: 0,
           FLIP_X: false,
           FLIP_Y: false,
+          IN_FRONT: false,
         });
         renderLayerList();
         updateJsonOutput();
@@ -1004,6 +1007,21 @@
           loopCell.append(loopX, loopY);
           tr.append(loopCell);
 
+          // front cell
+          const frontCell = document.createElement("td");
+          const frontChk = document.createElement("input");
+          frontChk.type = "checkbox";
+          frontChk.setAttribute("aria-label", "in front");
+          frontChk.setAttribute("data-tooltip", "Render this layer in front of everything");
+          frontChk.checked = !!layer.IN_FRONT;
+          frontChk.addEventListener("change", () => {
+            layer.IN_FRONT = frontChk.checked;
+            updatePreview();
+            updateJsonOutput();
+          });
+          frontCell.append(frontChk);
+          tr.append(frontCell);
+
           // tile cell
           const tileCell = document.createElement("td");
           const tileChk = document.createElement("input");
@@ -1256,7 +1274,10 @@
         const areaW = bufCanvas.width;
         const areaH = bufCanvas.height;
 
-        state.current.LAYERS.forEach((layer) => {
+        // draw non-front layers first, then front layers so they appear on top
+        const layers = (state.current.LAYERS || []).slice();
+        layers.sort((a, b) => (a.IN_FRONT ? 1 : 0) - (b.IN_FRONT ? 1 : 0));
+        layers.forEach((layer) => {
           drawLayerToBuffer(bufCtx, layer, areaW, areaH, dpr);
         });
 
@@ -1456,84 +1477,57 @@
         const areaW = previewCanvas.width;
         const areaH = previewCanvas.height;
         if (state.current) {
-          // simulate a simple camera/player velocity when `state.simulate` is enabled
-          let camX = 0, camY = 0;
+          // only update offsets when simulation is active; pause freezes scrolling
           if (state.simulate) {
-            const t = (time - simStart) / 1000;
-            camX = Math.cos(t * 0.6) * 60; // px/sec horizontal camera motion
-            camY = Math.sin(t * 0.4) * 8;  // small vertical bob
+            // when simulating, advance layers by their scroll speeds only
+            state.current.LAYERS.forEach((layer) => {
+              // scroll contribution: SCROLL_X/Y are pixels-per-second
+              const scrollX = (layer.SCROLL_X || 0) * dt;
+              const scrollY = (layer.SCROLL_Y || 0) * dt;
+
+              layer.offsetX = (layer.offsetX || 0) + scrollX;
+              layer.offsetY = (layer.offsetY || 0) + scrollY;
+
+              // keep offsets bounded when looping (wrap uses canvas bounds + buffer)
+              if (layer.LOOP_X) {
+                if (layer.TILE) {
+                  if (layer.TYPE === "atlas") {
+                    const rect = layer.ATLAS_TEXTURE || {w:0};
+                    const w = rect.w || 0;
+                    if (w) layer.offsetX = ((layer.offsetX % w) + w) % w;
+                  } else {
+                    const w = layer.RECT?.w || 0;
+                    if (w) layer.offsetX = ((layer.offsetX % w) + w) % w;
+                  }
+                } else {
+                  const buf = Number(layer.WRAP_BUFFER || 0) * dpr;
+                  const viewW = areaW + buf * 2;
+                  if (viewW) {
+                    // normalize into [-buf, areaW+buf)
+                    layer.offsetX = ((layer.offsetX + buf) % viewW + viewW) % viewW - buf;
+                  }
+                }
+              }
+              if (layer.LOOP_Y) {
+                if (layer.TILE) {
+                  if (layer.TYPE === "atlas") {
+                    const rect = layer.ATLAS_TEXTURE || {h:0};
+                    const h = rect.h || 0;
+                    if (h) layer.offsetY = ((layer.offsetY % h) + h) % h;
+                  } else {
+                    const h = layer.RECT?.h || 0;
+                    if (h) layer.offsetY = ((layer.offsetY % h) + h) % h;
+                  }
+                } else {
+                  const buf = Number(layer.WRAP_BUFFER || 0) * dpr;
+                  const viewH = areaH + buf * 2;
+                  if (viewH) {
+                    layer.offsetY = ((layer.offsetY + buf) % viewH + viewH) % viewH - buf;
+                  }
+                }
+              }
+            });
           }
-
-          state.current.LAYERS.forEach((layer) => {
-            const parx = Number(layer.PARALLAX_X ?? 1);
-            const pary = Number(layer.PARALLAX_Y ?? 1);
-
-            // scroll contribution: SCROLL_X/Y are pixels-per-second
-            const scrollX = (layer.SCROLL_X || 0) * dt;
-            const scrollY = (layer.SCROLL_Y || 0) * dt;
-
-            // camera velocity (px/sec) when simulating movement; parallax affects camera influence
-            let camVx = 0, camVy = 0;
-            if (state.simulate) {
-              const t2 = (time - simStart) / 1000;
-              // smaller base amplitude so motion is subtle
-              const baseX = Math.cos(t2 * 0.6) * 20;
-              const baseY = Math.sin(t2 * 0.4) * 3;
-              if (layer._phase === undefined) layer._phase = Math.random() * Math.PI * 2;
-              // per-layer phase variation makes objects move slightly out-of-sync
-              camVx = Math.cos(t2 * 0.6 + layer._phase) * (0.6 * Math.abs(baseX));
-              camVy = Math.sin(t2 * 0.4 + layer._phase) * (0.6 * Math.abs(baseY));
-            }
-
-            const relX = 1 - parx;
-            const relY = 1 - pary;
-            // apply a small factor so parallax-induced motion is subtle
-            const camContribX = -camVx * dt * relX * 0.25 * (state.globalParallaxX ?? 1);
-            const camContribY = -camVy * dt * relY * 0.25 * (state.globalParallaxY ?? 1);
-
-            layer.offsetX = (layer.offsetX || 0) + scrollX + camContribX;
-            layer.offsetY = (layer.offsetY || 0) + scrollY + camContribY;
-
-            // keep offsets bounded when looping (wrap uses canvas bounds + buffer)
-            if (layer.LOOP_X) {
-              if (layer.TILE) {
-                if (layer.TYPE === "atlas") {
-                  const rect = layer.ATLAS_TEXTURE || {w:0};
-                  const w = rect.w || 0;
-                  if (w) layer.offsetX = ((layer.offsetX % w) + w) % w;
-                } else {
-                  const w = layer.RECT?.w || 0;
-                  if (w) layer.offsetX = ((layer.offsetX % w) + w) % w;
-                }
-              } else {
-                const buf = Number(layer.WRAP_BUFFER || 0) * dpr;
-                const viewW = areaW + buf * 2;
-                if (viewW) {
-                  // normalize into [-buf, areaW+buf)
-                  layer.offsetX = ((layer.offsetX + buf) % viewW + viewW) % viewW - buf;
-                }
-              }
-            }
-            if (layer.LOOP_Y) {
-              if (layer.TILE) {
-                if (layer.TYPE === "atlas") {
-                  const rect = layer.ATLAS_TEXTURE || {h:0};
-                  const h = rect.h || 0;
-                  if (h) layer.offsetY = ((layer.offsetY % h) + h) % h;
-                } else {
-                  const h = layer.RECT?.h || 0;
-                  if (h) layer.offsetY = ((layer.offsetY % h) + h) % h;
-                }
-              } else {
-                const buf = Number(layer.WRAP_BUFFER || 0) * dpr;
-                const viewH = areaH + buf * 2;
-                if (viewH) {
-                  layer.offsetY = ((layer.offsetY + buf) % viewH + viewH) % viewH - buf;
-                }
-              }
-            }
-          });
-
           updatePreview();
         }
         requestAnimationFrame(tick);
@@ -1654,6 +1648,10 @@
 
       // fullscreen/resize support for preview
       const previewFullBtn = document.getElementById("previewFullBtn");
+      previewSimBtn.addEventListener("click", () => {
+        state.simulate = !state.simulate;
+        previewSimBtn.textContent = state.simulate ? "Pause" : "Play";
+      });
       previewFullBtn.addEventListener("click", async () => {
         const elem = document.getElementById("previewWrap");
         if (!document.fullscreenElement) {

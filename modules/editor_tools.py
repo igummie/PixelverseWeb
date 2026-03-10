@@ -650,6 +650,8 @@ def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
                     continue
                 layer = {"TYPE": "atlas", "ATLAS_ID": atlas_id, "ATLAS_TEXTURE": texture}
                 layer.update(common)
+                # keep option to render in front of everything
+                layer["IN_FRONT"] = bool(raw.get("IN_FRONT", False))
                 # Always persist atlas transform/meta fields (coerce structured values)
                 layer["OPACITY"] = round(_extract_number(raw.get("OPACITY", raw.get("opacity", 1)), 1) or 1, 4)
                 layer["SCALE"] = round(_extract_number(raw.get("SCALE", raw.get("scale", 1)), 1) or 1, 4)
@@ -669,6 +671,7 @@ def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
                     continue
                 layer = {"TYPE": "color", "COLOR": color}
                 layer.update(common)
+                layer["IN_FRONT"] = bool(raw.get("IN_FRONT", False))
                 layers.append(layer)
             elif typ == "shape":
                 shape = str(raw.get("SHAPE", "rect")).lower()
@@ -684,6 +687,7 @@ def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
                 if rot != 0:
                     layer["ROTATION"] = round(rot, 2)
                 layer.update(common)
+                layer["IN_FRONT"] = bool(raw.get("IN_FRONT", False))
                 layers.append(layer)
             else:
                 # unknown type

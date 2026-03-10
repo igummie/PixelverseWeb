@@ -2721,8 +2721,8 @@ function loop() {
       ctx.font = "20px \"Segoe UI\", Tahoma, sans-serif";
       ctx.fillText("Loading world...", 30, 50);
     } else {
-      // render weather first so world tiles appear on top
-      drawWeather();
+      // render weather background layers before world
+      drawWeather(false);
       drawWorld();
       drawDebugGrid();
       drawPlantedTrees();
@@ -2730,6 +2730,8 @@ function loop() {
       drawSeedDrops();
       drawDamageOverlays();
       drawPlayers();
+      // render any weather layers marked IN_FRONT on top of everything
+      drawWeather(true);
       drawDebugHitboxes();
       drawTransientWorldTexts();
     }
@@ -2739,21 +2741,24 @@ function loop() {
 }
 
 // render active weather definition on top of world
-function drawWeather() {
+function drawWeather(frontOnly = false) {
   if (!state.world) return;
   const id = Number(state.world.weather || 0);
   const def = state.weatherDefs.get(id);
   if (!def) return;
 
-  // base fill color
-  const base = normalizeTint(def.WEATHER_COLOR);
-  if (base) {
-    ctx.fillStyle = base;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // base fill color is only drawn on the background pass
+  if (!frontOnly) {
+    const base = normalizeTint(def.WEATHER_COLOR);
+    if (base) {
+      ctx.fillStyle = base;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
   }
 
   const layers = Array.isArray(def.LAYERS) ? def.LAYERS : [];
   layers.forEach((layer, idx) => {
+    if (!!layer.IN_FRONT !== !!frontOnly) return; // skip layers not in this pass
     let offs = (state.weatherOffsets && state.weatherOffsets[idx]) || { x: 0, y: 0 };
     const type = layer.TYPE || "atlas";
     if (type === "color") {
