@@ -12,32 +12,120 @@
         resize: both;
         overflow: auto;
         max-height: 50vh;
+        position: relative;
+        z-index: 60; /* sit above preview when expanded */
+        background: rgba(0,0,0,0.55); /* translucent black for readability */
+        padding: 8px;
       }
-      /* layer list column wrapping and sizing */
-      #layerList {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        overflow: auto;
+
+      /* table layout for layers */
+      #layerTable {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
       }
-      #layerList .row {
-        flex-wrap: wrap;
+      
+      /* horizontal scrolling if table too wide */
+      #layersSection {
+        overflow-x: auto;
       }
-      #layerList .row > * {
-        flex: 0 0 auto;
+      
+      /* simple tooltip system that always shows above the element */
+      [data-tooltip] {
+        position: relative;
       }
-      #layerList .header span {
-        font-weight: 700;
-        margin-right: 4px;
-        flex: 0 0 auto;
+      [data-tooltip]::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.8);
+        color: #fff;
+        padding: 2px 4px;
+        font-size: 11px;
+        white-space: nowrap;
+        border-radius: 3px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .2s;
+        z-index: 10;
+      }
+      [data-tooltip]:hover::after {
+        opacity: 1;
+      }
+      #layerTable th,
+      #layerTable td {
+        padding: 4px;
+        border-bottom: 1px solid #374151;
+        text-align: left;
+        vertical-align: middle;
         font-size: 12px;
-        color: #cbd5e1;
       }
+      #layerTable th {
+        color: #cbd5e1;
+        position: sticky;
+        top: 0;
+        background: #1f2937;
+        z-index: 1;
+      }
+
+      /* ensure preview stays below layers panel */
+      #previewWrap {
+        position: relative;
+        z-index: 1;
+      }
+
+      /* tile picker overlay */
+      #tilePickerOverlay {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+      }
+      #tilePickerBox {
+        background: #0f172a;
+        padding: 12px;
+        border-radius: 6px;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+      }
+      #tilePickerCanvas {
+        max-width: 80vw;
+        max-height: 70vh;
+        border: 1px solid #374151;
+        image-rendering: pixelated;
+        display: block;
+      }
+      .tilePickerClose {
+        margin-top: 8px;
+        display: block;
+        text-align: right;
+      }
+
+      /* improved button styling */
+      #layersSection .icon-btn {
+        padding: 2px 6px;
+        font-size: 12px;
+        background: #374151;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+      }
+      #layersSection .icon-btn:hover {
+        background: #4b5563;
+      }
+
       /* compact slider inputs and space their output */
-      #layerList input[type=range] {
+      #layerTable input[type=range] {
         margin-right: 4px;
       }
-      #layerList span {
+      #layerTable span {
         margin-right: 8px;
       }
     </style>
@@ -90,7 +178,26 @@
         <div id="layersSection">
           <div class="title small">Layers</div>
           <button id="addLayerBtn" class="secondary" type="button">+ Add Layer</button>
-          <div id="layerList"></div>
+          <div class="tiny" id="layerHint" style="margin-top:4px;">Hints appear next to each column header and controls.</div>
+          <!-- replaced row-based list with a table for clarity -->
+          <table id="layerTable">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Atlas/Texture</th>
+                <th>Coords / Color / Shape</th>
+                <th>Parallax</th>
+                <th>Scroll</th>
+                <th>Rot</th>
+                <th>Loop</th>
+                <th>Tile</th>
+                <th>Buf</th>
+                <th>Order</th>
+                <th>Remove</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
 
         <div class="row" style="margin-top: 8px">
@@ -108,7 +215,7 @@
         <div id="previewWrap" class="atlasWrap" style="margin-bottom:12px; overflow: visible; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; position:relative;">
           <button id="previewFullBtn" type="button" style="position:absolute; top:8px; right:8px; font-size:12px; padding:2px 6px; z-index:10;">Fullscreen</button>
           <canvas id="previewCanvas" width="800" height="400" style="border:1px solid #374151; width:100%; flex:1 1 auto;"></canvas>
-          <div class="tiny" id="previewHint">Preview will animate based on scroll/parallax values; color/shape layers are drawn directly.</div>
+          <!-- <div class="tiny" id="previewHint">Preview will animate based on scroll/parallax values; color/shape layers are drawn directly.</div> -->
         </div>
         <div id="cardsContainer" style="margin-top:auto;">
           <div class="title">Weather</div>
@@ -233,7 +340,6 @@
       const weatherColorInput = document.getElementById("weatherColorInput");
       const weatherColorPicker = document.getElementById("weatherColorPicker");
       const addLayerBtn = document.getElementById("addLayerBtn");
-      const layerList = document.getElementById("layerList");
       const previewCanvas = document.getElementById("previewCanvas");
       const jsonOutput = document.getElementById("jsonOutput");
       const saveBtn = document.getElementById("saveBtn");
@@ -314,7 +420,8 @@
           weatherNameInput.value = "";
           weatherColorInput.value = "";
           weatherColorPicker.value = "#000000";
-          layerList.innerHTML = "";
+          const tbody = document.querySelector("#layerTable tbody");
+          if (tbody) tbody.innerHTML = "";
           state.current = null;
           updateJsonOutput();
           updatePreview();
@@ -383,49 +490,29 @@
           WRAP_BUFFER: 0,
           offsetX: 0,
           offsetY: 0,
+          OPACITY: 1,
+          SCALE: 1,
+          ROTATION: 0,
+          FLIP_X: false,
+          FLIP_Y: false,
         });
         renderLayerList();
         updateJsonOutput();
       }
 
       function renderLayerList() {
-        layerList.innerHTML = "";
+        const tbody = document.querySelector("#layerTable tbody");
+        tbody.innerHTML = "";
         if (!state.current) return;
-        // add a header row with labels for each column
-        const header = document.createElement("div");
-        header.className = "row header";
-        header.style = "align-items:center; gap:4px; margin-bottom:4px;";
-        [
-          "Type",
-          "Atlas/Texture",
-          "Coords",
-          "Color/Shape",
-          "Parallax X",
-          "Parallax Y",
-          "Scroll X",
-          "Scroll Y",
-          "Rot",
-          "LoopX",
-          "LoopY",
-          "Tile",
-          "Buf",
-          "Up",
-          "Down",
-          "Del",
-        ].forEach((txt) => {
-          const span = document.createElement("span");
-          span.textContent = txt;
-          header.append(span);
-        });
-        layerList.append(header);
-        state.current.LAYERS.forEach((layer, i) => {
-          const row = document.createElement("div");
-          row.className = "row";
-          row.style = "align-items:center; gap:4px; margin-bottom:4px;";
 
-          // layer type
+        state.current.LAYERS.forEach((layer, i) => {
+          const tr = document.createElement("tr");
+
+          // type cell
+          const typeCell = document.createElement("td");
           const typeSel = document.createElement("select");
           typeSel.setAttribute("aria-label", "layer type");
+          typeSel.setAttribute("data-tooltip", "Choose atlas/color/shape layer type");
           ["atlas", "color", "shape"].forEach((t) => {
             const o = document.createElement("option");
             o.value = t;
@@ -449,20 +536,22 @@
             updatePreview();
             updateJsonOutput();
           });
-          row.append(typeSel);
+          typeCell.append(typeSel);
+          tr.append(typeCell);
 
-          let thumbnailCnv = null;
+          // atlas/texture or color/shape cell
+          const detailCell = document.createElement("td");
           if (layer.TYPE === "atlas") {
-            thumbnailCnv = document.createElement("canvas");
+            const thumbnailCnv = document.createElement("canvas");
             thumbnailCnv.width = 40;
             thumbnailCnv.height = 40;
             thumbnailCnv.style.border = "1px solid #374151";
-            thumbnailCnv.style.marginRight = "4px";
             drawLayerThumbnail(thumbnailCnv, layer);
-            row.append(thumbnailCnv);
+            detailCell.append(thumbnailCnv);
 
             const atlasSel = document.createElement("select");
             atlasSel.setAttribute("aria-label", "atlas id");
+            atlasSel.setAttribute("data-tooltip", "Atlas identifier for texture source");
             atlasSel.style.width = "120px";
             const emptyOpt = document.createElement("option");
             emptyOpt.value = "";
@@ -483,11 +572,12 @@
               });
               updateJsonOutput();
             });
-            row.append(atlasSel);
+            detailCell.append(atlasSel);
 
             ["x", "y", "w", "h"].forEach((coord) => {
               const inp = document.createElement("input");
               inp.setAttribute("aria-label", "texture " + coord);
+              inp.setAttribute("data-tooltip", "Texture coordinate " + coord);
               inp.type = "number";
               inp.min = "0";
               inp.step = "1";
@@ -500,22 +590,164 @@
                 drawLayerThumbnail(thumbnailCnv, layer);
                 updateJsonOutput();
               });
-              row.append(inp);
+              detailCell.append(inp);
             });
+            // additional atlas controls: scale, opacity, rotation, flips
+            const scaleInp = document.createElement("input");
+            scaleInp.setAttribute("aria-label", "scale");
+            scaleInp.setAttribute("data-tooltip", "Scale factor for the atlas texture (e.g. 1.0)");
+            scaleInp.type = "number";
+            scaleInp.step = "0.1";
+            scaleInp.min = "0.01";
+            scaleInp.style.width = "60px";
+            scaleInp.value = String(layer.SCALE ?? 1);
+            scaleInp.addEventListener("input", () => {
+              layer.SCALE = Math.max(0.01, Number.parseFloat(scaleInp.value) || 1);
+              updatePreview();
+              updateJsonOutput();
+            });
+            detailCell.append(document.createTextNode("Scale:"), scaleInp);
+
+            const opWrap = document.createElement("div");
+            opWrap.style.display = "inline-block";
+            opWrap.style.marginLeft = "6px";
+            const opLabel = document.createElement("span");
+            opLabel.textContent = "Op:";
+            opLabel.style.fontSize = "11px";
+            opLabel.style.marginRight = "4px";
+            const op = document.createElement("input");
+            op.setAttribute("aria-label", "opacity");
+            op.setAttribute("data-tooltip", "Opacity (0.0 to 1.0)");
+            op.type = "range";
+            op.min = "0";
+            op.max = "1";
+            op.step = "0.01";
+            op.value = String(layer.OPACITY ?? 1);
+            op.style.width = "80px";
+            const opVal = document.createElement("span");
+            opVal.textContent = op.value;
+            opVal.style.marginLeft = "4px";
+            op.addEventListener("input", () => {
+              layer.OPACITY = Number.parseFloat(op.value) || 0;
+              opVal.textContent = layer.OPACITY.toFixed(2);
+              updatePreview();
+              updateJsonOutput();
+            });
+            opWrap.append(opLabel, op, opVal);
+            detailCell.append(opWrap);
+
+            const rotWrap = document.createElement("div");
+            rotWrap.style.display = "inline-block";
+            rotWrap.style.marginLeft = "8px";
+            const rotLabelA = document.createElement("span");
+            rotLabelA.textContent = "Rot:";
+            rotLabelA.style.fontSize = "11px";
+            rotLabelA.style.marginRight = "4px";
+            const rotA = document.createElement("input");
+            rotA.setAttribute("aria-label", "atlas rotation");
+            rotA.setAttribute("data-tooltip", "Rotation in degrees for atlas (applies to non-tiled draws)");
+            rotA.type = "range";
+            rotA.min = "0";
+            rotA.max = "360";
+            rotA.step = "1";
+            rotA.value = String(layer.ROTATION ?? 0);
+            rotA.style.width = "80px";
+            const rotValA = document.createElement("span");
+            rotValA.textContent = rotA.value;
+            rotValA.style.marginLeft = "4px";
+            rotA.addEventListener("input", () => {
+              layer.ROTATION = Number.parseFloat(rotA.value) || 0;
+              rotValA.textContent = String(Math.round(layer.ROTATION));
+              updatePreview();
+              updateJsonOutput();
+            });
+            rotWrap.append(rotLabelA, rotA, rotValA);
+            detailCell.append(rotWrap);
+
+            // flips
+            const flipX = document.createElement("input");
+            flipX.type = "checkbox";
+            flipX.setAttribute("data-tooltip", "Flip horizontally");
+            flipX.checked = !!layer.FLIP_X;
+            flipX.addEventListener("change", () => {
+              layer.FLIP_X = flipX.checked;
+              updatePreview();
+              updateJsonOutput();
+            });
+            const flipXLabel = document.createElement("label");
+            flipXLabel.style.marginLeft = "6px";
+            flipXLabel.append(document.createTextNode("FlipX:"), flipX);
+            detailCell.append(flipXLabel);
+
+            const flipY = document.createElement("input");
+            flipY.type = "checkbox";
+            flipY.setAttribute("data-tooltip", "Flip vertically");
+            flipY.checked = !!layer.FLIP_Y;
+            flipY.addEventListener("change", () => {
+              layer.FLIP_Y = flipY.checked;
+              updatePreview();
+              updateJsonOutput();
+            });
+            const flipYLabel = document.createElement("label");
+            flipYLabel.style.marginLeft = "4px";
+            flipYLabel.append(document.createTextNode("FlipY:"), flipY);
+            detailCell.append(flipYLabel);
+            // position controls (offset) so atlas layers can be moved like shapes
+            const posX = document.createElement("input");
+            posX.setAttribute("aria-label", "offset x");
+            posX.setAttribute("data-tooltip", "Horizontal offset in pixels");
+            posX.type = "number";
+            posX.step = "1";
+            posX.style.width = "70px";
+            posX.style.marginLeft = "8px";
+            posX.value = String(layer.offsetX || 0);
+            posX.addEventListener("input", () => {
+              layer.offsetX = Number.parseFloat(posX.value) || 0;
+              updatePreview();
+              updateJsonOutput();
+            });
+            detailCell.append(document.createTextNode("X:"), posX);
+
+            const posY = document.createElement("input");
+            posY.setAttribute("aria-label", "offset y");
+            posY.setAttribute("data-tooltip", "Vertical offset in pixels");
+            posY.type = "number";
+            posY.step = "1";
+            posY.style.width = "70px";
+            posY.style.marginLeft = "6px";
+            posY.value = String(layer.offsetY || 0);
+            posY.addEventListener("input", () => {
+              layer.offsetY = Number.parseFloat(posY.value) || 0;
+              updatePreview();
+              updateJsonOutput();
+            });
+            detailCell.append(document.createTextNode("Y:"), posY);
+
+            // tile picker button
+            const pickBtn = document.createElement("button");
+            pickBtn.type = "button";
+            pickBtn.className = "icon-btn";
+            pickBtn.setAttribute("data-tooltip", "Pick texture region from atlas image");
+            pickBtn.textContent = "Pick Tile";
+            pickBtn.style.marginLeft = "8px";
+            pickBtn.addEventListener("click", () => openTilePicker(layer));
+            detailCell.append(pickBtn);
           } else if (layer.TYPE === "color") {
             const colorInp = document.createElement("input");
             colorInp.type = "text";
             colorInp.placeholder = "#ffffff";
             colorInp.style.width = "80px";
+            colorInp.setAttribute("data-tooltip", "Hex color code (#rrggbb or #rrggbbaa)");
             colorInp.value = layer.COLOR || "";
             colorInp.addEventListener("input", () => {
               layer.COLOR = normalizeTint(colorInp.value);
               updatePreview();
               updateJsonOutput();
             });
-            row.append(colorInp);
+            detailCell.append(colorInp);
             const colorPicker = document.createElement("input");
             colorPicker.setAttribute("aria-label", "color picker");
+            colorPicker.setAttribute("data-tooltip", "Visual color selector");
             colorPicker.type = "color";
             colorPicker.value = layer.COLOR || "#000000";
             colorPicker.addEventListener("input", () => {
@@ -524,10 +756,11 @@
               updatePreview();
               updateJsonOutput();
             });
-            row.append(colorPicker);
+            detailCell.append(colorPicker);
           } else if (layer.TYPE === "shape") {
             const shapeSel = document.createElement("select");
             shapeSel.setAttribute("aria-label", "shape");
+            shapeSel.setAttribute("data-tooltip", "Choose rectangle or circle shape");
             ["rect", "circle"].forEach((s) => {
               const o = document.createElement("option");
               o.value = s;
@@ -540,21 +773,23 @@
               updatePreview();
               updateJsonOutput();
             });
-            row.append(shapeSel);
+            detailCell.append(shapeSel);
 
             const colorInp = document.createElement("input");
             colorInp.type = "text";
             colorInp.placeholder = "#ffffff";
             colorInp.style.width = "80px";
+            colorInp.setAttribute("data-tooltip", "Hex color code (#rrggbb or #rrggbbaa)");
             colorInp.value = layer.COLOR || "";
             colorInp.addEventListener("input", () => {
               layer.COLOR = normalizeTint(colorInp.value);
               updatePreview();
               updateJsonOutput();
             });
-            row.append(colorInp);
+            detailCell.append(colorInp);
             const colorPicker = document.createElement("input");
             colorPicker.setAttribute("aria-label", "color picker");
+            colorPicker.setAttribute("data-tooltip", "Visual color selector");
             colorPicker.type = "color";
             colorPicker.value = layer.COLOR || "#000000";
             colorPicker.addEventListener("input", () => {
@@ -563,11 +798,12 @@
               updatePreview();
               updateJsonOutput();
             });
-            row.append(colorPicker);
+            detailCell.append(colorPicker);
 
             ["x", "y", "w", "h"].forEach((coord) => {
               const inp = document.createElement("input");
               inp.setAttribute("aria-label", coord === "w" ? "width" : coord === "h" ? "height" : coord);
+              inp.setAttribute("data-tooltip", "Shape " + coord + " (pixels)");
               inp.type = "number";
               inp.min = "0";
               inp.step = "1";
@@ -580,9 +816,8 @@
                 updatePreview();
                 updateJsonOutput();
               });
-              row.append(inp);
+              detailCell.append(inp);
             });
-            // add rotation control
             const rotWrap = document.createElement("div");
             rotWrap.style.display = "flex";
             rotWrap.style.alignItems = "center";
@@ -592,6 +827,7 @@
             rotLabel.style.marginRight = "2px";
             const rot = document.createElement("input");
             rot.setAttribute("aria-label", "rotation");
+            rot.setAttribute("data-tooltip", "Rotation (degrees)");
             rot.type = "range";
             rot.min = "0";
             rot.max = "360";
@@ -609,10 +845,12 @@
               updateJsonOutput();
             });
             rotWrap.append(rotLabel, rot, rotVal);
-            row.append(rotWrap);
+            detailCell.append(rotWrap);
           }
+          tr.append(detailCell);
 
-          // parallax x slider
+          // parallax cell
+          const parCell = document.createElement("td");
           const parxWrap = document.createElement("div");
           parxWrap.style.display = "flex";
           parxWrap.style.alignItems = "center";
@@ -622,6 +860,7 @@
           parxLabel.style.marginRight = "2px";
           const parx = document.createElement("input");
           parx.setAttribute("aria-label", "parallax x");
+          parx.setAttribute("data-tooltip", "Horizontal parallax factor (-20 to 20)");
           parx.type = "range";
           parx.min = "-20";
           parx.max = "20";
@@ -639,9 +878,6 @@
             updateJsonOutput();
           });
           parxWrap.append(parxLabel, parx, parxVal);
-          row.append(parxWrap);
-
-          // parallax y slider
           const paryWrap = document.createElement("div");
           paryWrap.style.display = "flex";
           paryWrap.style.alignItems = "center";
@@ -651,6 +887,7 @@
           paryLabel.style.marginRight = "2px";
           const pary = document.createElement("input");
           pary.setAttribute("aria-label", "parallax y");
+          pary.setAttribute("data-tooltip", "Vertical parallax factor (-20 to 20)");
           pary.type = "range";
           pary.min = "-20";
           pary.max = "20";
@@ -668,9 +905,11 @@
             updateJsonOutput();
           });
           paryWrap.append(paryLabel, pary, paryVal);
-          row.append(paryWrap);
+          parCell.append(parxWrap, paryWrap);
+          tr.append(parCell);
 
-          // scroll x slider
+          // scroll cell
+          const scrollCell = document.createElement("td");
           const sxWrap = document.createElement("div");
           sxWrap.style.display = "flex";
           sxWrap.style.alignItems = "center";
@@ -680,6 +919,7 @@
           sxLabel.style.marginRight = "2px";
           const sx = document.createElement("input");
           sx.setAttribute("aria-label", "scroll x");
+          sx.setAttribute("data-tooltip", "Horizontal scroll speed (px/sec)");
           sx.type = "range";
           sx.min = "-200";
           sx.max = "200";
@@ -697,9 +937,6 @@
             updateJsonOutput();
           });
           sxWrap.append(sxLabel, sx, sxVal);
-          row.append(sxWrap);
-
-          // scroll y slider
           const syWrap = document.createElement("div");
           syWrap.style.display = "flex";
           syWrap.style.alignItems = "center";
@@ -709,6 +946,7 @@
           syLabel.style.marginRight = "2px";
           const sy = document.createElement("input");
           sy.setAttribute("aria-label", "scroll y");
+          sy.setAttribute("data-tooltip", "Vertical scroll speed (px/sec)");
           sy.type = "range";
           sy.min = "-200";
           sy.max = "200";
@@ -726,84 +964,233 @@
             updateJsonOutput();
           });
           syWrap.append(syLabel, sy, syVal);
-          row.append(syWrap);
+          scrollCell.append(sxWrap, syWrap);
+          tr.append(scrollCell);
 
+          // rotate cell
+          const rotCell = document.createElement("td");
+          if (layer.TYPE === "shape") {
+            rotCell.textContent = String(layer.ROTATION || 0);
+          }
+          tr.append(rotCell);
+
+          // loop cell
+          const loopCell = document.createElement("td");
           const loopX = document.createElement("input");
           loopX.setAttribute("aria-label", "loop x");
+          loopX.setAttribute("data-tooltip", "Enable horizontal looping");
           loopX.type = "checkbox";
           loopX.checked = !!layer.LOOP_X;
-          loopX.title = "loop x";
           loopX.addEventListener("change", () => {
             layer.LOOP_X = loopX.checked;
             updatePreview();
             updateJsonOutput();
           });
-          row.append(loopX);
-
           const loopY = document.createElement("input");
           loopY.setAttribute("aria-label", "loop y");
+          loopY.setAttribute("data-tooltip", "Enable vertical looping");
           loopY.type = "checkbox";
           loopY.checked = !!layer.LOOP_Y;
-          loopY.title = "loop y";
           loopY.addEventListener("change", () => {
             layer.LOOP_Y = loopY.checked;
             updatePreview();
             updateJsonOutput();
           });
-          row.append(loopY);
+          loopCell.append(loopX, loopY);
+          tr.append(loopCell);
 
-          // tile vs wrap toggle
+          // tile cell
+          const tileCell = document.createElement("td");
           const tileChk = document.createElement("input");
           tileChk.setAttribute("aria-label", "tile");
+          tileChk.setAttribute("data-tooltip", "Repeat texture when looping");
           tileChk.type = "checkbox";
           tileChk.checked = !!layer.TILE;
-          tileChk.title = "tile (repeat)";
           tileChk.addEventListener("change", () => {
             layer.TILE = tileChk.checked;
             updatePreview();
             updateJsonOutput();
           });
-          row.append(tileChk);
-          // buffer distance for wrap mode
+          tileCell.append(tileChk);
+          tr.append(tileCell);
+
+          // buffer cell
+          const bufCell = document.createElement("td");
           const bufferInp = document.createElement("input");
           bufferInp.setAttribute("aria-label", "wrap buffer");
+          bufferInp.setAttribute("data-tooltip", "Additional buffer distance used when wrapping");
           bufferInp.type = "number";
           bufferInp.min = "0";
           bufferInp.step = "1";
           bufferInp.style.width = "50px";
           bufferInp.value = String(Math.max(0, Number(layer.WRAP_BUFFER || 0)));
-          bufferInp.placeholder = "buf";
           bufferInp.addEventListener("input", () => {
             layer.WRAP_BUFFER = Math.max(0, Number.parseFloat(bufferInp.value) || 0);
             updatePreview();
             updateJsonOutput();
           });
-          row.append(bufferInp);
+          bufCell.append(bufferInp);
+          tr.append(bufCell);
 
+          // order cell
+          const orderCell = document.createElement("td");
           const upBtn = document.createElement("button");
-          upBtn.type = "button";
+          upBtn.className = "icon-btn";
+          upBtn.setAttribute("data-tooltip", "Move layer up in order");
           upBtn.textContent = "↑";
           upBtn.title = "move up";
           upBtn.addEventListener("click", () => moveLayer(i, -1));
-          row.append(upBtn);
-
           const downBtn = document.createElement("button");
-          downBtn.type = "button";
+          downBtn.className = "icon-btn";
+          downBtn.setAttribute("data-tooltip", "Move layer down in order");
           downBtn.textContent = "↓";
           downBtn.title = "move down";
           downBtn.addEventListener("click", () => moveLayer(i, 1));
-          row.append(downBtn);
+          orderCell.append(upBtn, downBtn);
+          tr.append(orderCell);
 
+          // delete cell
+          const delCell = document.createElement("td");
           const delBtn = document.createElement("button");
-          delBtn.type = "button";
+          delBtn.className = "icon-btn";
+          delBtn.setAttribute("data-tooltip", "Delete this layer");
           delBtn.textContent = "✕";
           delBtn.title = "remove layer";
           delBtn.addEventListener("click", () => removeLayer(i));
-          row.append(delBtn);
+          delCell.append(delBtn);
+          tr.append(delCell);
 
-          layerList.append(row);
+          tbody.append(tr);
         });
       }
+
+          // tile picker modal: open overlay and let user click an atlas image to set ATLAS_TEXTURE.x/y
+          function openTilePicker(layer) {
+            if (!layer || !layer.ATLAS_ID) {
+              setStatus('Select an atlas first', true);
+              return;
+            }
+            const key = String(normalizeAtlasId(layer.ATLAS_ID));
+            getAtlasImage(layer.ATLAS_ID).then((img) => {
+              if (!img) {
+                setStatus('Atlas image not available', true);
+                return;
+              }
+              // create overlay if needed
+              let overlay = document.getElementById('tilePickerOverlay');
+              if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'tilePickerOverlay';
+                const box = document.createElement('div');
+                box.id = 'tilePickerBox';
+                const canvas = document.createElement('canvas');
+                canvas.id = 'tilePickerCanvas';
+                box.append(canvas);
+                const closeWrap = document.createElement('div');
+                closeWrap.className = 'tilePickerClose';
+                const closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.textContent = 'Close';
+                closeBtn.addEventListener('click', () => closeTilePicker());
+                closeWrap.append(closeBtn);
+                box.append(closeWrap);
+                overlay.append(box);
+                overlay.addEventListener('click', (e) => {
+                  if (e.target === overlay) closeTilePicker();
+                });
+                document.body.appendChild(overlay);
+              }
+              // prepare tile-size controls above the canvas
+              const box = document.getElementById('tilePickerBox') || overlay.querySelector('#tilePickerBox');
+              // insert controls if not present
+              if (!box.querySelector('.tilePickerControls')) {
+                const controls = document.createElement('div');
+                controls.className = 'tilePickerControls';
+                controls.style.marginBottom = '8px';
+                controls.style.display = 'flex';
+                controls.style.alignItems = 'center';
+                controls.style.gap = '8px';
+                const sizeLabel = document.createElement('label');
+                sizeLabel.textContent = 'Tile size:';
+                const sizeInp = document.createElement('input');
+                sizeInp.type = 'number';
+                sizeInp.min = '1';
+                sizeInp.step = '1';
+                sizeInp.value = String((layer.ATLAS_TEXTURE && layer.ATLAS_TEXTURE.w) || 16);
+                sizeInp.style.width = '70px';
+                sizeInp.id = 'tilePickerSize';
+                const snapLabel = document.createElement('label');
+                snapLabel.textContent = 'Snap to grid';
+                const snapChk = document.createElement('input');
+                snapChk.type = 'checkbox';
+                snapChk.id = 'tilePickerSnap';
+                snapChk.checked = true;
+                snapLabel.append(snapChk);
+                controls.append(sizeLabel, sizeInp, snapLabel);
+                box.insertBefore(controls, box.firstChild);
+              }
+
+              const canvas = document.getElementById('tilePickerCanvas');
+              const ctx = canvas.getContext('2d');
+              // size canvas to fit viewport while preserving aspect
+              const maxW = Math.floor(window.innerWidth * 0.8);
+              const maxH = Math.floor(window.innerHeight * 0.7);
+              let drawW = img.naturalWidth;
+              let drawH = img.naturalHeight;
+              const ratio = Math.min(maxW / drawW, maxH / drawH, 1);
+              drawW = Math.floor(drawW * ratio);
+              drawH = Math.floor(drawH * ratio);
+              // handle high DPR: style size = CSS pixels, backing store = css*dpr
+              const dpr = window.devicePixelRatio || 1;
+              canvas.style.width = drawW + 'px';
+              canvas.style.height = drawH + 'px';
+              canvas.width = Math.max(1, Math.floor(drawW * dpr));
+              canvas.height = Math.max(1, Math.floor(drawH * dpr));
+              ctx.imageSmoothingEnabled = false;
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, canvas.width, canvas.height);
+              overlay.style.display = 'flex';
+
+              // click handler maps click to original image coords and sets layer.ATLAS_TEXTURE.x/y
+              const onClick = (ev) => {
+                const rect = canvas.getBoundingClientRect();
+                const cx = Math.max(0, Math.min(rect.width, ev.clientX - rect.left));
+                const cy = Math.max(0, Math.min(rect.height, ev.clientY - rect.top));
+                // map to original image coords using CSS rect dimensions
+                const imgX = Math.floor((cx / rect.width) * img.naturalWidth);
+                const imgY = Math.floor((cy / rect.height) * img.naturalHeight);
+                const sizeEl = document.getElementById('tilePickerSize');
+                const snapEl = document.getElementById('tilePickerSnap');
+                const tileSize = Math.max(1, Number.parseInt(sizeEl?.value || '16', 10));
+                let finalX = imgX;
+                let finalY = imgY;
+                if (snapEl && snapEl.checked) {
+                  finalX = Math.floor(imgX / tileSize) * tileSize;
+                  finalY = Math.floor(imgY / tileSize) * tileSize;
+                }
+                layer.ATLAS_TEXTURE = layer.ATLAS_TEXTURE || { x: 0, y: 0, w: tileSize, h: tileSize };
+                layer.ATLAS_TEXTURE.x = Math.max(0, Math.min(img.naturalWidth - 1, finalX));
+                layer.ATLAS_TEXTURE.y = Math.max(0, Math.min(img.naturalHeight - 1, finalY));
+                // set width/height to chosen tile size when snapping
+                if (snapEl && snapEl.checked) {
+                  layer.ATLAS_TEXTURE.w = tileSize;
+                  layer.ATLAS_TEXTURE.h = tileSize;
+                }
+                updatePreview();
+                renderLayerList();
+                updateJsonOutput();
+                // remove click handler and close
+                canvas.removeEventListener('click', onClick);
+                closeTilePicker();
+              };
+              canvas.addEventListener('click', onClick);
+            });
+          }
+
+          function closeTilePicker() {
+            const overlay = document.getElementById('tilePickerOverlay');
+            if (overlay) overlay.style.display = 'none';
+          }
 
       function moveLayer(index, dir) {
         if (!state.current) return;
@@ -988,10 +1375,12 @@
 
             const pattern = ctx.createPattern(tmp, "repeat");
             if (!pattern) return;
+            const opacity = Number(layer.OPACITY ?? 1);
             ctx.save();
             const tx = px;
             const ty = py;
             ctx.translate(tx, ty);
+            ctx.globalAlpha = opacity;
             ctx.fillStyle = pattern;
             ctx.fillRect(-tx, -ty, areaW + tmp.width, areaH + tmp.height);
             ctx.restore();
@@ -1007,10 +1396,46 @@
               if (y > areaH + buf) y = -buf + (y - (areaH + buf));
               else if (y < -buf) y = areaH + buf + (y + buf);
             }
-            ctx.drawImage(tmp, x, y);
+            // draw single atlas copy with transforms (opacity/scale/rotation/flip) applied
+            (function(){
+              const opacity = Number(layer.OPACITY ?? 1);
+              const scale = Number(layer.SCALE ?? 1) || 1;
+              const angle = ((parseFloat(layer.ROTATION) || 0) * Math.PI) / 180;
+              const flipX = !!layer.FLIP_X;
+              const flipY = !!layer.FLIP_Y;
+              const drawW = Math.max(1, Math.floor(tmp.width * scale));
+              const drawH = Math.max(1, Math.floor(tmp.height * scale));
+              const cx = x + drawW / 2;
+              const cy = y + drawH / 2;
+              ctx.save();
+              ctx.globalAlpha = opacity;
+              ctx.translate(cx, cy);
+              ctx.rotate(angle);
+              ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+              ctx.drawImage(tmp, -drawW / 2, -drawH / 2, drawW, drawH);
+              ctx.restore();
+            })();
           }
         } else {
-          ctx.drawImage(tmp, px, py);
+          // draw atlas single copy (non-loop) with transforms
+          (function(){
+            const opacity = Number(layer.OPACITY ?? 1);
+            const scale = Number(layer.SCALE ?? 1) || 1;
+            const angle = ((parseFloat(layer.ROTATION) || 0) * Math.PI) / 180;
+            const flipX = !!layer.FLIP_X;
+            const flipY = !!layer.FLIP_Y;
+            const drawW = Math.max(1, Math.floor(tmp.width * scale));
+            const drawH = Math.max(1, Math.floor(tmp.height * scale));
+            const cx = px + drawW / 2;
+            const cy = py + drawH / 2;
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+            ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+            ctx.drawImage(tmp, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+          })();
         }
       }
 

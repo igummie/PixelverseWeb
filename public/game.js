@@ -2231,7 +2231,9 @@ function update() {
           // clamp offsets when looping so they don't drift to huge numbers
           if (layer.LOOP_X) {
             if (layer.TILE) {
-              const w = layer.TYPE === "atlas" ? Number(layer.ATLAS_TEXTURE?.w || 0) : Number(layer.RECT?.w || 0);
+              const baseW = layer.TYPE === "atlas" ? Number(layer.ATLAS_TEXTURE?.w || 0) : Number(layer.RECT?.w || 0);
+              const scale = layer.TYPE === "atlas" ? Number(layer.SCALE || 1) : 1;
+              const w = Math.max(1, baseW * (isFinite(scale) ? scale : 1));
               if (w) offs.x = ((offs.x % w) + w) % w;
             } else {
               // wrap mode: bound by view width plus buffer
@@ -2242,7 +2244,9 @@ function update() {
           }
           if (layer.LOOP_Y) {
             if (layer.TILE) {
-              const h = layer.TYPE === "atlas" ? Number(layer.ATLAS_TEXTURE?.h || 0) : Number(layer.RECT?.h || 0);
+              const baseH = layer.TYPE === "atlas" ? Number(layer.ATLAS_TEXTURE?.h || 0) : Number(layer.RECT?.h || 0);
+              const scaleY = layer.TYPE === "atlas" ? Number(layer.SCALE || 1) : 1;
+              const h = Math.max(1, baseH * (isFinite(scaleY) ? scaleY : 1));
               if (h) offs.y = ((offs.y % h) + h) % h;
             } else {
               const buf = Number(layer.WRAP_BUFFER || 0);
@@ -2827,8 +2831,11 @@ function drawWeather() {
       pctx.imageSmoothingEnabled = false;
       pctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, 0, 0, tex.w, tex.h);
 
-      const w = tex.w || 1;
-      const h = tex.h || 1;
+      const baseW = tex.w || 1;
+      const baseH = tex.h || 1;
+      const scale = Number(layer.SCALE || 1) || 1;
+      const w = Math.max(1, Math.floor(baseW * scale));
+      const h = Math.max(1, Math.floor(baseH * scale));
       // normalize offsets only when looping; otherwise draw single copy
       const tx = ((offs.x % w) + w) % w;
       const ty = ((offs.y % h) + h) % h;
@@ -2838,8 +2845,17 @@ function drawWeather() {
         if (layer.TILE) {
           const pattern = ctx.createPattern(patternCanvas, "repeat");
           if (pattern) {
+            const opacity = Number(layer.OPACITY ?? 1);
+            const scale = Number(layer.SCALE ?? 1) || 1;
+            const angle = ((parseFloat(layer.ROTATION) || 0) * Math.PI) / 180;
+            const flipX = !!layer.FLIP_X;
+            const flipY = !!layer.FLIP_Y;
             ctx.save();
+            ctx.globalAlpha = opacity;
+            // apply translate for normalized tile offset, then apply rotation/scale/flip
             ctx.translate(tx, ty);
+            if (angle !== 0) ctx.rotate(angle);
+            ctx.scale(flipX ? -scale : scale, flipY ? -scale : scale);
             ctx.fillStyle = pattern;
             ctx.fillRect(-tx, -ty, canvas.width + w, canvas.height + h);
             ctx.restore();
@@ -2856,11 +2872,46 @@ function drawWeather() {
             if (y > canvas.height + buf) y = -buf + (y - (canvas.height + buf));
             else if (y < -buf) y = canvas.height + buf + (y + buf);
           }
-          ctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, x, y, tex.w, tex.h);
+          // draw single atlas copy with transforms (opacity/scale/rotation/flip) applied
+          (function(){
+            const opacity = Number(layer.OPACITY ?? 1);
+            const scale = Number(layer.SCALE ?? 1) || 1;
+            const angle = ((parseFloat(layer.ROTATION) || 0) * Math.PI) / 180;
+            const flipX = !!layer.FLIP_X;
+            const flipY = !!layer.FLIP_Y;
+            const drawW = Math.max(1, Math.floor(tex.w * scale));
+            const drawH = Math.max(1, Math.floor(tex.h * scale));
+            const cx = x + drawW / 2;
+            const cy = y + drawH / 2;
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+            ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+            ctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+          })();
         }
       } else {
         // draw single tile at computed offset (no wrapping)
-        ctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, offs.x, offs.y, tex.w, tex.h);
+        (function(){
+          const opacity = Number(layer.OPACITY ?? 1);
+          const scale = Number(layer.SCALE ?? 1) || 1;
+          const angle = ((parseFloat(layer.ROTATION) || 0) * Math.PI) / 180;
+          const flipX = !!layer.FLIP_X;
+          const flipY = !!layer.FLIP_Y;
+          const drawW = Math.max(1, Math.floor(tex.w * scale));
+          const drawH = Math.max(1, Math.floor(tex.h * scale));
+          const cx = offs.x + drawW / 2;
+          const cy = offs.y + drawH / 2;
+          ctx.save();
+          ctx.globalAlpha = opacity;
+          ctx.translate(cx, cy);
+          ctx.rotate(angle);
+          ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+          ctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, -drawW / 2, -drawH / 2, drawW, drawH);
+          ctx.restore();
+        })();
       }
     }
   });

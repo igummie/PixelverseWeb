@@ -7,6 +7,36 @@ from typing import Any, Callable
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_number(value: Any, default: float = 0.0) -> float:
+    """Coerce a possibly-structured value into a float.
+
+    Accepts raw numbers, numeric strings, or objects like {'source': '1.0', 'parsedValue': 1}.
+    Falls back to `default` on failure.
+    """
+    try:
+        if isinstance(value, dict):
+            if "parsedValue" in value:
+                return float(value.get("parsedValue") or default)
+            if "source" in value:
+                return float(value.get("source") or default)
+            # try common alias keys
+            for k in ("value", "v"):
+                if k in value:
+                    return float(value.get(k) or default)
+            return float(default)
+        if value is None:
+            return float(default)
+        if isinstance(value, (int, float)):
+            return float(value)
+        # fallback try parsing string
+        return float(str(value))
+    except Exception:
+        return float(default)
 
 
 ALLOWED_ITEM_TYPES = {"seed", "block", "furniture", "clothes"}
@@ -604,32 +634,17 @@ def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
                 continue
             typ = str(raw.get("TYPE", "atlas")).lower()
             common: dict[str, Any] = {}
-            # parse universal effects
-            try:
-                common["PARALLAX_X"] = round(float(raw.get("PARALLAX_X", 0)) or 0, 4)
-            except Exception:
-                common["PARALLAX_X"] = 0
-            try:
-                common["PARALLAX_Y"] = round(float(raw.get("PARALLAX_Y", 0)) or 0, 4)
-            except Exception:
-                common["PARALLAX_Y"] = 0
-            try:
-                common["SCROLL_X"] = round(float(raw.get("SCROLL_X", 0)) or 0, 4)
-            except Exception:
-                common["SCROLL_X"] = 0
-            try:
-                common["SCROLL_Y"] = round(float(raw.get("SCROLL_Y", 0)) or 0, 4)
-            except Exception:
-                common["SCROLL_Y"] = 0
+            # parse universal effects (robustly accept numbers, strings, or structured objects)
+            common["PARALLAX_X"] = round(_extract_number(raw.get("PARALLAX_X", 0), 0) or 0, 4)
+            common["PARALLAX_Y"] = round(_extract_number(raw.get("PARALLAX_Y", 0), 0) or 0, 4)
+            common["SCROLL_X"] = round(_extract_number(raw.get("SCROLL_X", 0), 0) or 0, 4)
+            common["SCROLL_Y"] = round(_extract_number(raw.get("SCROLL_Y", 0), 0) or 0, 4)
             common["LOOP_X"] = bool(raw.get("LOOP_X", False))
             common["LOOP_Y"] = bool(raw.get("LOOP_Y", False))
             # existing behaviour: LOOP flags enabled
             # new option: TILE controls whether layer is tiled repeatedly
             common["TILE"] = bool(raw.get("TILE", False))
-            try:
-                common["WRAP_BUFFER"] = round(float(raw.get("WRAP_BUFFER", 0)) or 0, 4)
-            except Exception:
-                common["WRAP_BUFFER"] = 0
+            common["WRAP_BUFFER"] = round(_extract_number(raw.get("WRAP_BUFFER", 0), 0) or 0, 4)
 
             if typ == "atlas":
                 atlas_id = normalize_atlas_id_value(raw.get("ATLAS_ID"))
@@ -638,6 +653,18 @@ def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
                     continue
                 layer = {"TYPE": "atlas", "ATLAS_ID": atlas_id, "ATLAS_TEXTURE": texture}
                 layer.update(common)
+                # Always persist atlas transform/meta fields (coerce structured values)
+                layer["OPACITY"] = round(_extract_number(raw.get("OPACITY", raw.get("opacity", 1)), 1) or 1, 4)
+                layer["SCALE"] = round(_extract_number(raw.get("SCALE", raw.get("scale", 1)), 1) or 1, 4)
+                rot = _extract_number(raw.get("ROTATION", raw.get("rotation", 0)), 0) % 360
+                layer["ROTATION"] = round(rot, 2)
+                # flips
+                layer["FLIP_X"] = bool(raw.get("FLIP_X", raw.get("flip_x", False)))
+                layer["FLIP_Y"] = bool(raw.get("FLIP_Y", raw.get("flip_y", False)))
+                # offsets (allow several naming variants)
+                layer["offsetX"] = round(_extract_number(raw.get("offsetX", raw.get("offset_x", raw.get("OFFSET_X", 0))), 0), 4)
+                layer["offsetY"] = round(_extract_number(raw.get("offsetY", raw.get("offset_y", raw.get("OFFSET_Y", 0))), 0), 4)
+
                 layers.append(layer)
             elif typ == "color":
                 color = normalize_tint_color(raw.get("COLOR"))
@@ -655,11 +682,7 @@ def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
                     continue
                 rect = normalize_atlas_texture_rect(raw.get("RECT") or raw.get("ATLAS_TEXTURE") or {}) or {"x": 0, "y": 0, "w": 0, "h": 0}
                 # rotation in degrees
-                try:
-                    rot = float(raw.get("ROTATION", raw.get("rotation", 0)) or 0)
-                except Exception:
-                    rot = 0.0
-                rot = rot % 360
+                rot = _extract_number(raw.get("ROTATION", raw.get("rotation", 0)), 0) % 360
                 layer = {"TYPE": "shape", "SHAPE": shape, "COLOR": color, "RECT": rect}
                 if rot != 0:
                     layer["ROTATION"] = round(rot, 2)
@@ -1175,6 +1198,17 @@ def register_editor_routes(
 
     @app.post("/api/tools/weather/save-data")
     def save_weather_data(payload: SaveWeatherDataBody) -> dict[str, Any]:
+        # Debug: log incoming payload (truncated) to help diagnose missing fields
+        try:
+            incoming_weather_count = len(payload.weather) if isinstance(payload.weather, list) else 0
+        except Exception:
+            incoming_weather_count = 0
+        try:
+            logger.info("save_weather_data called: weather_count=%d, atlases_count=%d", incoming_weather_count, len(payload.atlases) if isinstance(payload.atlases, list) else 0)
+            logger.debug("incoming payload (truncated): %s", json.dumps({"weather": payload.weather[:5], "atlases": (payload.atlases or [])[:5]}, default=str)[:4000])
+        except Exception:
+            logger.exception("Error logging incoming payload")
+
         existing = load_weather_payload()
         output: dict[str, Any] = {}
 
@@ -1206,6 +1240,12 @@ def register_editor_routes(
 
             if "atlases" not in output and isinstance(existing.get("atlases"), list):
                 output["atlases"] = [dict(entry) for entry in existing.get("atlases", []) if isinstance(entry, dict)]
+
+        # Debug: log sanitized output before writing
+        try:
+            logger.debug("sanitized output preview: %s", json.dumps({"weather": output.get("weather")[:5], "atlases": output.get("atlases")[:5]}, default=str)[:4000])
+        except Exception:
+            logger.exception("Error logging sanitized output")
 
         with weather_path.open("w", encoding="utf-8") as handle:
             json.dump(output, handle, indent=2)
