@@ -7,7 +7,7 @@
         {
           "TYPE": "shape",
           "SHAPE": "rect",
-          "COLOR": "#2e297c",
+          "COLOR": "#1b8b67",
           "RECT": {
             "x": 55,
             "y": 500,
@@ -42,6 +42,31 @@
           "LOOP_Y": true,
           "TILE": false,
           "WRAP_BUFFER": 500.0
+        },
+        {
+          "TYPE": "atlas",
+          "ATLAS_ID": "gems",
+          "ATLAS_TEXTURE": {
+            "x": 48,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "PARALLAX_X": 0,
+          "PARALLAX_Y": 0,
+          "SCROLL_X": 123.9,
+          "SCROLL_Y": 175.9,
+          "LOOP_X": true,
+          "LOOP_Y": true,
+          "TILE": false,
+          "WRAP_BUFFER": 20.0,
+          "OPACITY": 0.25,
+          "SCALE": 6.0,
+          "ROTATION": 137.0,
+          "FLIP_X": false,
+          "FLIP_Y": false,
+          "offsetX": 100.0,
+          "offsetY": 100.0
         }
       ],
       "WEATHER_COLOR": "#4597d3"
