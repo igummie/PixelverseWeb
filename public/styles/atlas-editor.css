@@ -644,6 +644,12 @@ textarea {
   color: #93c5fd;
 }
 
+/* disabled controls are greyed out so it’s clear why clicking doesn’t work */
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 @media (max-width: 1200px) {
   .layout {
     grid-template-columns: 1fr;

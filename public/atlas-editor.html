@@ -154,6 +154,13 @@
               <canvas id="createAtlasCanvas" width="256" height="256"></canvas>
             </div>
             <div id="createAtlasSelectionInfo" class="tiny">Rect: 0,0,16,16</div>
+            <div class="atlasControls" id="createModalAtlasControls">
+              <button id="createModalZoomOutBtn" type="button">-</button>
+              <input id="createModalZoomRange" type="range" min="0.25" max="8" step="0.25" value="1" />
+              <button id="createModalZoomInBtn" type="button">+</button>
+              <button id="createModalZoomResetBtn" type="button">1x</button>
+            </div>
+            <div class="tiny" id="createModalZoomInfo">Zoom: 1.00x</div>
           </div>
           <div class="fieldStack" id="createTexture47Field" hidden>
             <label for="createTexture47AtlasInput">Texture47 Atlas ID</label>
@@ -325,6 +332,11 @@
       const createBlockDropSelfToggle = document.getElementById("createBlockDropSelfToggle");
       const createBlockDropSelfChanceInput = document.getElementById("createBlockDropSelfChanceInput");
       const createBlockSubmitBtn = document.getElementById("createBlockSubmitBtn");
+      const createModalZoomOutBtn = document.getElementById("createModalZoomOutBtn");
+      const createModalZoomInBtn = document.getElementById("createModalZoomInBtn");
+      const createModalZoomResetBtn = document.getElementById("createModalZoomResetBtn");
+      const createModalZoomRange = document.getElementById("createModalZoomRange");
+      const createModalZoomInfo = document.getElementById("createModalZoomInfo");
       const saveWarningModal = document.getElementById("saveWarningModal");
       const closeSaveWarningBtn = document.getElementById("closeSaveWarningBtn");
       const confirmSaveWarningBtn = document.getElementById("confirmSaveWarningBtn");
@@ -348,6 +360,9 @@
       const MIN_ZOOM = 0.25;
       const MAX_ZOOM = 8;
       const ZOOM_STEP = 0.25;
+
+      // zoom state for the create‑modal atlas preview will be part of the initial
+      // state object below (initialize to 1).
 
       const state = {
         version: 1,
@@ -379,6 +394,7 @@
         createModalTileWidth: 16,
         createModalTileHeight: 16,
         createModalSelectedTileIndex: 0,
+        createModalZoom: 1,
         blockPreviewAnimationTimer: 0,
         usedSeedItemIds: new Set(),
       };
@@ -502,6 +518,9 @@
         if (state.selectedAtlasKey && state.atlasByKey.has(state.selectedAtlasKey)) {
           createRegularAtlasSelect.value = state.selectedAtlasKey;
         }
+
+        // atlas list changed, update button state in case it was disabled earlier
+        updateCreateBlockSubmitButtonState();
       }
 
       function updateCreateBlockAtlasModeUi() {
@@ -660,11 +679,16 @@
       }
 
       function openCreateBlockModal() {
+        console.log("openCreateBlockModal called");
         if (!createBlockModal) {
           return;
         }
 
         renderCreateRegularAtlasOptions();
+        // if there are no regular atlases, let the user know up front
+        if (state.atlases.length === 0) {
+          setStatus("No regular atlases available – create one first or switch to Texture47 mode", true);
+        }
         createBlockIdInput.value = String(getNextAvailableBlockId());
         createBlockNameInput.value = "";
         createBlockTypeSelect.value = "SOLID";
@@ -679,21 +703,32 @@
         createBlockDropSelfToggle.value = "false";
         createBlockDropSelfChanceInput.value = "0.2";
         state.createModalSelectedTileIndex = 0;
+        state.createModalZoom = 1;
         updateCreateBlockAtlasModeUi();
         renderTexture47AtlasOptions();
 
+        // make sure the submit button reflects the current state
+        updateCreateBlockSubmitButtonState();
+
         createBlockModal.hidden = false;
+        // focus first form field so user can immediately type a name
+        if (createBlockNameInput) createBlockNameInput.focus();
         loadCreateModalAtlasPreview();
         loadTexture47AtlasOptions();
         renderCreateTexture47Preview();
       }
 
       function closeCreateBlockModal() {
+        console.log("closeCreateBlockModal called", createBlockModal);
         if (!createBlockModal) {
           return;
         }
         hideTexture47Suggestions();
-        createBlockModal.hidden = true;
+        // delay the actual hide until the event loop tick after the click works
+        // around browsers delivering the same click to elements underneath.
+        setTimeout(() => {
+          createBlockModal.hidden = true;
+        }, 0);
       }
 
       function openCreateAtlasModal() {
@@ -861,6 +896,24 @@
         return clampZoom(Math.min(ratioX, ratioY));
       }
 
+      function updateCreateModalZoomDisplay() {
+        if (!createAtlasCanvas) return;
+        if (!createModalZoomInfo || !createModalZoomRange) return;
+        createModalZoomInfo.textContent = `Zoom: ${state.createModalZoom.toFixed(2)}x`;
+        createModalZoomRange.value = String(state.createModalZoom);
+        if (state.createModalAtlasImage) {
+          const img = state.createModalAtlasImage;
+          createAtlasCanvas.style.width = `${img.width * state.createModalZoom}px`;
+          createAtlasCanvas.style.height = `${img.height * state.createModalZoom}px`;
+        }
+      }
+
+      function setCreateModalZoom(value) {
+        const z = clampZoom(value);
+        state.createModalZoom = z;
+        updateCreateModalZoomDisplay();
+      }
+
       function renderCreateModalAtlasPreview() {
         if (!createAtlasCanvas || !createAtlasContext) {
           return;
@@ -919,8 +972,11 @@
         }
 
         const fitZoom = getCreateModalFitZoom(image);
-        createAtlasCanvas.style.width = `${image.width * fitZoom}px`;
-        createAtlasCanvas.style.height = `${image.height * fitZoom}px`;
+        // if user hasn't changed zoom manually, adopt the fit value
+        if (!state.createModalZoom || state.createModalZoom === 1) {
+          state.createModalZoom = fitZoom;
+        }
+        updateCreateModalZoomDisplay();
       }
 
       async function loadCreateModalAtlasPreview() {
@@ -2938,6 +2994,8 @@
             refreshBlockDataEditor();
           }
           syncJsonOutput();
+          // enable create-block button now that atlas list is populated
+          updateCreateBlockSubmitButtonState();
           if (state.atlases.length === 0) {
             setStatus("Loaded data, but no atlases were found in blocks.json", true);
             return;
@@ -3283,6 +3341,23 @@
         setZoom(1);
       });
 
+      // create-modal zoom controls
+      createModalZoomRange?.addEventListener("input", () => {
+        setCreateModalZoom(createModalZoomRange.value);
+      });
+
+      createModalZoomOutBtn?.addEventListener("click", () => {
+        setCreateModalZoom(state.createModalZoom - ZOOM_STEP);
+      });
+
+      createModalZoomInBtn?.addEventListener("click", () => {
+        setCreateModalZoom(state.createModalZoom + ZOOM_STEP);
+      });
+
+      createModalZoomResetBtn?.addEventListener("click", () => {
+        setCreateModalZoom(getCreateModalFitZoom(state.createModalAtlasImage));
+      });
+
       atlasCanvas.addEventListener("click", (event) => {
         if (!state.image) {
           return;
@@ -3564,84 +3639,144 @@
         }
       });
 
-      createBlockSubmitBtn.addEventListener("click", async () => {
+      // helper that enables/disables the create button based on current inputs
+      function updateCreateBlockSubmitButtonState() {
+        if (!createBlockSubmitBtn) {
+          return;
+        }
         const blockId = Number(createBlockIdInput.value);
-        if (!Number.isInteger(blockId) || blockId < 0) {
-          setStatus("New block ID must be a non-negative integer", true);
-          return;
-        }
-
-        if (state.blockById.has(blockId)) {
-          setStatus(`Block ID ${blockId} already exists`, true);
-          return;
-        }
-
         const blockName = String(createBlockNameInput.value || "").trim();
-        if (!blockName) {
-          setStatus("New block requires a NAME", true);
-          return;
-        }
-
         const usesTexture47 = createBlockTexture47Toggle.value === "true";
-        const selectedRegularAtlas = state.atlases.find(a => a.ATLAS_ID === createRegularAtlasSelect.value) || null;
-        const regularAtlasId = selectedRegularAtlas?.ATLAS_ID;
-        const texture47AtlasId = String(createTexture47AtlasInput.value || "").trim().toLowerCase();
+        const texture47AtlasId = String(createTexture47AtlasInput.value || "").trim();
+        // atlas availability is not required for enabling the button; the click
+        // handler itself will perform final validation and report errors.  This
+        // prevents cases where the button stays disabled while the atlas list is
+        // still loading.
+        const atlasDefined = usesTexture47 ? texture47AtlasId.length > 0 : state.atlases.length > 0;
 
-        let atlasId = regularAtlasId;
-        if (usesTexture47) {
-          if (!texture47AtlasId) {
-            setStatus("Texture47 block requires a Texture47 atlas ID", true);
+        const validId = Number.isInteger(blockId) && blockId >= 0 && !state.blockById.has(blockId);
+        createBlockSubmitBtn.disabled = !(validId && blockName);
+
+        // debug output to help diagnose whether the button is toggling correctly
+        console.debug("create-block button state", {
+          validId,
+          blockName,
+          atlasDefined,
+          disabled: createBlockSubmitBtn.disabled,
+        });
+      }
+
+      // wire up inputs to update the submit button state live
+      [createBlockIdInput, createBlockNameInput, createBlockTexture47Toggle, createRegularAtlasSelect, createTexture47AtlasInput].forEach((el) => {
+        if (!el) return;
+        el.addEventListener("input", updateCreateBlockSubmitButtonState);
+        el.addEventListener("change", updateCreateBlockSubmitButtonState);
+      });
+
+      createBlockSubmitBtn.addEventListener("click", async () => {
+        console.log("[AtlasEditor] createBlockSubmitBtn clicked");
+        try {
+          const blockId = Number(createBlockIdInput.value);
+          if (!Number.isInteger(blockId) || blockId < 0) {
+            setStatus("New block ID must be a non-negative integer", true);
+            createBlockIdInput.focus();
             return;
           }
-          atlasId = texture47AtlasId;
-        } else if (atlasId == null) {
-          setStatus("Regular block requires a valid atlas", true);
-          return;
+
+          if (state.blockById.has(blockId)) {
+            setStatus(`Block ID ${blockId} already exists`, true);
+            createBlockIdInput.focus();
+            return;
+          }
+
+          const blockName = String(createBlockNameInput.value || "").trim();
+          if (!blockName) {
+            setStatus("New block requires a NAME", true);
+            createBlockNameInput.focus();
+            return;
+          }
+
+          const usesTexture47 = createBlockTexture47Toggle.value === "true";
+          // select.value contains the *atlas key* (prefixed with n: or s:), not the raw ID.
+          const selectedKey = createRegularAtlasSelect.value;
+          const selectedRegularAtlas = state.atlases.find(
+            (a) => atlasKey(a.ATLAS_ID) === selectedKey,
+          ) || null;
+          const regularAtlasId = selectedRegularAtlas?.ATLAS_ID;
+          const texture47AtlasId = String(createTexture47AtlasInput.value || "").trim().toLowerCase();
+
+          let atlasId = regularAtlasId;
+          console.debug("atlas selection", { selectedKey, regularAtlasId, selectedRegularAtlas });
+          if (usesTexture47) {
+            if (!texture47AtlasId) {
+              setStatus("Texture47 block requires a Texture47 atlas ID", true);
+              createTexture47AtlasInput.focus();
+              return;
+            }
+            atlasId = texture47AtlasId;
+          } else if (atlasId == null) {
+            setStatus("Regular block requires a valid atlas", true);
+            createRegularAtlasSelect.focus();
+            return;
+          }
+
+          const dropSelfEnabled = createBlockDropSelfToggle.value === "true";
+
+          const newBlock = {
+            ITEM_ID: blockId,
+            ITEM_TYPE: "block",
+            ID: blockId,
+            NAME: blockName,
+            BLOCK_TYPE: String(createBlockTypeSelect.value || "SOLID"),
+            ATLAS_ID: atlasId,
+            TOUGHNESS: Math.max(0, Number(createBlockToughnessInput.value) || 0),
+            GEM_CHANCE: Math.max(0, Math.min(1, Number(createBlockGemChanceInput.value) || 0)),
+            GEM_AMOUNT: Math.max(0, Math.floor(Number(createBlockGemAmountInput.value) || 0)),
+            GEM_AMOUNT_VAR: Math.max(0, Math.floor(Number(createBlockGemAmountVarInput.value) || 0)),
+            PLACEABLE: createBlockPlaceableToggle.value === "true",
+            BREAKABLE: createBlockBreakableToggle.value === "true",
+          };
+
+          if (dropSelfEnabled) {
+            newBlock.DROP_SELF = true;
+            newBlock.DROP_SELF_CHANCE = Math.max(0, Math.min(1, Number(createBlockDropSelfChanceInput.value) || 0.2));
+          }
+
+          if (!usesTexture47) {
+            newBlock.ATLAS_TEXTURE = getCreateModalSelectedTextureRect();
+          }
+
+          state.blocks.push(newBlock);
+          console.log("blocks after push", state.blocks.length, state.blocks.map(b=>b.ITEM_ID));
+          state.blocks.sort((a, b) => Number(a.ID) - Number(b.ID));
+          state.blockById.set(blockId, newBlock);
+          state.pendingBlockDataById.set(blockId, deepClone(newBlock));
+          if (!usesTexture47) {
+            state.pendingByBlockId.set(blockId, {
+              blockId,
+              atlasId,
+              texture: deepClone(newBlock.ATLAS_TEXTURE),
+            });
+          }
+
+          renderBlockOptions();
+          // close modal right away; atlas loading can happen in background
+          closeCreateBlockModal();
+          setStatus(`Created block ${blockId} (${blockName}). Save to persist.`);
+
+          // update selection and atlas asynchronously so UI is responsive
+          (async () => {
+            try {
+              await selectBlock(blockId);
+              syncJsonOutput();
+            } catch (err) {
+              console.error("selectBlock after creation failed", err);
+            }
+          })();
+        } catch (err) {
+          console.error("createBlock error", err);
+          setStatus(`Error creating block: ${err}`, true);
         }
-
-        const dropSelfEnabled = createBlockDropSelfToggle.value === "true";
-
-        const newBlock = {
-          ITEM_ID: blockId,
-          ITEM_TYPE: "block",
-          ID: blockId,
-          NAME: blockName,
-          BLOCK_TYPE: String(createBlockTypeSelect.value || "SOLID"),
-          ATLAS_ID: atlasId,
-          TOUGHNESS: Math.max(0, Number(createBlockToughnessInput.value) || 0),
-          GEM_CHANCE: Math.max(0, Math.min(1, Number(createBlockGemChanceInput.value) || 0)),
-          GEM_AMOUNT: Math.max(0, Math.floor(Number(createBlockGemAmountInput.value) || 0)),
-          GEM_AMOUNT_VAR: Math.max(0, Math.floor(Number(createBlockGemAmountVarInput.value) || 0)),
-          PLACEABLE: createBlockPlaceableToggle.value === "true",
-          BREAKABLE: createBlockBreakableToggle.value === "true",
-        };
-
-        if (dropSelfEnabled) {
-          newBlock.DROP_SELF = true;
-          newBlock.DROP_SELF_CHANCE = Math.max(0, Math.min(1, Number(createBlockDropSelfChanceInput.value) || 0.2));
-        }
-
-        if (!usesTexture47) {
-          newBlock.ATLAS_TEXTURE = getCreateModalSelectedTextureRect();
-        }
-
-        state.blocks.push(newBlock);
-        state.blocks.sort((a, b) => Number(a.ID) - Number(b.ID));
-        state.blockById.set(blockId, newBlock);
-        state.pendingBlockDataById.set(blockId, deepClone(newBlock));
-        if (!usesTexture47) {
-          state.pendingByBlockId.set(blockId, {
-            blockId,
-            atlasId,
-            texture: deepClone(newBlock.ATLAS_TEXTURE),
-          });
-        }
-
-        renderBlockOptions();
-        await selectBlock(blockId);
-        syncJsonOutput();
-        closeCreateBlockModal();
-        setStatus(`Created block ${blockId} (${blockName}). Save to persist.`);
       });
 
       applyBlockDataBtn.addEventListener("click", () => {
