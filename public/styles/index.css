@@ -6,8 +6,10 @@
       body {
         width: 100%;
         height: 100%;
-        /* allow scrolling so editors can grow taller than the viewport */
-        overflow: auto;
+        /* prevent the browser itself from showing a scrollbar; all scrolling
+           happens inside individual screen containers. this avoids sporadic
+           page scrollbars when the window resizes or zoom level changes. */
+        overflow: hidden;
       }
 
       body {
@@ -35,7 +37,7 @@
         overflow: hidden;
       }
 
-      /* editors and other screens may scroll */
+      /* editors and other screens may scroll; the page itself never does */
       .screen:not(#worldScreen):not(#loadingScreen) {
         overflow: auto;
       }
