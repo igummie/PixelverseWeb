@@ -21,6 +21,12 @@ export function clearAuthSession() {
     localStorage.removeItem(AUTH_USER_STORAGE_KEY);
   } catch {
   }
+
+  // also nuke any remembered world in case we were about to join it; this is
+  // safer than relying on callers of clearAuthSession to remember to do it.
+  try {
+    sessionStorage.removeItem("lastWorld");
+  } catch {}
 }
 
 export function loadAuthSession() {

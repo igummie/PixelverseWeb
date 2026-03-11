@@ -69,6 +69,13 @@ const screens = {
   world: document.getElementById("worldScreen"),
   game: document.getElementById("gameScreen"),
 };
+console.log("[game] screens mapping:", {
+  main: screens.main && screens.main.id,
+  login: screens.login && screens.login.id,
+  loading: screens.loading && screens.loading.id,
+  world: screens.world && screens.world.id,
+  game: screens.game && screens.game.id,
+});
 
 const playBtn = document.getElementById("playBtn");
 const backToMainBtn = document.getElementById("backToMainBtn");
@@ -603,6 +610,7 @@ function forceHardReloadForBundleUpdate() {
 }
 
 function clearActiveWorldRuntimeState() {
+  console.log("[world] clearing active runtime state");
   setChatInputOpen(false);
   setChatLogOpen(false);
   setInventoryOpen(false);
@@ -646,6 +654,7 @@ function returnToMainMenuAfterReconnectFailure() {
   showScreen("main");
 } 
 async function performReconnectAttempt() {
+  console.log("[reconnect] attempting reconnect, active=" + state.reconnect.active + ", token=" + Boolean(state.token));
   if (!state.reconnect.active || !state.token) {
     return false;
   }
@@ -663,7 +672,19 @@ async function performReconnectAttempt() {
     return false;
   }
 
-  // Connection is back; stay on world select and let user choose a world manually.
+  // Connection is back; if we were in a world prior to the disconnect, try
+  // to re‑join it automatically using our last known coordinates. otherwise
+  // fall back to the world selection screen.
+  if (state.world && state.token) {
+    appendChatLine("system", "Connection restored. Rejoining world...");
+    let payload = { type: "join_world", world: state.world.name, token: state.token };
+    if (Number.isFinite(state.me.x)) payload.reconnectX = state.me.x;
+    if (Number.isFinite(state.me.y)) payload.reconnectY = state.me.y;
+    sendWs(payload);
+    // keep reconnect active until the server sends us a fresh snapshot
+    return true;
+  }
+
   clearActiveWorldRuntimeState();
   resetReconnectState();
   worldError.textContent = "Connection restored. Select a world to join.";
@@ -674,6 +695,7 @@ async function performReconnectAttempt() {
 }
 
 function scheduleReconnectAttempt() {
+  console.log("[reconnect] schedule attempt, attempt=" + state.reconnect.attempt);
   clearReconnectTimer();
 
   if (!state.reconnect.active) {
@@ -703,6 +725,7 @@ function scheduleReconnectAttempt() {
 }
 
 function beginReconnectFlow() {
+  console.log("[reconnect] beginReconnectFlow");
   if (state.reconnect.active || !state.world || !state.token) {
     return;
   }
@@ -1204,8 +1227,15 @@ function resolveVertical(world, currentX, oldY, proposedY, currentVelocityY) {
 }
 
 function showScreen(name) {
+  console.log(`[ui] switching to screen ${name}`);
   for (const [screenName, screenEl] of Object.entries(screens)) {
-    screenEl.classList.toggle("active", screenName === name);
+    if (!screenEl) {
+      console.warn("[ui] missing element for screen", screenName);
+      continue;
+    }
+    const willBeActive = screenName === name;
+    console.log(`  -> ${screenName}: setting active=${willBeActive}`);
+    screenEl.classList.toggle("active", willBeActive);
   }
 
   // hide the page‑level scrollbar when we're in one of the full‑screen
@@ -1808,6 +1838,7 @@ function handleSocketMessage(msg) {
   }
 
   if (msg.type === "world_snapshot") {
+    resetReconnectState();
     state.world = msg.world;
     // initialize weather offsets for layer animation
     state.weatherOffsets = [];
@@ -2112,7 +2143,13 @@ function handleSocketMessage(msg) {
 }
 
 function connectSocket() {
-  return networkClient.connectSocket();
+  console.log("[network] attempting websocket connection");
+  return networkClient.connectSocket().then(() => {
+    console.log("[network] websocket open");
+  }).catch((err) => {
+    console.warn("[network] websocket failed", err);
+    throw err;
+  });
 }
 
 function sendWs(payload) {
@@ -2131,8 +2168,12 @@ function logout() {
   authWorldFlow.logout();
 }
 
-playBtn.addEventListener("click", () => {
+playBtn.addEventListener("click", async () => {
   if (mainError) mainError.textContent = "";
+  // resume any remembered session *after* the user presses Play; this
+  // guarantees that the first thing a fresh visitor sees is the main menu
+  // and no HTTP/WS activity begins until then.
+  await resumeSession();
   showScreen("login");
 });
 backToMainBtn.addEventListener("click", () => showScreen("main"));
@@ -2169,7 +2210,10 @@ passwordInput.addEventListener("keydown", (event) => {
 });
 
 worldInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
+  // only trigger when the world selection screen is actually showing. this
+  // avoids stray key events (e.g. the Enter used to submit the login form) that
+  // happen to bubble to the hidden input and immediately kick off a join.
+  if (event.key === "Enter" && screens.world.classList.contains("active")) {
     enterWorld();
   }
 });
@@ -2989,27 +3033,74 @@ function drawWeather(frontOnly = false) {
   });
 }
 
-(async () => {
+// helper that resumes any existing auth token. deliberately *not*
+// executed on page load; it's called from the Play button handler below so
+// no network traffic happens until the user interacts with the main menu.
+async function resumeSession() {
   const existingSession = loadAuthSession();
-  if (existingSession) {
-    state.token = existingSession.token;
-    state.user = existingSession.user;
-    welcomeText.textContent = `Logged in as ${state.user.username}`;
-    beginLoadingForUser(String(state.user?.username || "player"));
-    try {
-      await refreshGuestSessionIfNeeded();
-      await runPostLoginLoadingFlow();
-    } catch {
-      clearAuthSession();
-      state.token = null;
-      state.user = null;
-      showScreen("main");
-    }
-  } else {
+  if (!existingSession) {
+    console.log("[game] no existing session to resume");
+    return;
+  }
+
+  console.log("[game] resuming session for", existingSession.user.username);
+  state.token = existingSession.token;
+  state.user = existingSession.user;
+  welcomeText.textContent = `Logged in as ${state.user.username}`;
+  beginLoadingForUser(String(state.user?.username || "player"));
+  try {
+    await refreshGuestSessionIfNeeded();
+    await runPostLoginLoadingFlow();
+  } catch {
+    console.log("[game] session resume failed, clearing session");
+    clearAuthSession();
+    state.token = null;
+    state.user = null;
     showScreen("main");
+  }
+}
+
+(async () => {
+  console.log("[game] startup");
+  resetReconnectState();
+
+  // if we don't have a saved auth token, forget any leftover world name so a
+  // completely fresh visitor can't accidentally be re‑joined later.
+  const existingSession = loadAuthSession();
+  if (!existingSession) {
+    try {
+      sessionStorage.removeItem("lastWorld");
+    } catch {}
+  }
+
+  showScreen("main");
+
+  // resume stored session for returning users without waiting for Play. this
+  // is the convenience behaviour asked for by the user.
+  if (existingSession) {
+    await resumeSession();
   }
 
   requestAnimationFrame(loop);
+
+  // give the browser one tick to apply styles and then dump computed display
+  // values so we can see if any of the sections/overlays are unexpectedly
+  // visible even though they shouldn't be.
+  setTimeout(() => {
+    try {
+      console.log("[ui] computed styles", {
+        main: getComputedStyle(screens.main).display,
+        login: getComputedStyle(screens.login).display,
+        loading: getComputedStyle(screens.loading).display,
+        world: getComputedStyle(screens.world).display,
+        game: getComputedStyle(screens.game).display,
+        inventory: getComputedStyle(document.getElementById("inventoryOverlayRegion")).display,
+        chat: getComputedStyle(document.getElementById("chatOverlayRegion")).display,
+      });
+    } catch (e) {
+      console.warn("[ui] computed styles error", e);
+    }
+  }, 0);
 })();
 
 updateZoomUi();

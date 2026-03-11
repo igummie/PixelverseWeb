@@ -30,8 +30,7 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     setPauseMenuOpen,
   } = callbacks;
 
-  function beginLoadingForUser(username) {
-    // do not wipe existing log; keep historical messages across reconnects
+  function beginLoadingForUser(username) {    console.log(`[auth] begin loading for ${username}`);    // do not wipe existing log; keep historical messages across reconnects
     renderChatLog(true);
     appendChatLine("system", `attempting to log into ${username}...`);
     if (loadingStatus) {
@@ -68,16 +67,32 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     appendChatLine("system", `welcome ${username}!`);
     showScreen("world");
 
-    // if we have a remembered world (from before reload), auto-enter it at the door
+    // remove focus from the world name field to stop any pending key events
+    // (like the Enter that logged the user in) from immediately firing our
+    // "join" handler. the player can click or tab into it when they're ready.
+    try {
+      worldInput.blur();
+    } catch {}
+
+    // if we have a remembered world (from before reload), log it but do *not* auto-enter.
+    //
+    // a recent regression caused the client to immediately re‑join the last world on
+    // *every* page load. that meant even first‑time visitors would wind up on the
+    // game canvas with a WS connection attempt (HUD showed “Connecting...” but no
+    // UI, since the user never clicked anything). the storage-clearing steps we
+    // recommend to players don't touch sessionStorage in some browsers, so the
+    // value could persist across visits and trigger the behaviour for innocents.
+    //
+    // Instead, remove the remembered value and leave the user on world selection.
+    // They can click the button themself if they actually want to re‑enter the
+    // previous world.
     try {
       const last = sessionStorage.getItem("lastWorld");
-      if (last && state.token) {
+      if (last) {
         sessionStorage.removeItem("lastWorld");
-        appendChatLine("system", `continuing in world ${last}...`);
-        await enterWorld(last);
+        appendChatLine("system", `remembered world ${last} – use the \"Enter World\" button to join.`);
       }
-    } catch {}
-  }
+    } catch {}  }
 
   async function auth(action) {
     loginError.textContent = "";
@@ -187,7 +202,10 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     }
   }
 
-  async function enterWorld(targetWorldName = null) {
+  // options may include reconnectX/reconnectY coordinates when rejoining after
+  // a dropped connection. only used by reconnect logic in game.js.
+  async function enterWorld(targetWorldName = null, options = {}) {
+    console.log("[auth] enterWorld invoked", targetWorldName, options);
     resetReconnectState();
     worldError.textContent = "";
 
@@ -220,7 +238,11 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
       return;
     }
 
-    const ok = sendWs({ type: "join_world", world: worldName, token: state.token });
+    const payload = { type: "join_world", world: worldName, token: state.token };
+    if (options.reconnectX != null) payload.reconnectX = options.reconnectX;
+    if (options.reconnectY != null) payload.reconnectY = options.reconnectY;
+
+    const ok = sendWs(payload);
     if (!ok) {
       worldError.textContent = "Socket not connected.";
     } else {
@@ -254,6 +276,12 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     state.token = null;
     state.user = null;
     clearAuthSession();
+    // also forget the last world stored in sessionStorage; otherwise the next
+    // visitor using the same browser/tab could be whisked straight into a world
+    // ahead of time.
+    try {
+      sessionStorage.removeItem("lastWorld");
+    } catch {}
     usernameInput.value = "";
     passwordInput.value = "";
     loginError.textContent = "";
