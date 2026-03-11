@@ -1,3 +1,6 @@
+import * as utils from "./utils.js";
+import * as worldUtils from "./world_utils.js";
+
 export function createAssetsLoaderController({ state, settings, elements, callbacks }) {
   const {
     TILE_SIZE,
@@ -28,13 +31,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     return `${kind}:${String(value)}`;
   }
 
-  function normalizeSeedTint(value) {
-    const text = String(value ?? "").trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{8}$/.test(text)) {
-      return text.toLowerCase();
-    }
-    return "";
-  }
+  // color normalization moved to utils; use utils.normalizeTint
 
   function buildTintedSeedSprite(image, texture, tintHex) {
     const width = Math.max(1, Math.floor(Number(texture?.w) || TILE_SIZE));
@@ -50,7 +47,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     spriteCtx.clearRect(0, 0, width, height);
     spriteCtx.drawImage(image, sourceX, sourceY, width, height, 0, 0, width, height);
 
-    const tintColor = normalizeSeedTint(tintHex);
+    const tintColor = utils.normalizeTint(tintHex);
     if (!tintColor) {
       return spriteCanvas;
     }
@@ -66,7 +63,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
   }
 
   function buildTintedAtlasImage(image, tintHex, tintAlpha = 0.35) {
-    const tintColor = normalizeSeedTint(tintHex);
+    const tintColor = utils.normalizeTint(tintHex);
     const alpha = Number(tintAlpha);
     if (!tintColor || !Number.isFinite(alpha) || alpha <= 0) {
       return image;
@@ -150,11 +147,11 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     const texture47AtlasIds = new Set();
     const texture47SrcById = new Map();
     for (const block of data.blocks || []) {
-      if (!isTexture47Block(block)) {
+      if (!worldUtils.isTexture47Block(block)) {
         continue;
       }
 
-      const texture47Id = getTexture47IdFromBlock(block);
+      const texture47Id = worldUtils.getTexture47IdFromBlock(block);
       if (!texture47Id) {
         continue;
       }
@@ -315,7 +312,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
             }
           }
 
-          tint = normalizeSeedTint(config?.tint);
+          tint = utils.normalizeTint(config?.tint);
           const parsedTintAlpha = Number(config?.tintAlpha);
           if (Number.isFinite(parsedTintAlpha)) {
             tintAlpha = Math.max(0, Math.min(1, parsedTintAlpha));
@@ -495,7 +492,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       type: "block",
       blockId: Math.floor(normalizedBlockId),
       atlasId: block.ATLAS_ID,
-      texture47Id: getTexture47IdFromBlock(block),
+      texture47Id: worldUtils.getTexture47IdFromBlock(block),
       texture: block.ATLAS_TEXTURE || null,
     });
     const cachedBlockSprite = state.seedDropSpriteCache.get(blockCacheKey);
@@ -504,7 +501,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     }
 
     let sprite = null;
-    if (isTexture47Block(block)) {
+    if (worldUtils.isTexture47Block(block)) {
       sprite = getTexture47SingleCellSprite(block);
     } else {
       const atlas = state.atlases.get(block.ATLAS_ID);

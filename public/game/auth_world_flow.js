@@ -62,8 +62,11 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
 
   async function runPostLoginLoadingFlow() {
     const username = String(state.user?.username || "player");
+    console.log("[auth] begin post-login flow for", username);
     await ensureAssetsLoadedWithProgress();
+    console.log("[auth] assets loaded");
     await loadWorldList();
+    console.log("[auth] world list loaded");
     appendChatLine("system", `welcome ${username}!`);
     showScreen("world");
 
@@ -108,6 +111,7 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     beginLoadingForUser(username);
 
     try {
+      console.log("[auth] sending request", action, {username});
       const data = await requestJson(`/api/auth/${action}`, {
         method: "POST",
         body: JSON.stringify({ username, password }),
@@ -121,9 +125,12 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
       passwordInput.value = "";
       await runPostLoginLoadingFlow();
     } catch (error) {
+      console.error("auth() caught error", error);
+      console.error(error.stack);
       if (screens.loading?.classList.contains("active")) {
         showScreen("login");
       }
+      // show only the message; stack is in console
       loginError.textContent = error.message;
     }
   }
@@ -133,6 +140,7 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     beginLoadingForUser("guest");
 
     try {
+      console.log("[auth] guest login");
       const deviceId = getGuestDeviceId();
       const data = await requestJson("/api/auth/guest", {
         method: "POST",
@@ -148,6 +156,8 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
       passwordInput.value = "";
       await runPostLoginLoadingFlow();
     } catch (error) {
+      console.error("authGuest() caught error", error);
+      console.error(error.stack);
       if (screens.loading?.classList.contains("active")) {
         showScreen("login");
       }

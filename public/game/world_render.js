@@ -153,6 +153,7 @@ export function createWorldRenderController({ state, settings, callbacks }) {
 
   function rebuildWorldRenderCache() {
     if (!state.world) {
+      // if there’s no world we want the state reference to be cleared
       state.worldRender = null;
       return;
     }
@@ -163,10 +164,16 @@ export function createWorldRenderController({ state, settings, callbacks }) {
     const renderContext = renderCanvas.getContext("2d");
     renderContext.imageSmoothingEnabled = false;
 
-    state.worldRender = {
-      canvas: renderCanvas,
-      context: renderContext,
-    };
+    // keep any previously stored methods on the controller object while
+    // updating the canvas/context fields used by world_utils. if we simply
+    // replaced state.worldRender with a fresh object we would lose the
+    // functions that other modules rely on (and break earlier recursion fix).
+    if (state.worldRender && typeof state.worldRender === "object") {
+      state.worldRender.canvas = renderCanvas;
+      state.worldRender.context = renderContext;
+    } else {
+      state.worldRender = { canvas: renderCanvas, context: renderContext };
+    }
 
     for (let y = 0; y < state.world.height; y += 1) {
       for (let x = 0; x < state.world.width; x += 1) {

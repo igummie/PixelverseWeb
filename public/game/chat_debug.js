@@ -131,14 +131,27 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
   }
 
   const autoScrollMap = new Map();
+  // when we rebuild a log's DOM we may trigger scroll events synchronously
+  // (clearing elements changes scrollHeight). the handler normally creates a
+  // paused-indicator element if it doesn’t find one, which in the middle of a
+  // rebuild can lead to a self‑recursion loop. `rebuilding` is used to
+  // temporarily disable the handler while we’re modifying a container.
+  let rebuilding = false;
+
+  // recursion guards for debugging – avoid blowing the stack repeatedly
+  let renderCallDepth = 0;
+  let appendCallDepth = 0;
 
   function getPausedIndicator(target) {
-    let ind = target.parentElement.querySelector('.chatPausedIndicator');
+    // keep the indicator inside the scrollable element itself so we don't
+    // trigger parent scroll events when creating it. this also handles
+    // cases where the container is moved or re‑parented.
+    let ind = target.querySelector('.chatPausedIndicator');
     if (!ind) {
       ind = document.createElement('div');
       ind.className = 'chatPausedIndicator hidden';
       ind.textContent = 'log paused due to scrolling';
-      target.parentElement.appendChild(ind);
+      target.appendChild(ind);
     }
     return ind;
   }
@@ -148,19 +161,35 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
       return;
     }
     autoScrollMap.set(target, true);
+    // ensure the paused-indicator element exists once; avoid creating it
+    // inside the scroll event since appending could trigger another scroll
+    // event synchronously and lead to a recursion loop.
+    getPausedIndicator(target);
+
     target.addEventListener('scroll', () => {
+      if (rebuilding) {
+        // ignore any scroll events that fire while we’re tearing down /
+        // re‑building the chat log; they’re not meaningful and would otherwise
+        // lead to indicator creation loops.
+        return;
+      }
+
       const atBottom =
         target.scrollTop + target.clientHeight >= target.scrollHeight - 2;
       if (atBottom) {
         autoScrollMap.set(target, true);
         const ind = getPausedIndicator(target);
-        ind.classList.add('hidden');
+        if (!ind.classList.contains('hidden')) {
+          ind.classList.add('hidden');
+        }
       } else {
         if (autoScrollMap.get(target)) {
           // just moved off the bottom
           autoScrollMap.set(target, false);
           const ind = getPausedIndicator(target);
-          ind.classList.remove('hidden');
+          if (ind.classList.contains('hidden')) {
+            ind.classList.remove('hidden');
+          }
         }
       }
     });
@@ -168,18 +197,33 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
 
   // `force` pins to bottom regardless of pause state.
   function renderChatLog(force = false) {
+    renderCallDepth += 1;
+    if (renderCallDepth > 20) {
+      console.error("renderChatLog recursion detected", {force});
+      console.trace();
+      renderCallDepth -= 1;
+      return;
+    }
+
     const targets = [chatLog, worldChatLog, loadingChatLog].filter(Boolean);
     if (targets.length === 0) {
+      renderCallDepth -= 1;
       return;
     }
 
     for (const target of targets) {
       setupAutoScroll(target);
       let shouldAuto = autoScrollMap.get(target);
+      
+      // grab (or create) the paused indicator now and keep a reference so
+      // clearing the log below doesn’t accidentally remove it; if we wipe it
+      // out and then later hit a scroll event the handler would re‑append it
+      // and trigger a new scroll event, leading to the recursion bug we saw.
+      let ind = getPausedIndicator(target);
+
       if (force) {
         shouldAuto = true;
         // also clear paused indicator just in case
-        const ind = getPausedIndicator(target);
         ind.classList.add('hidden');
         autoScrollMap.set(target, true);
       }
@@ -189,7 +233,17 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
       const prevScrollHeight = target.scrollHeight;
       const distanceFromBottom = prevScrollHeight - prevScrollTop;
 
-      target.innerHTML = "";
+      // rebuild the log without ever removing the paused indicator; keep it in
+      // the container so scroll events during construction cannot create a new
+      // one. we also set a flag to make the scroll listener a no-op while we’re
+      // manipulating the children.
+      rebuilding = true;
+      for (const child of Array.from(target.children)) {
+        if (!child.classList.contains('chatPausedIndicator')) {
+          target.removeChild(child);
+        }
+      }
+
       for (const line of state.chatLogLines) {
         const row = document.createElement("div");
         row.className = `chatLine ${line.kind}`;
@@ -200,10 +254,11 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
         }
         target.appendChild(row);
       }
+      rebuilding = false;
 
       if (shouldAuto) {
         target.scrollTop = target.scrollHeight;
-        const ind = getPausedIndicator(target);
+        // indicator already present; just hide it
         ind.classList.add('hidden');
       } else {
         // maintain distance from bottom so the user's viewport doesn't jump
@@ -211,9 +266,18 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
         target.scrollTop = Math.max(0, newScrollHeight - distanceFromBottom);
       }
     }
+    renderCallDepth -= 1;
   }
 
   function appendChatLine(kind, text, username = "") {
+    appendCallDepth += 1;
+    if (appendCallDepth > 20) {
+      console.error("appendChatLine recursion detected", {kind, text, username});
+      console.trace();
+      appendCallDepth -= 1;
+      return;
+    }
+
     const line = {
       kind,
       text: String(text || "").trim(),
@@ -232,6 +296,7 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
 
     const anyOpen = state.chatLogOpen || state.worldChatLogOpen || state.loadingChatLogOpen;
     renderChatLog(anyOpen);
+    appendCallDepth -= 1;
   }
 
   function drawDebugGrid() {

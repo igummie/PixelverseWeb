@@ -58,6 +58,10 @@ import { createWorldDropsController } from "./game/world_drops.js";
 import { createDamageOverlayController } from "./game/damage_overlay.js";
 import { createPhysicsController } from "./game/physics.js";
 import { createWorldRenderController } from "./game/world_render.js";
+import { state } from "./game/state.js";
+import * as utils from "./game/utils.js";
+import { createInventoryController } from "./game/inventory.js";
+import * as worldUtils from "./game/world_utils.js";
 import { createAssetsLoaderController } from "./game/assets_loader.js";
 import { createNetworkClientController } from "./game/network_client.js";
 import { createAuthWorldFlowController } from "./game/auth_world_flow.js";
@@ -152,109 +156,10 @@ ctx.imageSmoothingEnabled = false;
 const RECONNECT_INTERVAL_MS = 3000; // try every 3 seconds per new requirement
 const MAX_RECONNECT_ATTEMPTS = 5;
 
-// helper used for weather colours and shapes
-function normalizeTint(value) {
-  const text = String(value || "").trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(text) || /^#[0-9a-fA-F]{8}$/.test(text)) {
-    return text.toLowerCase();
-  }
-  return "";
-}
+// state object and various helpers have been split into modules to keep
+// the main bundle lightweight.  See game/state.js and game/utils.js for
+// implementations.
 
-const state = {
-  token: null,
-  user: null,
-  ws: null,
-  connected: false,
-  selfId: null,
-  world: null,
-  gems: 0,
-  gemDrops: new Map(),
-  seedDrops: new Map(),
-  plantedTrees: new Map(),
-  players: new Map(),
-  me: { x: 8, y: 8 },
-  camera: { x: 0, y: 0, zoom: 1 },
-  keys: new Set(),
-  mouse: { x: 0, y: 0 },
-  lastMoveSentAt: 0,
-  blockDefs: new Map(),
-  animatedBlockIds: new Set(),
-  seedDefs: new Map(),
-  weatherDefs: new Map(),
-  inventorySeeds: new Map(),
-  atlases: new Map(),
-  seedDropSpriteCache: new Map(),
-  treeSpriteCache: new Map(),
-  texture47: new Map(),
-  // unified selection; we used to track block vs seed id separately
-  selectedItemId: -1,
-  selectedItemType: "seed",
-  selectedMissingSinceMs: 0,
-  velocity: { x: 0, y: 0 },
-  collider: { width: 0.72, height: 0.92 },
-  onGround: false,
-  jumpQueued: false,
-  worldRender: null,
-  crackAtlas: null,
-  tileDamage: new Map(),
-  chatLogLines: [],
-  chatLogOpen: false,
-  chatInputOpen: false,
-  chatDrawerHeight: CHAT_LOG_DRAWER_HEIGHT,
-  chatDrawerOffsetY: -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK),
-  chatDrawerDragging: false,
-  chatDrawerDragStartY: 0,
-  chatDrawerDragStartOffsetY: 0,
-  inventoryOpen: false,
-  inventoryDrawerHeight: INVENTORY_DRAWER_HEIGHT,
-  inventoryDrawerOffsetY: Math.max(0, INVENTORY_DRAWER_HEIGHT - INVENTORY_DRAWER_HANDLE_PEEK),
-  inventoryDrawerDragging: false,
-  inventoryDrawerDragStartY: 0,
-  inventoryDrawerDragStartOffsetY: 0,
-  worldChatLogOpen: false,
-  worldChatDrawerHeight: CHAT_LOG_DRAWER_HEIGHT,
-  worldChatDrawerOffsetY: -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK),
-  worldChatDrawerDragging: false,
-  worldChatDrawerDragStartY: 0,
-  worldChatDrawerDragStartOffsetY: 0,
-  loadingChatLogOpen: true,
-  loadingChatDrawerHeight: CHAT_LOG_DRAWER_HEIGHT,
-  loadingChatDrawerOffsetY: 0,
-  loadingChatDrawerDragging: false,
-  loadingChatDrawerDragStartY: 0,
-  loadingChatDrawerDragStartOffsetY: 0,
-  assetsLoaded: false,
-  flyEnabled: false,
-  noclipEnabled: false,
-  debugEnabled: false,
-  debugGridEnabled: false,
-  debugHitboxesEnabled: false,
-  creativeEnabled: false,
-  creativePlaceType: "block",
-  debugFps: 0,
-  debugPingMs: null,
-  netSimPingMs: 0,
-  netSimJitterMs: 0,
-  netSimLossPercent: 0,
-  debugPingToolsVisible: false,
-  pauseMenuOpen: false,
-  debugLastFrameAt: 0,
-  debugLastInfoAt: 0,
-  pingTimerId: null,
-  transientSystemBubbles: [],
-  serverTimeOffsetMs: 0,
-  treeHintAnchor: null,
-  treeHintTreeId: "",
-  reconnect: {
-    active: false,
-    attempt: 0,
-    timerId: null,
-  },
-  bundleFingerprint: "",
-  reloadInProgress: false,
-  reloadOnReconnect: false,
-};
 
 // Remove any `bundleReload` query param after a forced reload to keep the URL clean.
 (function cleanBundleReloadParam() {
@@ -303,10 +208,14 @@ const worldRender = createWorldRenderController({
     TEXTURE47_COLS,
   },
   callbacks: {
-    getAnimatedRegularTextureRect,
-    getRegularTextureRect, // handles variants + animation/base
+    getAnimatedRegularTextureRect: utils.getAnimatedRegularTextureRect,
+    getRegularTextureRect: utils.getRegularTextureRect, // handles variants + animation/base
   },
 });
+// expose the controller on state so helpers (world_utils) can reach its
+// methods; rebuildWorldRenderCache will amend the same object rather than
+// overwriting it.
+state.worldRender = worldRender;
 
 const assetsLoader = createAssetsLoaderController({
   state,
@@ -326,11 +235,22 @@ const assetsLoader = createAssetsLoaderController({
   },
   callbacks: {
     requestJson,
-    isTexture47Block: worldRender.isTexture47Block,
-    getTexture47IdFromBlock: worldRender.getTexture47IdFromBlock,
-    blockHasRegularAnimation,
-    rebuildWorldRenderCache: worldRender.rebuildWorldRenderCache,
+    isTexture47Block: worldUtils.isTexture47Block,
+    getTexture47IdFromBlock: worldUtils.getTexture47IdFromBlock,
+    blockHasRegularAnimation: utils.blockHasRegularAnimation,
+    rebuildWorldRenderCache: worldUtils.rebuildWorldRenderCache,
   },
+});
+
+// inventory controller needs to exist before various UI helpers are used
+const inventory = createInventoryController({
+  getItemDropSprite: assetsLoader.getItemDropSprite,
+  // sendWs will be registered later once the function is available
+  itemSelectHud,
+  inventoryGrid,
+  inventorySelectedInfo,
+  blockSelect,
+  blockTypeInfo,
 });
 
 const networkClient = createNetworkClientController({
@@ -489,9 +409,8 @@ const chatBubbles = createChatBubblesController({
 const TREE_HINT_FADE_OUT_MS = 280;
 const TREE_HINT_HOLD_MS = LEAVE_TEXT_FADE_MS + 180;
 
-function clampCameraZoom(value) {
-  return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, value));
-}
+// camera zoom clamping is implemented in utils; use
+// `utils.clampCameraZoom(value, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM)`
 
 function updateZoomUi() {
   hud.updateZoomUi();
@@ -617,13 +536,17 @@ function clearActiveWorldRuntimeState() {
   setWorldChatLogOpen(false);
   pauseMenu.setPauseMenuOpen(false);
   state.world = null;
-  state.worldRender = null;
+  // keep the worldRender controller object intact; it will be reused when
+  // the next world snapshot arrives. nulling it here prevented
+  // worldUtils.rebuildWorldRenderCache() from doing anything, leaving the
+  // canvas stale and resulting in a blank world on re-enter.
+  // state.worldRender = null;
   state.gems = 0;
   updateGemUi();
   state.inventorySeeds.clear();
   state.selectedItemId = -1;
   state.selectedItemType = "seed";
-  renderInventoryDrawer();
+  inventory.renderInventoryDrawer();
   state.gemDrops.clear();
   state.seedDrops.clear();
   state.plantedTrees.clear();
@@ -783,7 +706,7 @@ const inputController = createInputController({
         return null;
       }
       return {
-        itemType: normalizeItemType(state.selectedItemType || "seed", "seed"),
+        itemType: utils.normalizeItemType(state.selectedItemType || "seed", "seed"),
         itemId: Math.floor(itemId),
       };
     },
@@ -797,17 +720,17 @@ const inputController = createInputController({
         return null;
       }
       return {
-        itemType: normalizeItemType(state.selectedItemType || "seed", "seed"),
+        itemType: utils.normalizeItemType(state.selectedItemType || "seed", "seed"),
         itemId: Math.floor(itemId),
       };
     },
     isCreativeEnabled: () => !!state.creativeEnabled,
-    dropSelectedInventorySeed,
+    dropSelectedInventorySeed: inventory.dropSelectedInventorySeed,
   },
 });
 
 function setCameraZoom(nextZoom) {
-  const clamped = clampCameraZoom(nextZoom);
+  const clamped = utils.clampCameraZoom(nextZoom, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
   if (Math.abs(clamped - state.camera.zoom) < 0.0001) {
     return;
   }
@@ -821,29 +744,6 @@ function adjustCameraZoom(delta) {
   setCameraZoom(target);
 }
 
-function isTexture47Block(block) {
-  return worldRender.isTexture47Block(block);
-}
-
-function getTexture47IdFromBlock(block) {
-  return worldRender.getTexture47IdFromBlock(block);
-}
-
-function getTileIdAtLayer(tileX, tileY, layer = "foreground") {
-  return worldRender.getTileIdAtLayer(tileX, tileY, layer);
-}
-
-function sameTexture47Group(tileX, tileY, texture47Id, layer = "foreground") {
-  return worldRender.sameTexture47Group(tileX, tileY, texture47Id, layer);
-}
-
-function getTexture47Mask(tileX, tileY, texture47Id, layer = "foreground") {
-  return worldRender.getTexture47Mask(tileX, tileY, texture47Id, layer);
-}
-
-function drawConnected47TileToContext(targetContext, block, drawX, drawY, layer = "foreground") {
-  return worldRender.drawConnected47TileToContext(targetContext, block, drawX, drawY, layer);
-}
 
 function initializeRemotePlayerTracking(player) {
   player.targetX = player.x;
@@ -980,9 +880,7 @@ function removePlantedTree(entry) {
   worldDrops.removePlantedTree(entry);
 }
 
-function getServerNowMs() {
-  return Date.now() + (Number(state.serverTimeOffsetMs) || 0);
-}
+// server time helper moved to utils: utils.getServerNowMs(state)
 
 function updateRemotePlayersInterpolation(deltaSeconds) {
   if (!state.selfId) {
@@ -1035,164 +933,8 @@ function updateRemotePlayersInterpolation(deltaSeconds) {
   }
 }
 
-function normalizeAnimFrame(entry) {
-  if (!entry || typeof entry !== "object") {
-    return null;
-  }
-
-  const x = Number(entry.x);
-  const y = Number(entry.y);
-  const w = Number(entry.w);
-  const h = Number(entry.h);
-  const seconds = Number(entry.seconds ?? entry.SECONDS ?? entry.duration ?? 0.15);
-
-  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) {
-    return null;
-  }
-
-  if (x < 0 || y < 0 || w <= 0 || h <= 0) {
-    return null;
-  }
-
-  return {
-    x: Math.floor(x),
-    y: Math.floor(y),
-    w: Math.floor(w),
-    h: Math.floor(h),
-    seconds: Number.isFinite(seconds) && seconds > 0 ? seconds : 0.15,
-  };
-}
-
-function normalizePrimaryAnimSeconds(value, fallback = 0.15) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return fallback;
-  }
-  return Math.max(0.01, Number(numeric.toFixed(3)));
-}
-
-function blockHasRegularAnimation(block) {
-  if (!block?.ATLAS_TEXTURE || typeof block.ATLAS_TEXTURE !== "object") {
-    return false;
-  }
-
-  return Array.isArray(block.ANIM_FRAMES) && block.ANIM_FRAMES.length > 0;
-}
-
-function blockHasTextureVariants(block) {
-  return Array.isArray(block?.ATLAS_TEXTURE_VARIANTS) && block.ATLAS_TEXTURE_VARIANTS.length > 0;
-}
-
-// Choose a variant rectangle based on tile coordinates so it is stable across
-// redraws.  The simple hashing strategy mirrors the one used for texture47
-// mask variants in world_render.js.
-function getVariantTextureRect(block, tileX, tileY) {
-  if (!blockHasTextureVariants(block)) {
-    return null;
-  }
-  const variants = block.ATLAS_TEXTURE_VARIANTS;
-  const hash = Math.abs((tileX * 73856093) ^ (tileY * 19349663));
-  const idx = hash % variants.length;
-  const rect = variants[idx];
-  if (!rect || typeof rect !== "object") {
-    return null;
-  }
-  const x = Number(rect.x) || 0;
-  const y = Number(rect.y) || 0;
-  const w = Number(rect.w) || TILE_SIZE;
-  const h = Number(rect.h) || TILE_SIZE;
-  return { x, y, w, h };
-}
-
-// wrapper that applies variants first before animation or base texture
-function getRegularTextureRect(block, tileX, tileY, nowMs = performance.now()) {
-  const variant = getVariantTextureRect(block, tileX, tileY);
-  const animated = blockHasRegularAnimation(block);
-
-  if (animated) {
-    // if a variant exists use it as the base texture for the animation
-    if (variant) {
-      const temp = Object.assign({}, block);
-      temp.ATLAS_TEXTURE = variant;
-      return getAnimatedRegularTextureRect(temp, nowMs);
-    }
-    return getAnimatedRegularTextureRect(block, nowMs);
-  }
-
-  if (variant) {
-    return variant;
-  }
-
-  if (block?.ATLAS_TEXTURE && typeof block.ATLAS_TEXTURE === "object") {
-    return {
-      x: Number(block.ATLAS_TEXTURE.x) || 0,
-      y: Number(block.ATLAS_TEXTURE.y) || 0,
-      w: Number(block.ATLAS_TEXTURE.w) || TILE_SIZE,
-      h: Number(block.ATLAS_TEXTURE.h) || TILE_SIZE,
-    };
-  }
-  return null;
-}
-
-function getAnimatedRegularTextureRect(block, nowMs = performance.now()) {
-  if (!block?.ATLAS_TEXTURE || typeof block.ATLAS_TEXTURE !== "object") {
-    return null;
-  }
-
-  const rawFrames = Array.isArray(block.ANIM_FRAMES) ? block.ANIM_FRAMES : [];
-  const normalizedExtraFrames = [];
-  for (const rawFrame of rawFrames) {
-    const frame = normalizeAnimFrame(rawFrame);
-    if (frame) {
-      normalizedExtraFrames.push(frame);
-    }
-  }
-
-  const primarySeconds = normalizedExtraFrames.length > 0
-    ? normalizePrimaryAnimSeconds(block?.ANIM_FIRST_SECONDS, 0.15)
-    : 0.15;
-
-  const base = {
-    x: Number(block.ATLAS_TEXTURE.x) || 0,
-    y: Number(block.ATLAS_TEXTURE.y) || 0,
-    w: Number(block.ATLAS_TEXTURE.w) || TILE_SIZE,
-    h: Number(block.ATLAS_TEXTURE.h) || TILE_SIZE,
-    seconds: primarySeconds,
-  };
-
-  const frames = [base];
-  for (const frame of normalizedExtraFrames) {
-    frames.push(frame);
-  }
-
-  if (frames.length === 1) {
-    return base;
-  }
-
-  const totalSeconds = frames.reduce((sum, frame) => sum + Math.max(0.01, Number(frame.seconds) || 0.15), 0);
-  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
-    return base;
-  }
-
-  let cursor = (Math.max(0, nowMs) / 1000) % totalSeconds;
-  for (const frame of frames) {
-    const frameSeconds = Math.max(0.01, Number(frame.seconds) || 0.15);
-    if (cursor < frameSeconds) {
-      return frame;
-    }
-    cursor -= frameSeconds;
-  }
-
-  return frames[frames.length - 1];
-}
-
-function drawTileToContext(targetContext, tileId, drawX, drawY, layer = "foreground") {
-  worldRender.drawTileToContext(targetContext, tileId, drawX, drawY, layer);
-}
-
-function rebuildWorldRenderCache() {
-  worldRender.rebuildWorldRenderCache();
-}
+// texture/animation helpers have been migrated to game/utils.js and
+// low-level world rendering helpers are available via game/world_utils.js.
 
 function updateWorldRenderTile(tileX, tileY) {
   worldRender.updateWorldRenderTile(tileX, tileY);
@@ -1302,7 +1044,7 @@ function maybeRefreshDefinitionsForItem(itemId, itemType) {
     return;
   }
 
-  const normalizedItemType = normalizeItemType(itemType, "seed");
+  const normalizedItemType = utils.normalizeItemType(itemType, "seed");
   if (normalizedItemType === "seed") {
     if (state.seedDefs.has(normalizedItemId)) {
       return;
@@ -1337,252 +1079,10 @@ function getItemDropSprite(itemId, itemType = "") {
   return assetsLoader.getItemDropSprite(itemId, itemType);
 }
 
-const ALLOWED_ITEM_TYPES = new Set(["seed", "block", "furniture", "clothes"]);
+// inventory and item helpers have been relocated to game/inventory.js and
+// game/utils.js.  instantiate the controller below and use its methods
+// `setSelectedItem`, `renderInventoryDrawer`, etc.
 
-function normalizeItemType(value, fallback = "seed") {
-  const normalizedFallback = ALLOWED_ITEM_TYPES.has(String(fallback || "").trim().toLowerCase())
-    ? String(fallback).trim().toLowerCase()
-    : "seed";
-  const text = String(value ?? "").trim().toLowerCase();
-  return ALLOWED_ITEM_TYPES.has(text) ? text : normalizedFallback;
-}
-
-function getItemDisplayName(itemId, itemType) {
-  const normalizedType = normalizeItemType(itemType);
-  if (normalizedType === "block") {
-    return String(state.blockDefs.get(itemId)?.NAME || `Block ${itemId}`);
-  }
-  if (normalizedType === "furniture") {
-    return `Furniture ${itemId}`;
-  }
-  if (normalizedType === "clothes") {
-    return `Clothes ${itemId}`;
-  }
-  return String(
-    state.seedDefs.get(itemId)?.NAME
-    || state.blockDefs.get(itemId)?.NAME
-    || `Item ${itemId}`,
-  );
-}
-
-function normalizeInventoryEntry(entry) {
-  if (!entry || typeof entry !== "object") {
-    return null;
-  }
-
-  const itemId = Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id);
-  const itemType = normalizeItemType(entry.itemType ?? entry.item_type ?? "seed", "seed");
-  const count = Number(entry.count);
-  if (!Number.isFinite(itemId) || !Number.isFinite(count)) {
-    return null;
-  }
-
-  const normalizedItemId = Math.floor(itemId);
-  const normalizedCount = Math.floor(count);
-  if (normalizedItemId < 0 || normalizedCount <= 0) {
-    return null;
-  }
-
-  return {
-    key: `${itemType}:${normalizedItemId}`,
-    itemType,
-    itemId: normalizedItemId,
-    count: normalizedCount,
-  };
-}
-
-function normalizeInventoryPayload(payload) {
-  const merged = new Map();
-  if (!Array.isArray(payload)) {
-    return merged;
-  }
-
-  for (const rawEntry of payload) {
-    const entry = normalizeInventoryEntry(rawEntry);
-    if (!entry) {
-      continue;
-    }
-    merged.set(entry.key, (merged.get(entry.key) || 0) + entry.count);
-  }
-
-  return merged;
-}
-
-function getInventoryEntriesSorted() {
-  return Array.from(state.inventorySeeds.entries())
-    .map(([itemKey, count]) => {
-      const [typePart, idPart] = String(itemKey).split(":", 2);
-      const itemType = normalizeItemType(typePart || "seed", "seed");
-      const itemId = Number(idPart);
-      return {
-        key: String(itemKey),
-        itemType,
-        itemId,
-        count: Number(count),
-      };
-    })
-    .filter((entry) => Number.isFinite(entry.itemId) && Number.isFinite(entry.count) && entry.count > 0)
-    .sort((a, b) => a.key.localeCompare(b.key));
-}
-
-function getSelectedInventoryKey() {
-  if (!Number.isFinite(Number(state.selectedItemId)) || state.selectedItemId < 0) {
-    return "";
-  }
-  const type = normalizeItemType(state.selectedItemType || "seed", "seed");
-  return `${type}:${Math.floor(Number(state.selectedItemId))}`;
-}
-
-function setSelectedItem(itemId, itemType = "seed") {
-  const numeric = Number(itemId);
-  const normalizedType = normalizeItemType(itemType, "seed");
-  if (!Number.isFinite(numeric) || numeric < 0) {
-    state.selectedItemId = -1;
-    state.selectedItemType = "seed";
-    state.selectedMissingSinceMs = 0;
-    if (itemSelectHud) {
-      itemSelectHud.value = "";
-    }
-    renderInventoryDrawer();
-    return;
-  }
-
-  state.selectedItemId = Math.floor(numeric);
-  state.selectedItemType = normalizedType;
-  state.selectedMissingSinceMs = 0;
-  if (itemSelectHud) {
-    itemSelectHud.value = normalizedType === "seed" ? String(state.selectedItemId) : "";
-  }
-  renderInventoryDrawer();
-}
-
-function ensureSelectedItemStillValid() {
-  if (state.selectedItemId < 0) {
-    state.selectedMissingSinceMs = 0;
-    return;
-  }
-
-  // If the player currently has a block selected from the block palette,
-  // do not treat it as "missing" just because it's not present in the
-  // seed inventory map. Blocks are selected from `state.blockDefs` and
-  // aren't tracked in `state.inventorySeeds`, so skip the inventory
-  // existence check for block selections.
-  if (String(state.selectedItemType || "").toLowerCase() === "block") {
-    state.selectedMissingSinceMs = 0;
-    return;
-  }
-
-  const selectedKey = getSelectedInventoryKey();
-  if (selectedKey && Number(state.inventorySeeds.get(selectedKey) || 0) > 0) {
-    state.selectedMissingSinceMs = 0;
-    return;
-  }
-
-  // Removed auto-switch logic: do not switch to another item with the same id when depleted.
-
-  const now = Date.now();
-  if (!state.selectedMissingSinceMs) {
-    state.selectedMissingSinceMs = now;
-    return;
-  }
-
-  if (now - state.selectedMissingSinceMs < 450) {
-    return;
-  }
-
-  // Do not auto-switch to a different item when the current one is depleted.
-  setSelectedItem(-1);
-}
-
-function renderInventoryDrawer() {
-  if (!inventoryGrid) {
-    return;
-  }
-
-  const entries = getInventoryEntriesSorted();
-  inventoryGrid.innerHTML = "";
-
-  const slotCount = Math.max(INVENTORY_GRID_SLOTS, entries.length);
-  for (let i = 0; i < slotCount; i += 1) {
-    const slot = document.createElement("button");
-    slot.type = "button";
-    slot.className = "inventorySlot";
-
-    const entry = entries[i];
-    if (!entry) {
-      slot.classList.add("empty");
-      slot.disabled = true;
-      inventoryGrid.appendChild(slot);
-      continue;
-    }
-
-    const isSelected = entry.key === getSelectedInventoryKey();
-    if (isSelected) {
-      slot.classList.add("selected");
-    }
-
-    const sprite = getItemDropSprite(entry.itemId, entry.itemType);
-    if (sprite) {
-      const icon = document.createElement("img");
-      icon.className = "inventoryItemIcon";
-      icon.alt = "";
-      icon.src = sprite.toDataURL("image/png");
-      slot.appendChild(icon);
-    } else {
-      slot.textContent = `#${entry.itemId}`;
-    }
-
-    const count = document.createElement("span");
-    count.className = "inventoryItemCount";
-    count.textContent = String(entry.count);
-    slot.appendChild(count);
-
-    const itemName = entry.itemType === "block"
-      ? getItemDisplayName(entry.itemId, "block")
-      : getItemDisplayName(entry.itemId, entry.itemType);
-    slot.title = `${itemName} x${entry.count}`;
-    slot.addEventListener("click", () => {
-      setSelectedItem(entry.itemId, entry.itemType);
-    });
-    inventoryGrid.appendChild(slot);
-  }
-
-  if (inventorySelectedInfo) {
-    if (state.selectedItemId < 0) {
-      inventorySelectedInfo.textContent = "Selected: none";
-    } else {
-      const selectedKey = getSelectedInventoryKey();
-      const selectedCount = Number(state.inventorySeeds.get(selectedKey) || 0);
-      const selectedItemName = getItemDisplayName(state.selectedItemId, state.selectedItemType);
-      inventorySelectedInfo.textContent = `Selected: ${selectedItemName} x${Math.max(0, selectedCount)}`;
-    }
-  }
-}
-
-function dropSelectedInventorySeed(count = 1) {
-  if (!state.connected) {
-    return;
-  }
-
-  const itemId = Number(state.selectedItemId);
-  if (!Number.isFinite(itemId) || itemId < 0) {
-    return;
-  }
-
-  const itemType = normalizeItemType(state.selectedItemType || "seed", "seed");
-  sendWs({
-    type: "drop_inventory_seed",
-    itemType,
-    itemId: Math.floor(itemId),
-    count: Math.max(1, Math.floor(Number(count) || 1)),
-  });
-}
-
-function applyInventorySnapshot(payload) {
-  state.inventorySeeds = normalizeInventoryPayload(payload);
-  ensureSelectedItemStillValid();
-  renderInventoryDrawer();
-}
 
 function getSeedTreeStage(seed, serverNowMs, plantedAtMs) {
   if (!seed || typeof seed !== "object") {
@@ -1674,7 +1174,7 @@ function maybeShowTreeGrowthHint(nowMs) {
 
   const growSeconds = Math.max(1, Number(seed.GROWTIME) || 1);
   const totalMs = growSeconds * 1000;
-  const elapsedMs = Math.max(0, getServerNowMs() - Number(tree.plantedAtMs || 0));
+  const elapsedMs = Math.max(0, utils.getServerNowMs(state) - Number(tree.plantedAtMs || 0));
   const remainingMs = Math.max(0, totalMs - elapsedMs);
   // We no longer use the individual stage number; the hint shows the
   // tree's display name instead.
@@ -1682,7 +1182,7 @@ function maybeShowTreeGrowthHint(nowMs) {
   // derive a display name for the planted tree by taking the seed's
   // name and swapping out "Seed" for "Tree". This gives us something
   // like "Apple Tree" instead of "Apple Seed".
-  const seedName = getItemDisplayName(tree.seedId, "seed");
+  const seedName = utils.getItemDisplayName(tree.seedId, "seed", state);
   const treeName = seedName.replace(/Seed/gi, "Tree");
 
   // the bubble used to show the current stage number; now we show the
@@ -1753,7 +1253,7 @@ function drawPlantedTrees() {
     return;
   }
 
-  const serverNowMs = getServerNowMs();
+  const serverNowMs = utils.getServerNowMs(state);
   // compute the logical dimensions once per frame so browser zoom / DPR
   // doesn’t make our visibility clipping values inconsistent.
   const cssW = canvas.clientWidth || canvas.width;
@@ -1852,7 +1352,7 @@ function handleSocketMessage(msg) {
     state.selfId = msg.selfId;
     state.gems = Number(msg.gems || 0);
     updateGemUi();
-    applyInventorySnapshot(msg.inventory || []);
+    inventory.applyInventorySnapshot(msg.inventory || []);
     state.players.clear();
     applyGemDropSnapshot(msg.world.gemDrops || []);
     applySeedDropSnapshot(msg.world.seedDrops || []);
@@ -1861,7 +1361,7 @@ function handleSocketMessage(msg) {
     for (const damageState of msg.world.tileDamage || []) {
       setTileDamage(damageState);
     }
-    rebuildWorldRenderCache();
+    worldUtils.rebuildWorldRenderCache();
 
     for (const player of msg.world.players) {
       initializeRemotePlayerTracking(player);
@@ -2105,9 +1605,9 @@ function handleSocketMessage(msg) {
       const label = drops
         .map((entry) => {
           const itemId = Math.floor(Number(entry.itemId ?? entry.item_id ?? entry.seedId ?? entry.seed_id) || 0);
-          const itemType = normalizeItemType(entry.itemType ?? entry.item_type ?? "seed", "seed");
+          const itemType = utils.normalizeItemType(entry.itemType ?? entry.item_type ?? "seed", "seed");
           const count = Math.max(1, Math.floor(Number(entry.count) || 1));
-          const itemName = getItemDisplayName(itemId, itemType);
+          const itemName = utils.getItemDisplayName(itemId, itemType, state);
           return `${itemName} x${count}`;
         })
         .join(", ");
@@ -2127,7 +1627,7 @@ function handleSocketMessage(msg) {
       const itemType = entry.itemType ?? entry.item_type ?? "seed";
       maybeRefreshDefinitionsForItem(itemId, itemType);
     }
-    applyInventorySnapshot(msg.inventory || []);
+    inventory.applyInventorySnapshot(msg.inventory || []);
     return;
   }
 
@@ -2155,6 +1655,9 @@ function connectSocket() {
 function sendWs(payload) {
   return networkClient.sendWs(payload);
 }
+
+// wire the inventory helper so it can send drop requests
+inventory.setSendWs(sendWs);
 
 async function enterWorld(targetWorldName = null) {
   await authWorldFlow.enterWorld(targetWorldName);
@@ -2186,7 +1689,7 @@ logoutBtn.addEventListener("click", logout);
 blockSelect.addEventListener("change", () => {
   const nextId = Number(blockSelect.value);
   if (!Number.isNaN(nextId)) {
-    setSelectedItem(nextId, "block");
+    inventory.setSelectedItem(nextId, "block");
     if (state.creativeEnabled) {
       state.creativePlaceType = "block";
     }
@@ -2200,7 +1703,7 @@ itemSelectHud?.addEventListener("change", () => {
   if (state.creativeEnabled) {
     state.creativePlaceType = "seed";
   }
-  setSelectedItem(Number.isFinite(nextId) ? Math.floor(nextId) : -1, "seed");
+  inventory.setSelectedItem(Number.isFinite(nextId) ? Math.floor(nextId) : -1, "seed");
 });
 
 passwordInput.addEventListener("keydown", (event) => {
@@ -2261,7 +1764,7 @@ const endInventoryDrawerDrag = (event) => {
 inventoryDrawerHandle?.addEventListener("pointerup", endInventoryDrawerDrag);
 inventoryDrawerHandle?.addEventListener("pointercancel", endInventoryDrawerDrag);
 applyInventoryDrawerPosition(state.inventoryDrawerOffsetY);
-renderInventoryDrawer();
+inventory.renderInventoryDrawer();
 
 
 function update() {
@@ -2456,7 +1959,7 @@ function drawWorld() {
   }
 
   if (!state.worldRender) {
-    rebuildWorldRenderCache();
+    worldUtils.rebuildWorldRenderCache();
   }
 
   if (!state.worldRender) {
@@ -2528,12 +2031,8 @@ function drawAnimatedTilesOverlay() {
           continue;
         }
 
-        let tex = null;
-        if (typeof getRegularTextureRect === "function") {
-          tex = getRegularTextureRect(block, tileX, tileY, nowMs);
-        } else {
-          tex = getAnimatedRegularTextureRect(block, nowMs);
-        }
+        // use helper from utils, which handles variants and animation
+        let tex = utils.getRegularTextureRect(block, tileX, tileY, nowMs);
         if (!tex) {
           continue;
         }
@@ -2860,7 +2359,7 @@ function drawWeather(frontOnly = false) {
 
   // base fill color is only drawn on the background pass
   if (!frontOnly) {
-    const base = normalizeTint(def.WEATHER_COLOR);
+    const base = utils.normalizeTint(def.WEATHER_COLOR);
     if (base) {
       ctx.fillStyle = base;
       ctx.fillRect(0, 0, cw, ch);
@@ -2873,13 +2372,13 @@ function drawWeather(frontOnly = false) {
     let offs = (state.weatherOffsets && state.weatherOffsets[idx]) || { x: 0, y: 0 };
     const type = layer.TYPE || "atlas";
     if (type === "color") {
-      const col = normalizeTint(layer.COLOR);
+      const col = utils.normalizeTint(layer.COLOR);
       if (col) {
         ctx.fillStyle = col;
         ctx.fillRect(0, 0, cw, ch);
       }
     } else if (type === "shape") {
-      const col = normalizeTint(layer.COLOR) || "#000";
+      const col = utils.normalizeTint(layer.COLOR) || "#000";
       const rect = layer.RECT || { x: 0, y: 0, w: 0, h: 0 };
       if (rect.w > 0 && rect.h > 0) {
         // convert offset to pixel space, include shape origin
