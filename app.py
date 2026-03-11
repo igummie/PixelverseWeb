@@ -1016,7 +1016,7 @@ def collect_gems_for_player(world: dict[str, Any], player: dict[str, Any]) -> tu
     return collected_ids, collected_total
 
 
-def collect_seed_drops_for_player(
+def collect_item_drops_for_player(
     world: dict[str, Any],
     player: dict[str, Any],
     inventory_slots: int | None = None,
@@ -1029,9 +1029,9 @@ def collect_seed_drops_for_player(
     removed from the world and the other two lists will be empty.
     """
 
-    seed_drops = ensure_world_seed_state(world)
-    if not seed_drops:
-        return [], []
+    item_drops = ensure_world_seed_state(world)
+    if not item_drops:
+        return [], [], False
 
     try:
         player_center_x = float(player.get("x", 0.0)) + 0.36
@@ -1044,27 +1044,27 @@ def collect_seed_drops_for_player(
     candidate_items: list[dict[str, Any]] = []
     radius_sq = PLAYER_PICKUP_RADIUS * PLAYER_PICKUP_RADIUS
 
-    for drop_id, drop in list(seed_drops.items()):
+    for drop_id, drop in list(item_drops.items()):
         if not isinstance(drop, dict):
             continue
 
         try:
             dx = float(drop.get("x", 0.0)) - player_center_x
             dy = float(drop.get("y", 0.0)) - player_center_y
-            seed_id = int(drop.get("item_id", drop.get("seed_id", -1)))
+            item_id = int(drop.get("item_id", drop.get("seed_id", -1)))
             item_type = str(drop.get("item_type", "seed")).strip().lower()
         except Exception:
             continue
 
-        if seed_id < 0:
+        if item_id < 0:
             # invalid drop; clean up immediately
-            seed_drops.pop(drop_id, None)
+            item_drops.pop(drop_id, None)
             continue
 
         if (dx * dx) + (dy * dy) <= radius_sq:
             item_type = normalize_item_type(item_type)
             candidate_ids.append(str(drop_id))
-            candidate_items.append({"itemId": seed_id, "itemType": item_type})
+            candidate_items.append({"itemId": item_id, "itemType": item_type})
 
     # capacity check
     overflowed = False
@@ -1087,7 +1087,7 @@ def collect_seed_drops_for_player(
 
     for idx, entry in enumerate(candidate_items):
         drop_id = candidate_ids[idx]
-        seed_drops.pop(drop_id, None)
+        item_drops.pop(drop_id, None)
         collected_ids.append(drop_id)
         collected_items.append(entry)
 
@@ -2010,7 +2010,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 # compute current inventory for capacity check
                 current_inventory = normalize_inventory(player.get("inventory", {}))
                 slots_limit = int(player.get("inventory_slots", 0)) or None
-                collected_seed_drop_ids, collected_items, overflow = collect_seed_drops_for_player(
+                collected_item_drop_ids, collected_items, overflow = collect_item_drops_for_player(
                     world,
                     player,
                     slots_limit,
@@ -2019,7 +2019,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if overflow:
                     # notify the player that their inventory is full
                     await ws_send(websocket, {"type": "system_message", "message": "Inventory full"})
-                if collected_seed_drop_ids:
+                if collected_item_drop_ids:
                     await schedule_world_save(world["name"])
                     item_counts: dict[tuple[str, int], int] = {}
                     for entry in collected_items:
@@ -2049,7 +2049,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
                         await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
 
-                    for drop_id in collected_seed_drop_ids:
+                    for drop_id in collected_item_drop_ids:
                         await broadcast_to_world(
                             world,
                             {
