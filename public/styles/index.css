@@ -103,12 +103,21 @@
         font-size: 13px;
       }
 
+      /* make the game screen a full‑viewport flex container; the canvas
+         inside will flex to fill whatever space isn’t taken by the HUD/topbar.
+         this is more robust than doing `calc()` on the canvas height, which can
+         mis‑measure when the variable isn’t updated yet. */
       #gameScreen {
+        /* fixed positioning ensures the element always covers the entire
+           viewport, even when the browser toolbars hide/show (F11) or the
+           window is moved/resized; using inset makes it a true rectangle. */
+        position: fixed;
+        inset: 0;
+        display: flex;
         flex-direction: column;
         padding: 0;
         align-items: stretch;
         justify-content: flex-start;
-        position: relative;
         overflow: hidden;
         --hud-height: 58px;
       }
@@ -155,8 +164,11 @@
 
       #game {
         display: block;
-        width: 100vw;
-        height: calc(100vh - 58px);
+        /* flex:1 ensures the canvas always expands to fill whatever vertical
+           space remains inside #gameScreen after the HUD/topbar, which
+           eliminates gaps or clipping at the bottom. */
+        flex: 1;
+        width: 100%;
         image-rendering: pixelated;
         background: #0f172a;
         position: relative;

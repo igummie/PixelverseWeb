@@ -235,10 +235,17 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     // browser will scale the canvas visually and small rounding errors when
     // we compute tile positions can make layers appear to hop around.
     const dpr = window.devicePixelRatio || 1;
-    const cw = window.innerWidth;
-    const ch = Math.max(1, window.innerHeight - topbarHeight);
-    canvas.width = Math.round(cw * dpr);
-    canvas.height = Math.round(ch * dpr);
+    // measure the canvas itself; this avoids any discrepancies between CSS
+    // `100vw` and window.innerWidth caused by scrollbars.  Using the raw
+    // client rect ensures the backing store matches the visible element exactly.
+    const rect = canvas.getBoundingClientRect();
+    const cw = rect.width;
+    const ch = Math.max(1, rect.height);
+    // use ceil rather than round to ensure backing surface is at least as
+    // large as the CSS box; rounding down by half a pixel could produce a
+    // one‑pixel strip of untranslated area at the right/bottom edges.
+    canvas.width = Math.ceil(cw * dpr);
+    canvas.height = Math.ceil(ch * dpr);
     // scale future drawing operations automatically
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 

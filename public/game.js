@@ -1236,6 +1236,11 @@ function resizeCanvas() {
 }
 
 window.addEventListener("resize", resizeCanvas);
+// when the browser goes into or out of fullscreen mode the layout can
+// shift without triggering a normal resize event on some platforms; watch
+// for the fullscreenchange event and update our canvas state accordingly.
+window.addEventListener("fullscreenchange", resizeCanvas);
+window.addEventListener("webkitfullscreenchange", resizeCanvas); // Safari/old WebKit
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
@@ -2801,12 +2806,20 @@ function drawWeather(frontOnly = false) {
   const def = state.weatherDefs.get(id);
   if (!def) return;
 
+  // calculate a consistent logical size in CSS pixels for the weather drawing.
+  // the rendering context is already scaled by devicePixelRatio, so using the
+  // clientWidth/Height matches the coordinate space used for camera/world
+  // drawing and avoids off‑by‑one gaps when the canvas backing store and the
+  // visible box differ by a pixel or two.
+  const cw = canvas.clientWidth || canvas.width || 0;
+  const ch = canvas.clientHeight || canvas.height || 0;
+
   // base fill color is only drawn on the background pass
   if (!frontOnly) {
     const base = normalizeTint(def.WEATHER_COLOR);
     if (base) {
       ctx.fillStyle = base;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, cw, ch);
     }
   }
 
@@ -2819,7 +2832,7 @@ function drawWeather(frontOnly = false) {
       const col = normalizeTint(layer.COLOR);
       if (col) {
         ctx.fillStyle = col;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, cw, ch);
       }
     } else if (type === "shape") {
       const col = normalizeTint(layer.COLOR) || "#000";
@@ -2853,8 +2866,8 @@ function drawWeather(frontOnly = false) {
             // tile version: repeat shape across canvas
             const tx = ((px % w) + w) % w;
             const ty = ((py % h) + h) % h;
-            for (let xx = -tx; xx < canvas.width; xx += w) {
-              for (let yy = -ty; yy < canvas.height; yy += h) {
+            for (let xx = -tx; xx < cw; xx += w) {
+              for (let yy = -ty; yy < ch; yy += h) {
                 drawShape(xx, yy);
               }
             }
@@ -2863,12 +2876,12 @@ function drawWeather(frontOnly = false) {
             let x = px;
             let y = py;
             if (layer.LOOP_X) {
-              if (x > canvas.width + buf) x = -buf + (x - (canvas.width + buf));
-              else if (x < -buf) x = canvas.width + buf + (x + buf);
+              if (x > cw + buf) x = -buf + (x - (cw + buf));
+              else if (x < -buf) x = cw + buf + (x + buf);
             }
             if (layer.LOOP_Y) {
-              if (y > canvas.height + buf) y = -buf + (y - (canvas.height + buf));
-              else if (y < -buf) y = canvas.height + buf + (y + buf);
+              if (y > ch + buf) y = -buf + (y - (ch + buf));
+              else if (y < -buf) y = ch + buf + (y + buf);
             }
             drawShape(x, y);
           }
@@ -2916,7 +2929,7 @@ function drawWeather(frontOnly = false) {
             if (angle !== 0) ctx.rotate(angle);
             ctx.scale(flipX ? -scale : scale, flipY ? -scale : scale);
             ctx.fillStyle = pattern;
-            ctx.fillRect(-tx, -ty, canvas.width + w, canvas.height + h);
+            ctx.fillRect(-tx, -ty, cw + w, ch + h);
             ctx.restore();
           }
         } else {
@@ -2924,12 +2937,12 @@ function drawWeather(frontOnly = false) {
           let x = offs.x;
           let y = offs.y;
           if (layer.LOOP_X) {
-            if (x > canvas.width + buf) x = -buf + (x - (canvas.width + buf));
-            else if (x < -buf) x = canvas.width + buf + (x + buf);
+            if (x > cw + buf) x = -buf + (x - (cw + buf));
+            else if (x < -buf) x = cw + buf + (x + buf);
           }
           if (layer.LOOP_Y) {
-            if (y > canvas.height + buf) y = -buf + (y - (canvas.height + buf));
-            else if (y < -buf) y = canvas.height + buf + (y + buf);
+            if (y > ch + buf) y = -buf + (y - (ch + buf));
+            else if (y < -buf) y = ch + buf + (y + buf);
           }
           // draw single atlas copy with transforms (opacity/scale/rotation/flip) applied
           (function(){
