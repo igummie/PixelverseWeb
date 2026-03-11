@@ -982,10 +982,14 @@ function showScreen(name) {
 
   // hide the page‑level scrollbar when we're in one of the full‑screen
   // interactive modes; ancestors (chat drawers, canvases) handle their own
-  // scrolling. editors and menus are allowed to scroll normally.
+  // scrolling. editors and menus are allowed to scroll normally. we apply
+  // styles to *both* <html> and <body> because some browsers only honour one
+  // of them at high zoom levels, leading to a stray scrollbar.
   if (name === "game" || name === "world" || name === "loading") {
+    document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
   } else {
+    document.documentElement.style.overflow = "auto";
     document.body.style.overflow = "auto";
   }
 
