@@ -7,7 +7,6 @@ import {
   CHAT_LOG_DRAWER_HEIGHT,
   INVENTORY_DRAWER_HEIGHT,
   INVENTORY_DRAWER_HANDLE_PEEK,
-  INVENTORY_GRID_SLOTS,
   CRACK_ATLAS_COLUMNS,
   CRACK_ATLAS_ROWS,
   CRACK_ATLAS_SRC,
@@ -373,6 +372,7 @@ const chatDebug = createChatDebugController({
     debugSimPingInput,
     debugSimJitterInput,
     debugSimLossInput,
+    debugInventorySlotsInput,
   },
   settings: {
     TILE_SIZE,
@@ -391,6 +391,7 @@ const chatDebug = createChatDebugController({
     getLoadingChatDrawerHiddenOffset,
     updateDebugUi,
     updateDebugInfo,
+    renderInventory: inventory.renderInventoryDrawer,
   },
 });
 
@@ -1355,6 +1356,10 @@ function handleSocketMessage(msg) {
     }
     state.selfId = msg.selfId;
     state.gems = Number(msg.gems || 0);
+    // inventory slot limit from server (persisted per-user)
+    state.inventorySlotLimit = Number(msg.inventorySlots || state.inventorySlotLimit || 20);
+    // ensure debug input reflects new value
+    updateNetworkSimInputsFromState();
     updateGemUi();
     inventory.applyInventorySnapshot(msg.inventory || []);
     state.players.clear();
@@ -1428,6 +1433,14 @@ function handleSocketMessage(msg) {
 
     state.players.delete(msg.id);
     gameStatus.textContent = `World: ${state.world.name} | Players: ${state.players.size}`;
+    return;
+  }
+
+  if (msg.type === "inventory_slots") {
+    // server told us our slot limit changed
+    state.inventorySlotLimit = Number(msg.inventorySlots || state.inventorySlotLimit || 20);
+    updateNetworkSimInputsFromState();
+    inventory.renderInventoryDrawer();
     return;
   }
 

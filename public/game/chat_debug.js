@@ -21,6 +21,7 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     debugSimPingInput,
     debugSimJitterInput,
     debugSimLossInput,
+    debugInventorySlotsInput, // new field
   } = elements;
 
   const {
@@ -89,6 +90,9 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
       debugNetSimStats.textContent = `Net sim: ${Math.round(state.netSimPingMs)}ms +/-${Math.round(state.netSimJitterMs)}ms, loss ${Math.round(state.netSimLossPercent)}%`;
     }
 
+    // sync inventory slot input whenever other debug values are refreshed
+    updateInventorySlotInputFromState();
+
     applyPingToolsVisibility();
   }
 
@@ -105,6 +109,25 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     state.netSimJitterMs = clampNumber(debugSimJitterInput?.value ?? state.netSimJitterMs, 0, 1000, 0);
     state.netSimLossPercent = clampNumber(debugSimLossInput?.value ?? state.netSimLossPercent, 0, 50, 0);
     updateNetworkSimInputsFromState();
+    updateDebugInfo(true);
+  }
+
+  function updateInventorySlotInputFromState() {
+    if (debugInventorySlotsInput) {
+      debugInventorySlotsInput.value = String(Number(state.inventorySlotLimit) || 20);
+    }
+  }
+
+  function refreshInventorySlotStateFromInput() {
+    if (!debugInventorySlotsInput) {
+      return;
+    }
+    state.inventorySlotLimit = clampNumber(debugInventorySlotsInput.value, 1, 200, 20);
+    // ask game code to redraw so new limit takes effect
+    actions.renderInventory?.();
+    // tell server so we can persist the new limit and keep both ends in sync
+    actions.sendWs?.({ type: "set_inventory_slots", slots: state.inventorySlotLimit });
+    updateInventorySlotInputFromState();
     updateDebugInfo(true);
   }
 
@@ -369,6 +392,7 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     debugSimPingInput?.addEventListener("change", refreshNetworkSimStateFromInputs);
     debugSimJitterInput?.addEventListener("change", refreshNetworkSimStateFromInputs);
     debugSimLossInput?.addEventListener("change", refreshNetworkSimStateFromInputs);
+    debugInventorySlotsInput?.addEventListener("change", refreshInventorySlotStateFromInput);
 
     chatDrawerHandle?.addEventListener("pointerdown", (event) => {
       if (!screens.game.classList.contains("active")) {

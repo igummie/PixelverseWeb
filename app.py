@@ -24,9 +24,12 @@ from modules.player_data import (
     get_db,
     get_guest_profile_gems,
     get_guest_profile_inventory,
+    get_guest_profile_inventory_slots,
     get_or_create_guest_profile,
     get_user_gems,
     get_user_inventory,
+    get_user_inventory_slots,
+    set_user_inventory_slots,
     hash_password,
     initialize_db,
     inventory_to_client_payload,
@@ -1013,7 +1016,19 @@ def collect_gems_for_player(world: dict[str, Any], player: dict[str, Any]) -> tu
     return collected_ids, collected_total
 
 
-def collect_seed_drops_for_player(world: dict[str, Any], player: dict[str, Any]) -> tuple[list[str], list[dict[str, Any]]]:
+def collect_seed_drops_for_player(
+    world: dict[str, Any],
+    player: dict[str, Any],
+    inventory_slots: int | None = None,
+    inventory: dict[str, int] | None = None,
+) -> tuple[list[str], list[dict[str, Any]], bool]:
+    """Return ids/items the player can pick up plus overflow flag.
+
+    ``overflow`` will be True if there were drops within pickup range but the
+    inventory limit prevented collecting them; in that case no drops are
+    removed from the world and the other two lists will be empty.
+    """
+
     seed_drops = ensure_world_seed_state(world)
     if not seed_drops:
         return [], []
@@ -1024,8 +1039,9 @@ def collect_seed_drops_for_player(world: dict[str, Any], player: dict[str, Any])
     except Exception:
         return [], []
 
-    collected_ids: list[str] = []
-    collected_items: list[dict[str, Any]] = []
+    # gather candidates first (without mutating world)
+    candidate_ids: list[str] = []
+    candidate_items: list[dict[str, Any]] = []
     radius_sq = PLAYER_PICKUP_RADIUS * PLAYER_PICKUP_RADIUS
 
     for drop_id, drop in list(seed_drops.items()):
@@ -1041,16 +1057,41 @@ def collect_seed_drops_for_player(world: dict[str, Any], player: dict[str, Any])
             continue
 
         if seed_id < 0:
+            # invalid drop; clean up immediately
             seed_drops.pop(drop_id, None)
             continue
 
         if (dx * dx) + (dy * dy) <= radius_sq:
-            seed_drops.pop(drop_id, None)
-            collected_ids.append(str(drop_id))
             item_type = normalize_item_type(item_type)
-            collected_items.append({"itemId": seed_id, "itemType": item_type})
+            candidate_ids.append(str(drop_id))
+            candidate_items.append({"itemId": seed_id, "itemType": item_type})
 
-    return collected_ids, collected_items
+    # capacity check
+    overflowed = False
+    if inventory_slots is not None and candidate_items:
+        inv = inventory if inventory is not None else normalize_inventory(player.get("inventory", {}))
+        used = len(inv)
+        new_keys = set()
+        for entry in candidate_items:
+            key = make_inventory_key(entry.get("itemType", "seed"), entry.get("itemId", -1))
+            if key and key not in inv:
+                new_keys.add(key)
+        if used + len(new_keys) > inventory_slots:
+            # cannot pick up; leave drops in the world
+            overflowed = True
+            return [], [], overflowed
+
+    # actually remove and return
+    collected_ids: list[str] = []
+    collected_items: list[dict[str, Any]] = []
+
+    for idx, entry in enumerate(candidate_items):
+        drop_id = candidate_ids[idx]
+        seed_drops.pop(drop_id, None)
+        collected_ids.append(drop_id)
+        collected_items.append(entry)
+
+    return collected_ids, collected_items, overflowed
 
 
 def get_tile_damage_key(x: int, y: int, layer: str) -> str:
@@ -1794,14 +1835,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 persisted_gems = 0
                 persisted_inventory: dict[str, int] = {}
+                persisted_slots = 20
                 if isinstance(client.get("user_id"), int) and int(client.get("user_id", 0)) > 0:
                     persisted_gems = await asyncio.to_thread(get_user_gems, int(client["user_id"]))
                     persisted_inventory = await asyncio.to_thread(get_user_inventory, int(client["user_id"]))
+                    persisted_slots = await asyncio.to_thread(get_user_inventory_slots, int(client["user_id"]))
                 elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
                     persisted_gems = await asyncio.to_thread(get_guest_profile_gems, int(client["guest_profile_id"]))
                     persisted_inventory = await asyncio.to_thread(
                         get_guest_profile_inventory, int(client["guest_profile_id"])
                     )
+                    # also load slot limit using helper
+                    persisted_slots = await asyncio.to_thread(
+                        get_guest_profile_inventory_slots, int(client["guest_profile_id"]))
 
                 world["players"][client_id] = {
                     "id": client_id,
@@ -1811,11 +1857,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     "facing_x": 1,
                     "gems": int(persisted_gems),
                     "inventory": normalize_inventory(persisted_inventory),
+                    "inventory_slots": int(persisted_slots),
                     "fly_enabled": False,
                     "noclip_enabled": False,
                     "ws": websocket,
                 }
-
+                
                 await ws_send(
                     websocket,
                     {
@@ -1847,24 +1894,34 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         "selfId": client_id,
                         "gems": int(world["players"][client_id].get("gems", 0)),
                         "inventory": inventory_to_client_payload(world["players"][client_id].get("inventory", {})),
+                        "inventorySlots": int(world["players"][client_id].get("inventory_slots", persisted_slots)),
                     },
-                )
-
-                await broadcast_to_world(
-                    world,
-                    {
-                        "type": "player_joined",
-                        "player": {
-                            "id": client_id,
-                            "username": client["username"],
-                            "x": spawn_x,
-                            "y": spawn_y,
-                        },
-                    },
-                    except_client_id=client_id,
                 )
                 continue
 
+            if msg_type == "set_inventory_slots":
+                # client requesting to change their personal inventory limit
+                slots = msg.get("slots")
+                try:
+                    slots = max(1, int(slots))
+                except Exception:
+                    continue
+                # update persisted value for authenticated user or guest
+                if isinstance(client.get("user_id"), int) and client.get("user_id", 0) > 0:
+                    await asyncio.to_thread(set_user_inventory_slots, int(client["user_id"]), slots)
+                elif isinstance(client.get("guest_profile_id"), int) and client.get("guest_profile_id", 0) > 0:
+                    # update guest record directly
+                    with await asyncio.to_thread(get_db) as conn:
+                        conn.execute(
+                            "UPDATE guest_profiles SET inventory_slots = ? WHERE id = ?",
+                            (slots, int(client["guest_profile_id"])),
+                        )
+                # also update our in‑memory player state if inside a world
+                if client_id and world_cache and client_id in world_cache[client.get("world_name", "")]["players"]:
+                    world_cache[client.get("world_name")]["players"][client_id]["inventory_slots"] = slots
+                # tell the client their new limit
+                await ws_send(websocket, {"type": "inventory_slots", "inventorySlots": slots})
+                continue
             if msg_type == "leave_world":
                 await leave_world(client, world_cache)
                 continue
@@ -1950,7 +2007,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             },
                         )
 
-                collected_seed_drop_ids, collected_items = collect_seed_drops_for_player(world, player)
+                # compute current inventory for capacity check
+                current_inventory = normalize_inventory(player.get("inventory", {}))
+                slots_limit = int(player.get("inventory_slots", 0)) or None
+                collected_seed_drop_ids, collected_items, overflow = collect_seed_drops_for_player(
+                    world,
+                    player,
+                    slots_limit,
+                    current_inventory,
+                )
+                if overflow:
+                    # notify the player that their inventory is full
+                    await ws_send(websocket, {"type": "system_message", "message": "Inventory full"})
                 if collected_seed_drop_ids:
                     await schedule_world_save(world["name"])
                     item_counts: dict[tuple[str, int], int] = {}

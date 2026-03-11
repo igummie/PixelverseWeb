@@ -3,6 +3,7 @@ import {
   CHAT_DRAWER_HANDLE_PEEK,
   INVENTORY_DRAWER_HEIGHT,
   INVENTORY_DRAWER_HANDLE_PEEK,
+  INVENTORY_GRID_SLOTS,
 } from "./constants.js";
 
 // central mutable state object shared across game modules
@@ -58,6 +59,8 @@ export const state = {
   inventoryDrawerDragStartY: 0,
   inventoryDrawerDragStartOffsetY: 0,
   worldChatLogOpen: false,
+  // how many inventory slots the player is allowed to have (persisted per-user)
+  inventorySlotLimit: INVENTORY_GRID_SLOTS,
   worldChatDrawerHeight: CHAT_LOG_DRAWER_HEIGHT,
   worldChatDrawerOffsetY: -(CHAT_LOG_DRAWER_HEIGHT - CHAT_DRAWER_HANDLE_PEEK),
   worldChatDrawerDragging: false,

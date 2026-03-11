@@ -60,6 +60,7 @@ multiplayer 2D build/break game using a custom canvas engine and a Python backen
 
 - Collision and gravity/jumping
 - Inventory and block types
+- Per-user inventory slot limit (debug-adjustable and purchasable with gems, stored in DB)
 - World persistence to a database
 - Authentication and anti-cheat server validation
 - Private/public world permissions

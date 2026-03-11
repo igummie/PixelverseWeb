@@ -276,9 +276,11 @@
       .inventoryGrid {
         flex: 1;
         display: grid;
-        grid-template-columns: repeat(8, minmax(0, 1fr));
-        grid-auto-rows: 1fr;
+        /* cap at 20 columns so every 20 slots wraps to a new row */
+        grid-template-columns: repeat(20, 56px);
+        grid-auto-rows: 56px;
         gap: 8px;
+        justify-content: center; /* center the grid when there’s extra space */
         min-height: 0;
       }
 
@@ -287,7 +289,10 @@
         border: 1px solid #334155;
         border-radius: 8px;
         background: rgba(15, 23, 42, 0.95);
-        min-height: 44px;
+        /* square slots of a fixed size */
+        aspect-ratio: 1 / 1;
+        width: 56px;
+        height: 56px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -316,9 +321,11 @@
         border: 1px dashed rgba(100, 116, 139, 0.5);
       }
 
+      /* make the item icons larger so they are easier to see */
       .inventoryItemIcon {
-        width: 20px;
-        height: 20px;
+        /* increase these values as desired */
+        width: 32px;
+        height: 32px;
         image-rendering: pixelated;
       }
 

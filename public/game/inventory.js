@@ -1,4 +1,5 @@
 import {state} from "./state.js";
+import { INVENTORY_GRID_SLOTS } from "./constants.js";
 import {
   normalizeItemType,
   getItemDisplayName,
@@ -95,7 +96,15 @@ export function createInventoryController({
     const entries = getInventoryEntriesSorted(state);
     inventoryGrid.innerHTML = "";
 
-    const slotCount = Math.max(12, entries.length);
+    // compute slot count from the user's configured limit, but never below the
+    // number of entries actually present (so items don't disappear). the
+    // `INVENTORY_GRID_SLOTS` constant only provides the initial default – it
+    // shouldn't prevent the limit from shrinking once the player adjusts it.
+    const defaultLimit = INVENTORY_GRID_SLOTS || 12;
+    const limit = Number(state.inventorySlotLimit);
+    // if the limit isn't a valid number, fall back to defaultLimit
+    const effectiveLimit = Number.isFinite(limit) && limit > 0 ? limit : defaultLimit;
+    const slotCount = Math.max(effectiveLimit, entries.length);
     for (let i = 0; i < slotCount; i += 1) {
       const slot = document.createElement("button");
       slot.type = "button";

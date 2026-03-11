@@ -39,6 +39,7 @@ def initialize_db() -> None:
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 inventory_json TEXT NOT NULL DEFAULT '{}',
+                inventory_slots INTEGER NOT NULL DEFAULT 20,
                 created_at INTEGER NOT NULL
             )
             """
@@ -66,11 +67,13 @@ def initialize_db() -> None:
                 username TEXT NOT NULL,
                 gems INTEGER NOT NULL DEFAULT 0,
                 inventory_json TEXT NOT NULL DEFAULT '{}',
+                inventory_slots INTEGER NOT NULL DEFAULT 20,
                 created_at INTEGER NOT NULL
             )
             """
         )
 
+        # migrate existing tables as needed
         columns = {
             str(row["name"]).lower()
             for row in conn.execute("PRAGMA table_info(worlds)").fetchall()
@@ -88,6 +91,8 @@ def initialize_db() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN gems INTEGER NOT NULL DEFAULT 0")
         if "inventory_json" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN inventory_json TEXT NOT NULL DEFAULT '{}' ")
+        if "inventory_slots" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN inventory_slots INTEGER NOT NULL DEFAULT 20")
 
         guest_columns = {
             str(row["name"]).lower()
@@ -95,6 +100,8 @@ def initialize_db() -> None:
         }
         if "inventory_json" not in guest_columns:
             conn.execute("ALTER TABLE guest_profiles ADD COLUMN inventory_json TEXT NOT NULL DEFAULT '{}' ")
+        if "inventory_slots" not in guest_columns:
+            conn.execute("ALTER TABLE guest_profiles ADD COLUMN inventory_slots INTEGER NOT NULL DEFAULT 20")
 
 
 def normalize_name(value: str | None, fallback: str = "") -> str:
@@ -253,6 +260,34 @@ def get_user_inventory(user_id: int) -> dict[str, int]:
     return parse_inventory_json(row["inventory_json"])
 
 
+def get_user_inventory_slots(user_id: int, default: int = 20) -> int:
+    if user_id <= 0:
+        return default
+
+    with get_db() as conn:
+        row = conn.execute("SELECT inventory_slots FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row or row["inventory_slots"] is None:
+        return default
+    try:
+        return int(row["inventory_slots"])
+    except Exception:
+        return default
+
+
+def set_user_inventory_slots(user_id: int, slots: int) -> None:
+    if user_id <= 0:
+        return
+    try:
+        slots_val = max(1, int(slots))
+    except Exception:
+        return
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET inventory_slots = ? WHERE id = ?",
+            (slots_val, user_id),
+        )
+
+
 def set_user_inventory(user_id: int, inventory: dict[str, int]) -> None:
     if user_id <= 0:
         return
@@ -279,7 +314,7 @@ def get_or_create_guest_profile(device_id: str) -> dict[str, Any] | None:
     now = int(time.time())
     with get_db() as conn:
         existing = conn.execute(
-            "SELECT id, username, gems, inventory_json FROM guest_profiles WHERE device_id = ?",
+            "SELECT id, username, gems, inventory_json, inventory_slots FROM guest_profiles WHERE device_id = ?",
             (normalized_device_id,),
         ).fetchone()
         if existing:
@@ -289,13 +324,14 @@ def get_or_create_guest_profile(device_id: str) -> dict[str, Any] | None:
                 "username": str(existing["username"]),
                 "gems": max(0, int(existing["gems"])),
                 "inventory": parse_inventory_json(existing["inventory_json"]),
+                "inventory_slots": int(existing.get("inventory_slots") or 20),
             }
 
         guest_number = secrets.randbelow(900) + 100
         guest_username = f"Guest_{guest_number}"
         cursor = conn.execute(
-            "INSERT INTO guest_profiles (device_id, username, gems, created_at) VALUES (?, ?, ?, ?)",
-            (normalized_device_id, guest_username, 0, now),
+            "INSERT INTO guest_profiles (device_id, username, gems, inventory_slots, created_at) VALUES (?, ?, ?, ?, ?)",
+            (normalized_device_id, guest_username, 0, 20, now),
         )
         profile_id = int(cursor.lastrowid)
 
@@ -317,6 +353,38 @@ def get_guest_profile_gems(profile_id: int) -> int:
 
     if not row:
         return 0
+
+    try:
+        return max(0, int(row["gems"]))
+    except Exception:
+        return 0
+
+
+def get_guest_profile_inventory_slots(profile_id: int, default: int = 20) -> int:
+    if profile_id <= 0:
+        return default
+    with get_db() as conn:
+        row = conn.execute("SELECT inventory_slots FROM guest_profiles WHERE id = ?", (profile_id,)).fetchone()
+    if not row or row["inventory_slots"] is None:
+        return default
+    try:
+        return int(row["inventory_slots"])
+    except Exception:
+        return default
+
+
+def set_guest_profile_inventory_slots(profile_id: int, slots: int) -> None:
+    if profile_id <= 0:
+        return
+    try:
+        slots_val = max(1, int(slots))
+    except Exception:
+        return
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE guest_profiles SET inventory_slots = ? WHERE id = ?",
+            (slots_val, profile_id),
+        )
 
     try:
         return max(0, int(row["gems"]))

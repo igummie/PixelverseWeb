@@ -15,6 +15,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     worldChatDrawer,
     loadingChatDrawer,
     inventoryDrawer,
+    debugInventorySlotsInput,
   } = elements;
 
   const {
@@ -56,6 +57,9 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
       for (const control of creativeHudControls) {
         control?.classList.toggle("hidden", !state.creativeEnabled);
       }
+    }
+    if (debugInventorySlotsInput) {
+      debugInventorySlotsInput.value = String(Number(state.inventorySlotLimit) || 20);
     }
   }
 

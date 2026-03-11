@@ -122,8 +122,13 @@
               <input id="debugCreativeToggle" type="checkbox" />
               Creative
             </label>
-          </div>
-          <div id="debugNetSimPanel" class="debugNetSim">
+          </div>          <div class="debugBody">
+            <!-- inventory slot control (debug only) -->
+            <label class="debugNetField" for="debugInventorySlotsInput">
+              Slots
+              <input id="debugInventorySlotsInput" type="number" min="1" max="200" step="1" value="20" />
+            </label>
+          </div>          <div id="debugNetSimPanel" class="debugNetSim">
             <label class="debugNetField" for="debugSimPingInput">
               Ping
               <input id="debugSimPingInput" type="number" min="0" max="2000" step="10" value="0" />
