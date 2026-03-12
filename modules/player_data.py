@@ -318,13 +318,20 @@ def get_or_create_guest_profile(device_id: str) -> dict[str, Any] | None:
             (normalized_device_id,),
         ).fetchone()
         if existing:
+            # sqlite3.Row behaves like a mapping but does not support .get()
+            inventory_slots_val = existing["inventory_slots"]
+            try:
+                inventory_slots_val = int(inventory_slots_val)
+            except Exception:
+                inventory_slots_val = 20
+
             return {
                 "id": int(existing["id"]),
                 "device_id": normalized_device_id,
                 "username": str(existing["username"]),
                 "gems": max(0, int(existing["gems"])),
                 "inventory": parse_inventory_json(existing["inventory_json"]),
-                "inventory_slots": int(existing.get("inventory_slots") or 20),
+                "inventory_slots": inventory_slots_val or 20,
             }
 
         guest_number = secrets.randbelow(900) + 100
@@ -341,6 +348,7 @@ def get_or_create_guest_profile(device_id: str) -> dict[str, Any] | None:
         "username": guest_username,
         "gems": 0,
         "inventory": {},
+        "inventory_slots": 20,
     }
 
 

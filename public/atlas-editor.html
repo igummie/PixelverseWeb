@@ -1578,7 +1578,7 @@
         }
 
         const targetAtlasKey = atlasKey(block.ATLAS_ID);
-        if (state.atlases.some(a => a.ATLAS_ID === targetAtlasKey)) {
+        if (state.atlases.some(a => atlasKey(a.ATLAS_ID) === targetAtlasKey)) {
           const shouldReloadImage = state.selectedAtlasKey !== targetAtlasKey || !state.image;
           state.selectedAtlasKey = targetAtlasKey;
           atlasSelect.value = targetAtlasKey;
@@ -2538,15 +2538,16 @@
         const block = state.blockById.get(state.selectedBlockId);
         if (block) {
           const atlasId = block.ATLAS_ID;
-          const atlas = state.atlases.find(a => a.ATLAS_ID === atlasId) || null;
+          const atlas = state.atlases.find(a => atlasKey(a.ATLAS_ID) === atlasKey(atlasId) || a.ATLAS_ID === atlasId) || null;
           let needAtlasUpdate = false;
           let newTileSize = state.tileSize;
           if (atlas) {
             newTileSize = parsePositiveInt(atlas.TILE_SIZE, 16);
             // Set tile size input to match atlas
             tileSizeInput.value = String(newTileSize);
-            if (state.selectedAtlasKey !== atlasId || state.tileSize !== newTileSize) {
-              state.selectedAtlasKey = atlasId;
+            const atlasKeyValue = atlasKey(atlasId);
+            if (state.selectedAtlasKey !== atlasKeyValue || state.tileSize !== newTileSize) {
+              state.selectedAtlasKey = atlasKeyValue;
               state.tileSize = newTileSize;
               needAtlasUpdate = true;
             }
@@ -2736,7 +2737,8 @@
       }
 
       async function loadAtlasImage() {
-        const atlas = state.atlases.find(a => a.ATLAS_ID === state.selectedAtlasKey) || null;
+        // allow selectedAtlasKey to be either a raw ID or the normalized key
+        const atlas = state.atlases.find(a => atlasKey(a.ATLAS_ID) === state.selectedAtlasKey || a.ATLAS_ID === state.selectedAtlasKey) || null;
         if (!atlas) {
           state.image = null;
           renderAtlas();
