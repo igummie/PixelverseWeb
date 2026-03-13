@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from modules.events import load_events_payload
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -89,6 +91,12 @@ class SaveWeatherDataBody(BaseModel):
     # mirrors seeds body but for weather definitions
     atlases: list[dict[str, Any]] | None = None
     weather: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class SaveEventsDataBody(BaseModel):
+    # editor will submit top-level `events` list; additional properties may be
+    # included but are ignored by the server.
+    events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 def normalize_name(value: str | None, fallback: str = "") -> str:
@@ -699,6 +707,30 @@ def sanitize_weather_entry(value: Any) -> dict[str, Any] | None:
     return output
 
 
+
+
+def sanitize_event_entry(value: Any) -> dict[str, Any] | None:
+    """Basic validation for events (id/name/type) but otherwise passthrough."""
+    if not isinstance(value, dict):
+        return None
+    try:
+        eid = int(value.get("EVENT_ID", value.get("ID", -1)))
+    except Exception:
+        eid = -1
+    if eid < 0:
+        return None
+    name = str(value.get("NAME", "")).strip() or f"EVENT_{eid}"
+    etype = str(value.get("TYPE", "GEM")).strip().upper()
+    if etype not in {"GEM", "PINATA"}:
+        etype = "GEM"
+    output: dict[str, Any] = {"EVENT_ID": eid, "NAME": name, "TYPE": etype}
+    for key, val in value.items():
+        if key in output:
+            continue
+        output[key] = val
+    return output
+
+
 def load_texture47_configs(public_dir: Path, atlas_ids: set[str]) -> dict[str, dict[str, Any]]:
     configs: dict[str, dict[str, Any]] = {}
     config_dir = public_dir / "assets" / "texture47" / "configs"
@@ -747,6 +779,7 @@ def register_editor_routes(
     blocks_path: Path,
     seeds_path: Path,
     weather_path: Path,
+    events_path: Path,
     load_blocks_payload: Callable[[], dict[str, Any]],
     load_seeds_payload: Callable[[], dict[str, Any]],
     load_weather_payload: Callable[[], dict[str, Any]],
@@ -1243,9 +1276,59 @@ def register_editor_routes(
             json.dump(output, handle, indent=2)
             handle.write("\n")
 
-        return {
+        result = {
             "ok": True,
             "path": "data/weather.json",
             "atlasCount": len(output.get("atlases", [])) if isinstance(output.get("atlases", []), list) else 0,
             "weatherCount": len(sanitized_list),
         }
+        return result
+
+    @app.get("/api/tools/events/editor-data")
+    def get_events_editor_data() -> dict[str, Any]:
+        blocks_payload = load_blocks_payload()
+        seeds_payload = load_seeds_payload()
+        events_payload = load_events_payload()
+
+        atlases = blocks_payload.get("atlases", []) if isinstance(blocks_payload, dict) else []
+        events = events_payload.get("events", []) if isinstance(events_payload, dict) else []
+
+        return {"atlases": atlases, "events": events}
+
+    @app.post("/api/tools/events/save-data")
+    def save_events_data(payload: SaveEventsDataBody) -> dict[str, Any]:
+        try:
+            incoming_count = len(payload.events) if isinstance(payload.events, list) else 0
+        except Exception:
+            incoming_count = 0
+
+        existing = load_events_payload()
+        output: dict[str, Any] = {}
+
+        sanitized_list: list[dict[str, Any]] = []
+        seen_ids: set[int] = set()
+        for raw_entry in payload.events:
+            entry = sanitize_event_entry(raw_entry)
+            if entry is None:
+                raise HTTPException(status_code=400, detail="Each event must include a valid non-negative EVENT_ID")
+            eid = int(entry.get("EVENT_ID", entry.get("ID", -1)))
+            if eid in seen_ids:
+                raise HTTPException(status_code=400, detail=f"Duplicate event id: {eid}")
+            seen_ids.add(eid)
+            sanitized_list.append(entry)
+
+        sanitized_list.sort(key=lambda e: int(e.get("EVENT_ID", 0)))
+        output["events"] = sanitized_list
+
+        # preserve metadata
+        if isinstance(existing, dict):
+            for key, value in existing.items():
+                if key in {"events", "VERSION"}:
+                    continue
+                output[key] = value
+
+        with events_path.open("w", encoding="utf-8") as handle:
+            json.dump(output, handle, indent=2)
+            handle.write("\n")
+
+        return {"ok": True, "path": "data/events.json", "eventCount": len(sanitized_list)}

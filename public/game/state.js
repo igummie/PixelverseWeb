@@ -18,6 +18,7 @@ export const state = {
   gemDrops: new Map(),
   seedDrops: new Map(),
   plantedTrees: new Map(),
+  pinatas: new Map(),
   players: new Map(),
   me: { x: 8, y: 8 },
   camera: { x: 0, y: 0, zoom: 1 },

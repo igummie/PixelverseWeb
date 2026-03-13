@@ -869,6 +869,18 @@ function removeSeedDropById(dropId) {
   worldDrops.removeSeedDropById(dropId);
 }
 
+function applyPinataSnapshot(pinatas) {
+  worldDrops.applyPinataSnapshot(pinatas);
+}
+
+function upsertPinata(entry) {
+  worldDrops.upsertPinata(entry);
+}
+
+function removePinataById(id) {
+  worldDrops.removePinataById(id);
+}
+
 function applyPlantedTreeSnapshot(trees) {
   worldDrops.applyPlantedTreeSnapshot(trees);
 }
@@ -1366,6 +1378,7 @@ function handleSocketMessage(msg) {
     applyGemDropSnapshot(msg.world.gemDrops || []);
     applySeedDropSnapshot(msg.world.seedDrops || []);
     applyPlantedTreeSnapshot(msg.world.plantedTrees || []);
+    applyPinataSnapshot(msg.world.pinatas || []);
     state.tileDamage.clear();
     for (const damageState of msg.world.tileDamage || []) {
       setTileDamage(damageState);
@@ -1613,6 +1626,32 @@ function handleSocketMessage(msg) {
 
   if (msg.type === "seed_drop_remove") {
     removeSeedDropById(msg.id);
+    return;
+  }
+
+  // pinata messages
+  if (msg.type === "pinata_spawn") {
+    console.log("[client] pinata_spawn received", msg.pinata);
+    upsertPinata(msg.pinata);
+    // place a transient bubble so player can see where it appeared
+    addTransientSystemBubble(Number(msg.pinata.x || 0), Number(msg.pinata.y || 0), "Pinata spawned!");
+    return;
+  }
+
+  if (msg.type === "pinata_update") {
+    const id = String(msg.id || "").trim();
+    const strength = msg.strength;
+    if (id && Number.isFinite(strength)) {
+      const existing = state.pinatas.get(id);
+      if (existing) {
+        existing.strength = Math.max(0, Math.floor(strength));
+      }
+    }
+    return;
+  }
+
+  if (msg.type === "pinata_remove") {
+    removePinataById(msg.id);
     return;
   }
 
@@ -2176,6 +2215,49 @@ function drawSeedDrops() {
   }
 }
 
+function drawPinatas() {
+  if (!state.world || state.pinatas.size === 0) {
+    return;
+  }
+  console.log("[client] drawing pinatas, count=", state.pinatas.size);
+  for (const p of state.pinatas.values()) {
+    const atlasKey = String(p.atlas || "").trim().toLowerCase();
+    const atlas = state.atlases.get(atlasKey);
+    if (!atlas) {
+      console.log("[client] pinata skipped, missing atlas", atlasKey, p);
+      continue;
+    }
+    if (!atlas.image) {
+      console.log("[client] pinata atlas image not loaded yet", atlasKey);
+      continue;
+    }
+    const tex = (() => {
+      try {
+        const [x, y, w, h] = String(p.rect || "").split(',').map(Number);
+        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+          return { x, y, w, h };
+        }
+      } catch {}
+      return null;
+    })();
+    if (!tex) continue;
+
+    const screenX = (p.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
+    const screenY = (p.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const drawW = tex.w * state.camera.zoom;
+    const drawH = tex.h * state.camera.zoom;
+    ctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, screenX, screenY, drawW, drawH);
+
+    // optionally render strength as text
+    if (typeof p.strength === "number") {
+      ctx.fillStyle = "#fff";
+      ctx.font = `${Math.max(8, 10 * state.camera.zoom)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(String(p.strength), screenX + drawW/2, screenY - 2);
+    }
+}
+}
+
 function drawPlayers() {
   const now = performance.now();
   const playerBoxW = Math.max(0.2, Number(state.collider?.width) || 0.72);
@@ -2347,6 +2429,7 @@ function loop() {
       drawPlantedTrees();
       drawGemDrops();
       drawSeedDrops();
+      drawPinatas();
       drawDamageOverlays();
       drawPlayers();
       // render any weather layers marked IN_FRONT on top of everything
@@ -2552,6 +2635,45 @@ function drawWeather(frontOnly = false) {
 // helper that resumes any existing auth token. deliberately *not*
 // executed on page load; it's called from the Play button handler below so
 // no network traffic happens until the user interacts with the main menu.
+
+// load atlas definitions from server (blocks.json via editor-data endpoint)
+async function loadAtlases() {
+  try {
+    const r = await fetch("/api/tools/events/editor-data");
+    const data = await r.json();
+    const arr = Array.isArray(data.atlases) ? data.atlases : [];
+    state.atlases.clear();
+    for (const atlas of arr) {
+      const key = String(atlas?.ATLAS_ID ?? "").trim().toLowerCase();
+      if (key) state.atlases.set(key, atlas);
+    }
+    // prefetch images so they are available when first drawn
+    for (const atlas of state.atlases.values()) {
+      getAtlasImage(atlas.ATLAS_ID);
+    }
+  } catch (e) {
+    console.warn("[game] failed to load atlases", e);
+  }
+}
+  // Helper to load and cache atlas images by ID
+  function getAtlasImage(atlasId) {
+    const key = String(atlasId || "").trim().toLowerCase();
+    const atlas = state.atlases.get(key);
+    if (!atlas || !atlas.SRC) return Promise.resolve(null);
+    if (!state.atlasImageCache) state.atlasImageCache = {};
+    if (state.atlasImageCache[key]) return state.atlasImageCache[key];
+    state.atlasImageCache[key] = new Promise((resolve) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => {
+        atlas.image = img;
+        resolve(img);
+      };
+      img.onerror = () => resolve(null);
+      img.src = String(atlas.SRC);
+    });
+    return state.atlasImageCache[key];
+  }
 async function resumeSession() {
   const existingSession = loadAuthSession();
   if (!existingSession) {
@@ -2579,6 +2701,7 @@ async function resumeSession() {
 (async () => {
   console.log("[game] startup");
   resetReconnectState();
+  await loadAtlases();
 
   // if we don't have a saved auth token, forget any leftover world name so a
   // completely fresh visitor can't accidentally be re‑joined later.

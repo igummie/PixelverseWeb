@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixelverse Event Editor</title>
+    <!-- reuse seed-editor stylesheet for layout and drop lists -->
+    <link rel="stylesheet" href="/styles/seed-editor.css" />
+    <style>
+      /* outline around pinata atlas picker canvas */
+      #pinataAtlasPicker .atlasWrap {
+        border: 2px solid #22c55e; /* green */
+        display: inline-block;
+      }
+      /* highlight atlas dropdown when a value is chosen */
+      #pinataAtlasSelect {
+        border: 2px solid #22c55e;
+      }
+      #pinataAtlasSelect:focus {
+        outline: none;
+      }
+      /* small preview for currently selected rectangle */
+      #pinataTexturePreviewCanvas {
+        border: 2px solid #22c55e;
+        image-rendering: pixelated;
+        display: block;
+        margin-top: 4px;
+        background: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="editorSwitcher" aria-label="Editor Switcher">
+      <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
+      <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
+      <a class="switchBtn" href="/seed-editor.html">Seed Editor</a>
+      <a class="switchBtn" href="/weather-editor.html">Weather Editor</a>
+      <a class="switchBtn active" href="/event-editor.html">Event Editor</a>
+      <a class="switchBtn" href="/item-manager.html">Item Manager</a>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="title">Pixelverse Event Editor</div>
+        <div class="subtitle">Define global events such as gem drops or pinata breaks.</div>
+
+        <div class="row">
+          <div class="fieldStack" style="min-width: 280px">
+            <label for="eventSelect">Event Entry</label>
+            <select id="eventSelect"></select>
+          </div>
+          <button id="createEventBtn" type="button">Create Event</button>
+          <button id="deleteEventBtn" class="secondary" type="button">Delete Event</button>
+          <button id="reloadBtn" class="secondary" type="button">Reload</button>
+        </div>
+
+        <div class="row">
+          <div class="fieldStack">
+            <label for="eventIdInput">EVENT_ID</label>
+            <input id="eventIdInput" type="number" min="0" step="1" />
+          </div>
+          <div class="fieldStack" style="min-width: 220px">
+            <label for="eventNameInput">NAME</label>
+            <input id="eventNameInput" type="text" maxlength="80" />
+          </div>
+          <div class="fieldStack">
+              <label for="eventEnabledToggle">ENABLED</label>
+              <select id="eventEnabledToggle">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </div>
+          <div class="fieldStack">
+            <label for="eventTypeSelect">TYPE</label>
+            <select id="eventTypeSelect">
+              <option value="GEM">Gem Event</option>
+              <option value="PINATA">Pinata Event</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- gem-specific options -->
+        <div id="gemSection" class="eventTypeSection" hidden>
+          <div class="title small">Gem Event Options</div>
+          <div class="row">
+            <div class="fieldStack">
+              <label for="gemSpawnModeSelect">Spawn Mode</label>
+              <select id="gemSpawnModeSelect">
+                <option value="any">Any open space (no blocks)</option>
+                <option value="above">Only above blocks</option>
+                <option value="player">At the player (legacy)</option>
+              </select>
+            </div>
+            <div class="fieldStack">
+              <label for="gemCountMinInput">Min Gems</label>
+              <input id="gemCountMinInput" type="number" min="0" step="1" value="0" />
+            </div>
+            <div class="fieldStack">
+              <label for="gemCountMaxInput">Max Gems</label>
+              <input id="gemCountMaxInput" type="number" min="0" step="1" value="0" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="fieldStack">
+              <label for="gemDurationInput">Duration (s)</label>
+              <input id="gemDurationInput" type="number" min="0" step="0.1" value="0" />
+            </div>
+            <div class="fieldStack">
+              <label for="gemIntervalInput">Interval (s)</label>
+              <input id="gemIntervalInput" type="number" min="0.1" step="0.1" value="1" />
+            </div>
+          </div>
+          <div class="fruitDropsSection">
+            <div class="row" style="margin-bottom: 6px">
+              <div class="title small" style="margin: 0">Gem Types</div>
+              <button id="addGemTypeBtn" class="secondary" type="button">+ Add Gem Type</button>
+            </div>
+            <div class="tiny" style="margin-top: 0">Choose item type + item id, then set MIN/MAX amount range per entry.</div>
+            <div class="fruitDropColumns" aria-hidden="true">
+              <span>Type</span>
+              <span>Item ID</span>
+              <span>Chance</span>
+              <span>Min</span>
+              <span>Max</span>
+              <span></span>
+            </div>
+            <div id="gemTypesEditor" class="fruitDropsEditor"></div>
+          </div>
+        </div>
+
+        <!-- pinata-specific options -->
+        <div id="pinataSection" class="eventTypeSection" hidden>
+          <div class="title small">Pinata Event Options</div>
+          <div class="row">
+            <div class="fieldStack">
+              <label for="pinataStrengthInput">Strength (hits to break)</label>
+              <input id="pinataStrengthInput" type="number" min="1" step="1" value="1" />
+            </div>
+            <div class="fieldStack">
+              <label for="pinataAtlasSelect">Atlas</label>
+              <select id="pinataAtlasSelect"></select>
+            </div>
+            <div class="fieldStack">
+              <label for="pinataTextureAtlasInput">Texture Atlas ID</label>
+              <input id="pinataTextureAtlasInput" type="text" />
+            </div>
+            <div class="fieldStack">
+              <label for="pinataSpawnModeSelect">Spawn Mode</label>
+              <select id="pinataSpawnModeSelect">
+                <option value="any">Any open</option>
+                <option value="above">Above blocks</option>
+                <option value="player">Player location</option>
+              </select>
+            </div>
+            <div class="fieldStack">
+              <label for="pinataTimeoutInput">Timeout (s)</label>
+              <input id="pinataTimeoutInput" type="number" min="0" step="0.1" value="0" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="fieldStack">
+              <label for="pinataTextureRectInput">Texture Rect (x,y,w,h)</label>
+              <input id="pinataTextureRectInput" type="text" placeholder="0,0,16,16" />
+            </div>
+            <div class="fieldStack">
+              <label for="pinataTileSizeInput">Tile Size</label>
+              <input id="pinataTileSizeInput" type="number" min="1" step="1" value="16" />
+            </div>
+            <!-- atlas preview picker -->
+            <div id="pinataAtlasPicker" style="margin-top:8px;">
+              <div class="title tiny">Atlas Preview (click to pick)</div>
+              <div class="atlasWrap small">
+                <canvas id="pinataAtlasCanvas" width="256" height="256"></canvas>
+              </div>
+              <div class="atlasControls">
+                <button id="pinataZoomOutBtn" type="button">-</button>
+                <input id="pinataZoomRange" type="range" min="0.25" max="8" step="0.25" value="1" />
+                <button id="pinataZoomInBtn" type="button">+</button>
+                <button id="pinataZoomResetBtn" type="button">1x</button>
+              </div>
+              <div class="tiny" id="pinataZoomInfo">Atlas Zoom: 1.00x</div>
+            </div>
+            <!-- small preview of selected region -->
+            <div class="fieldStack">
+              <label>Selected Texture</label>
+              <canvas id="pinataTexturePreviewCanvas" width="32" height="32"></canvas>
+            </div>
+            <div class="fieldStack">
+              <label for="pinataBurstModeSelect">Burst Area</label>
+              <select id="pinataBurstModeSelect">
+                <option value="area">Radius</option>
+                <option value="world">Whole world</option>
+              </select>
+            </div>
+            <div class="fieldStack">
+              <label for="pinataBurstRadiusInput">Radius</label>
+              <input id="pinataBurstRadiusInput" type="number" min="0" step="1" value="0" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="fieldStack">
+              <label for="pinataSpawnAboveToggle">Spawn Above Blocks</label>
+              <select id="pinataSpawnAboveToggle">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </div>
+          </div>
+          <div class="fruitDropsSection">
+            <div class="row" style="margin-bottom: 6px">
+              <div class="title small" style="margin: 0">Burst Drops</div>
+              <button id="addBurstItemBtn" class="secondary" type="button">+ Add Drop</button>
+            </div>
+            <div class="tiny" style="margin-top: 0">Specify what spawns when pinata is broken.</div>
+            <div class="fruitDropColumns" aria-hidden="true">
+              <span>Type</span>
+              <span>Item ID</span>
+              <span>Chance</span>
+              <span>Min</span>
+              <span>Max</span>
+              <span></span>
+            </div>
+            <div id="burstItemsEditor" class="fruitDropsEditor"></div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 8px">
+          <button id="saveBtn" type="button">Save events.json</button>
+          <button id="resetJsonBtn" class="secondary" type="button">Reset JSON To State</button>
+          <button id="copyJsonBtn" class="secondary" type="button">Copy JSON</button>
+        </div>
+
+        <textarea id="jsonOutput" spellcheck="false" readonly style="height:120px;"></textarea>
+        <div id="status" class="status"></div>
+      </div>
+
+      <div class="panel">
+        <div class="title">Events</div>
+        <div class="subtitle">Click a card to select an event for editing.</div>
+        <div id="eventCardList" class="seedCardList"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      // basic helpers copied from seed-editor where appropriate
+      const eventSelect = document.getElementById("eventSelect");
+      const createEventBtn = document.getElementById("createEventBtn");
+      const deleteEventBtn = document.getElementById("deleteEventBtn");
+      const reloadBtn = document.getElementById("reloadBtn");
+      const eventIdInput = document.getElementById("eventIdInput");
+      const eventNameInput = document.getElementById("eventNameInput");
+      const eventTypeSelect = document.getElementById("eventTypeSelect");
+      const eventEnabledToggle = document.getElementById("eventEnabledToggle");
+      const gemSection = document.getElementById("gemSection");
+      const pinataSection = document.getElementById("pinataSection");
+
+      // gem fields
+      const gemSpawnModeSelect = document.getElementById("gemSpawnModeSelect");
+      const gemCountMinInput = document.getElementById("gemCountMinInput");
+      const gemCountMaxInput = document.getElementById("gemCountMaxInput");
+      const gemDurationInput = document.getElementById("gemDurationInput");
+      const gemIntervalInput = document.getElementById("gemIntervalInput");
+      const gemTypesEditor = document.getElementById("gemTypesEditor");
+      const addGemTypeBtn = document.getElementById("addGemTypeBtn");
+
+      // pinata fields
+      const pinataStrengthInput = document.getElementById("pinataStrengthInput");
+      const pinataAtlasSelect = document.getElementById("pinataAtlasSelect");
+      const pinataTextureAtlasInput = document.getElementById("pinataTextureAtlasInput");
+      const pinataTextureRectInput = document.getElementById("pinataTextureRectInput");
+      const pinataTileSizeInput = document.getElementById("pinataTileSizeInput");
+      const pinataSpawnModeSelect = document.getElementById("pinataSpawnModeSelect");
+      const pinataTimeoutInput = document.getElementById("pinataTimeoutInput");
+      const pinataBurstModeSelect = document.getElementById("pinataBurstModeSelect");
+      const pinataBurstRadiusInput = document.getElementById("pinataBurstRadiusInput");
+      const pinataSpawnAboveToggle = document.getElementById("pinataSpawnAboveToggle");
+      const burstItemsEditor = document.getElementById("burstItemsEditor");
+      const addBurstItemBtn = document.getElementById("addBurstItemBtn");
+
+      // atlas picker controls
+      const pinataAtlasCanvas = document.getElementById("pinataAtlasCanvas");
+      const pinataTexturePreviewCanvas = document.getElementById("pinataTexturePreviewCanvas");
+      const pinataZoomRange = document.getElementById("pinataZoomRange");
+      const pinataZoomOutBtn = document.getElementById("pinataZoomOutBtn");
+      const pinataZoomInBtn = document.getElementById("pinataZoomInBtn");
+      const pinataZoomResetBtn = document.getElementById("pinataZoomResetBtn");
+      const pinataZoomInfo = document.getElementById("pinataZoomInfo");
+
+      const saveBtn = document.getElementById("saveBtn");
+      const status = document.getElementById("status");
+      const jsonOutput = document.getElementById("jsonOutput");
+      const eventCardList = document.getElementById("eventCardList");
+      const resetJsonBtn = document.getElementById("resetJsonBtn");
+      const copyJsonBtn = document.getElementById("copyJsonBtn");
+
+      const state = {
+        atlases: [],
+        events: [],
+        selectedIndex: -1,
+      };
+
+      const ALLOWED_ITEM_TYPES = ["seed", "block", "furniture", "clothes"];
+
+      function normalizeItemType(value, fallback = "seed") {
+        const text = String(value ?? "").trim().toLowerCase();
+        if (!ALLOWED_ITEM_TYPES.includes(text)) return fallback;
+        return text;
+      }
+
+      function setStatus(message, isError = false) {
+        status.textContent = message || "";
+        status.style.color = isError ? "#fca5a5" : "#93c5fd";
+      }
+
+      function updateTypeSections() {
+        const typ = eventTypeSelect.value;
+        gemSection.hidden = typ !== "GEM";
+        pinataSection.hidden = typ !== "PINATA";
+      }
+
+      eventTypeSelect.addEventListener("change", () => {
+        updateTypeSections();
+        applyCurrentEventFields();
+      });
+
+      function makeDefaultEvent() {
+        return { EVENT_ID: 0, NAME: "", TYPE: "GEM", ENABLED: true };
+      }
+
+      function renderEventCards() {
+        eventCardList.innerHTML = "";
+        state.events.forEach((e, idx) => {
+            const div = document.createElement("div");
+            div.className = "seedCard";
+            div.textContent = `${e.EVENT_ID} – ${e.NAME || e.TYPE}`;
+            if (idx === state.selectedIndex) div.style.borderColor = "#22c55e";
+            div.addEventListener("click", () => {
+                state.selectedIndex = idx;
+                refreshEditor();
+            });
+            eventCardList.append(div);
+        });
+      }
+
+      function updateJsonOutput() {
+        jsonOutput.value = JSON.stringify({ events: state.events }, null, 2);
+      }
+
+      function buildListEditor(container, rows) {
+        container.innerHTML = "";
+        const appendRow = (entry) => {
+          const row = document.createElement("div");
+          row.className = "fruitDropRow";
+          const typeSelect = document.createElement("select");
+          typeSelect.className = "fruitDropType";
+          ALLOWED_ITEM_TYPES.forEach((it) => {
+            const o = document.createElement("option");
+            o.value = it;
+            o.textContent = it;
+            typeSelect.append(o);
+          });
+          typeSelect.value = normalizeItemType(entry?.ITEM_TYPE || entry?.type || "seed");
+          const idInput = document.createElement("input");
+          idInput.type = "number";
+          idInput.className = "fruitDropItemId";
+          idInput.min = "0";
+          idInput.step = "1";
+          idInput.value = String(Math.max(0, Number(entry?.ITEM_ID || entry?.id || 0)));
+          const chanceInput = document.createElement("input");
+          chanceInput.type = "number";
+          chanceInput.className = "fruitDropChance";
+          chanceInput.min = "0";
+          chanceInput.max = "1";
+          chanceInput.step = "0.01";
+          chanceInput.value = String(Number(entry?.CHANCE || entry?.chance || 1));
+          const minInput = document.createElement("input");
+          minInput.type = "number";
+          minInput.className = "fruitDropMin";
+          minInput.min = "0";
+          minInput.step = "1";
+          minInput.value = String(Math.max(0, Number(entry?.MIN || entry?.min || 0)));
+          const maxInput = document.createElement("input");
+          maxInput.type = "number";
+          maxInput.className = "fruitDropMax";
+          maxInput.min = "0";
+          maxInput.step = "1";
+          maxInput.value = String(Math.max(0, Number(entry?.MAX || entry?.max || 0)));
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "secondary fruitDropRemoveBtn";
+          removeBtn.textContent = "Remove";
+          removeBtn.addEventListener("click", () => {
+            row.remove();
+            applyCurrentEventFields();
+            updateJsonOutput();
+            renderEventCards();
+          });
+          [typeSelect, idInput, chanceInput, minInput, maxInput].forEach(ctrl => ctrl.addEventListener("input", () => {
+            applyCurrentEventFields();
+            updateJsonOutput();
+            renderEventCards();
+          }));
+          row.append(typeSelect, idInput, chanceInput, minInput, maxInput, removeBtn);
+          container.append(row);
+        };
+        for (const r of rows) appendRow(r);
+      }
+
+      function readListEditor(container) {
+        const rows = [];
+        container.querySelectorAll(".fruitDropRow").forEach(row => {
+          const itemType = normalizeItemType(row.querySelector(".fruitDropType").value);
+          const itemId = Math.max(0, Number.parseInt(row.querySelector(".fruitDropItemId").value || "0", 10));
+          const chance = Math.max(0, Math.min(1, Number(row.querySelector(".fruitDropChance").value) || 0));
+          const min = Math.max(0, Number.parseInt(row.querySelector(".fruitDropMin").value || "0", 10));
+          const max = Math.max(min, Number.parseInt(row.querySelector(".fruitDropMax").value || String(min), 10));
+          rows.push({ ITEM_TYPE: itemType, ITEM_ID: itemId, CHANCE: chance, MIN: min, MAX: max });
+        });
+        return rows;
+      }
+
+      function applyCurrentEventFields() {
+        const idx = state.selectedIndex;
+        if (idx < 0 || idx >= state.events.length) return;
+        const ev = state.events[idx];
+        ev.EVENT_ID = Math.max(0, Number(eventIdInput.value) || 0);
+        ev.NAME = String(eventNameInput.value || "");
+        ev.ENABLED = eventEnabledToggle.value === "true";
+        ev.TYPE = String(eventTypeSelect.value || "GEM");
+        if (ev.TYPE === "GEM") {
+          ev.SPAWN_MODE = gemSpawnModeSelect.value;
+          ev.GEM_COUNT_MIN = Math.max(0, Number(gemCountMinInput.value) || 0);
+          ev.GEM_COUNT_MAX = Math.max(0, Number(gemCountMaxInput.value) || 0);
+          ev.GEM_DURATION = Math.max(0, parseFloat(gemDurationInput.value) || 0);
+          ev.GEM_INTERVAL = Math.max(0.1, parseFloat(gemIntervalInput.value) || 1);
+          ev.GEM_TYPES = readListEditor(gemTypesEditor);
+          // clean up pinata-specific fields
+          delete ev.STRENGTH; delete ev.TEXTURE_ATLAS; delete ev.TEXTURE_RECT;
+          delete ev.SPAWN_MODE; delete ev.TIMEOUT;
+          delete ev.BURST_MODE; delete ev.BURST_RADIUS; delete ev.SPAWN_ABOVE;
+          delete ev.BURST_ITEMS;
+        } else if (ev.TYPE === "PINATA") {
+          ev.STRENGTH = Math.max(1, Number(pinataStrengthInput.value) || 1);
+          ev.TEXTURE_ATLAS = String(pinataTextureAtlasInput.value || "");
+          ev.TEXTURE_RECT = String(pinataTextureRectInput.value || "");
+          ev.SPAWN_MODE = String(pinataSpawnModeSelect.value || "any");
+          ev.TIMEOUT = Math.max(0, parseFloat(pinataTimeoutInput.value) || 0);
+          ev.BURST_MODE = pinataBurstModeSelect.value;
+          ev.BURST_RADIUS = Math.max(0, Number(pinataBurstRadiusInput.value) || 0);
+          ev.SPAWN_ABOVE = pinataSpawnAboveToggle.value === "true";
+          ev.BURST_ITEMS = readListEditor(burstItemsEditor);
+          // remove gem-specific
+          delete ev.GEM_COUNT_MIN; delete ev.GEM_COUNT_MAX; delete ev.GEM_TYPES;
+        }
+        renderEventCards();
+      }
+
+      function refreshEditor() {
+        const idx = state.selectedIndex;
+        if (idx < 0) return;
+        const ev = state.events[idx];
+        eventIdInput.value = String(ev.EVENT_ID || 0);
+        eventNameInput.value = ev.NAME || "";
+        eventEnabledToggle.value = ev.ENABLED ? "true" : "false";
+        eventTypeSelect.value = ev.TYPE || "GEM";
+        updateTypeSections();
+        if (ev.TYPE === "GEM") {
+          gemSpawnModeSelect.value = ev.SPAWN_MODE || "any";
+          gemCountMinInput.value = String(ev.GEM_COUNT_MIN || 0);
+          gemCountMaxInput.value = String(ev.GEM_COUNT_MAX || 0);
+          gemDurationInput.value = String(ev.GEM_DURATION || 0);
+          gemIntervalInput.value = String(ev.GEM_INTERVAL || 1);
+          buildListEditor(gemTypesEditor, ev.GEM_TYPES || []);
+        } else if (ev.TYPE === "PINATA") {
+          // ensure atlas options exist
+          renderAtlasSelect(pinataAtlasSelect);
+          pinataAtlasSelect.value = normalizeAtlasId(ev.TEXTURE_ATLAS || "");
+
+          pinataStrengthInput.value = String(ev.STRENGTH || 1);
+          pinataTextureAtlasInput.value = ev.TEXTURE_ATLAS || "";
+          pinataTextureRectInput.value = ev.TEXTURE_RECT || "";
+          pinataSpawnModeSelect.value = ev.SPAWN_MODE || "any";
+          pinataTimeoutInput.value = String(ev.TIMEOUT || 0);
+          pinataBurstModeSelect.value = ev.BURST_MODE || "area";
+          pinataBurstRadiusInput.value = String(ev.BURST_RADIUS || 0);
+          pinataSpawnAboveToggle.value = ev.SPAWN_ABOVE ? "true" : "false";
+          buildListEditor(burstItemsEditor, ev.BURST_ITEMS || []);
+          // refresh atlas preview
+          loadPinataAtlas();
+          updatePinataZoom(1);
+        }
+        updateJsonOutput();
+        renderEventCards();
+      }
+
+      function reloadData() {
+        fetch("/api/tools/events/editor-data")
+          .then(r => r.json())
+          .then(data => {
+            state.atlases = Array.isArray(data.atlases) ? data.atlases : [];
+            state.events = Array.isArray(data.events) ? data.events : [];
+            state.selectedIndex = -1;
+            populateEventSelect();
+            renderEventCards();
+            setStatus("Loaded", false);
+            updateJsonOutput();
+            // refresh atlas dropdown
+            renderAtlasSelect(pinataAtlasSelect);
+          })
+          .catch(err => setStatus("Failed to load: " + err, true));
+      }
+
+      // pinata atlas picker support
+      let pinataAtlasImage = null;
+      let pinataZoom = 1;
+
+      function normalizeAtlasId(value) {
+        return String(value || "").trim().toLowerCase();
+      }
+
+      function renderAtlasSelect(selectEl) {
+        if (!selectEl) return;
+        const current = String(normalizeAtlasId(selectEl.value));
+        selectEl.innerHTML = "";
+        const atlasChoices = Array.isArray(state.atlases) ? state.atlases : [];
+        for (const atlas of atlasChoices) {
+          const atlasId = normalizeAtlasId(atlas?.ATLAS_ID);
+          const option = document.createElement("option");
+          option.value = atlasId;
+          option.textContent = `${String(atlas?.NAME ?? "ATLAS")} (${atlasId})`;
+          selectEl.append(option);
+        }
+        if (selectEl.options.length) {
+          selectEl.value = Array.from(selectEl.options).some(opt => opt.value === current)
+            ? current
+            : selectEl.options[0].value;
+        }
+      }
+
+      function getAtlasById(atlasId) {
+        const key = normalizeAtlasId(atlasId);
+        return (state.atlases || []).find((a) => normalizeAtlasId(a?.ATLAS_ID) === key) || null;
+      }
+
+      function getAtlasImage(atlasId) {
+        const atlas = getAtlasById(atlasId);
+        if (!atlas || !atlas.SRC) return Promise.resolve(null);
+        const key = normalizeAtlasId(atlasId);
+        if (state.atlasImageCache && state.atlasImageCache[key]) {
+          return state.atlasImageCache[key];
+        }
+        if (!state.atlasImageCache) state.atlasImageCache = {};
+        state.atlasImageCache[key] = new Promise((resolve) => {
+          const img = new Image();
+          img.decoding = "async";
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = String(atlas.SRC);
+        });
+        return state.atlasImageCache[key];
+      }
+
+      function updatePinataZoom(newZoom) {
+        pinataZoom = Math.max(0.25, Math.min(8, newZoom));
+        if (pinataZoomRange) pinataZoomRange.value = String(pinataZoom);
+        if (pinataZoomInfo) pinataZoomInfo.textContent = `Atlas Zoom: ${pinataZoom.toFixed(2)}x`;
+        drawPinataAtlas();
+      }
+
+      function drawPinataAtlas() {
+        if (!pinataAtlasCanvas) return;
+        const ctx = pinataAtlasCanvas.getContext("2d");
+        if (!ctx) return;
+        if (!pinataAtlasImage) {
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, pinataAtlasCanvas.width, pinataAtlasCanvas.height);
+          return;
+        }
+        const w = pinataAtlasImage.width * pinataZoom;
+        const h = pinataAtlasImage.height * pinataZoom;
+        pinataAtlasCanvas.width = w;
+        pinataAtlasCanvas.height = h;
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(pinataAtlasImage, 0, 0, w, h);
+        // draw selection rectangle if defined
+        if (pinataTextureRectInput) {
+          const parts = String(pinataTextureRectInput.value || "").split(",").map(Number);
+          if (parts.length === 4 && parts.every(Number.isFinite)) {
+            const [rx, ry, rw, rh] = parts;
+            ctx.strokeStyle = "#22c55e";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(rx * pinataZoom, ry * pinataZoom, rw * pinataZoom, rh * pinataZoom);            // update small preview canvas
+            if (pinataTexturePreviewCanvas) {
+              const pctx = pinataTexturePreviewCanvas.getContext("2d");
+              if (pctx) {
+                pctx.imageSmoothingEnabled = false;
+                // scale preview to fixed size
+                const previewSize = 32;
+                const scale = Math.max(1, previewSize / Math.max(rw, rh));
+                pinataTexturePreviewCanvas.width = Math.round(rw * scale);
+                pinataTexturePreviewCanvas.height = Math.round(rh * scale);
+                pctx.clearRect(0,0,pinataTexturePreviewCanvas.width, pinataTexturePreviewCanvas.height);
+                pctx.drawImage(
+                  pinataAtlasImage,
+                  rx, ry, rw, rh,
+                  0, 0, pinataTexturePreviewCanvas.width, pinataTexturePreviewCanvas.height
+                );
+              }
+            }          }
+        }
+      }
+
+      async function loadPinataAtlas() {
+        const atlasId = String(pinataTextureAtlasInput.value || "").trim();
+        if (!atlasId) {
+          pinataAtlasImage = null;
+          drawPinataAtlas();
+          return;
+        }
+        let img = null;
+        try {
+          img = await getAtlasImage(atlasId);
+        } catch {
+          img = null;
+        }
+        if (img) {
+          pinataAtlasImage = img;
+          updatePinataZoom(pinataZoom);
+        } else {
+          pinataAtlasImage = null;
+          drawPinataAtlas();
+        }
+      }
+
+      if (pinataTextureAtlasInput) {
+        pinataTextureAtlasInput.addEventListener("change", loadPinataAtlas);
+      }
+      if (pinataTextureRectInput) {
+        pinataTextureRectInput.addEventListener("input", drawPinataAtlas);
+      }
+      if (pinataTileSizeInput) {
+        pinataTileSizeInput.addEventListener("input", drawPinataAtlas);
+      }
+      if (pinataAtlasSelect) {
+        pinataAtlasSelect.addEventListener("change", () => {
+          pinataTextureAtlasInput.value = String(pinataAtlasSelect.value || "");
+          loadPinataAtlas();
+        });
+      }
+      if (pinataAtlasCanvas) {
+        pinataAtlasCanvas.addEventListener("click", (e) => {
+          if (!pinataAtlasImage) return;
+          const rect = pinataAtlasCanvas.getBoundingClientRect();
+          let x = Math.floor((e.clientX - rect.left) / pinataZoom);
+          let y = Math.floor((e.clientY - rect.top) / pinataZoom);
+          const ts = pinataTileSizeInput && parseInt(pinataTileSizeInput.value) > 0 ? parseInt(pinataTileSizeInput.value) : 16;
+          // always use tile size for selection dimensions
+          const selW = ts;
+          const selH = ts;
+          // snap to tile boundaries using ts
+          x = Math.floor(x / ts) * ts;
+          y = Math.floor(y / ts) * ts;
+          pinataTextureRectInput.value = `${x},${y},${selW},${selH}`;
+          drawPinataAtlas();
+          applyCurrentEventFields();
+          updateJsonOutput();
+          renderEventCards();
+        });
+      }
+      if (pinataZoomRange) {
+        pinataZoomRange.addEventListener("input", () => updatePinataZoom(Number(pinataZoomRange.value)));
+      }
+      if (pinataZoomOutBtn) {
+        pinataZoomOutBtn.addEventListener("click", () => updatePinataZoom(pinataZoom - 0.25));
+      }
+      if (pinataZoomInBtn) {
+        pinataZoomInBtn.addEventListener("click", () => updatePinataZoom(pinataZoom + 0.25));
+      }
+      if (pinataZoomResetBtn) {
+        pinataZoomResetBtn.addEventListener("click", () => updatePinataZoom(1));
+      }
+
+      function populateEventSelect() {
+        eventSelect.innerHTML = "";
+        state.events.forEach((e, idx) => {
+          const opt = document.createElement("option");
+          opt.value = String(idx);
+          opt.textContent = `${e.EVENT_ID} – ${e.NAME || e.TYPE}`;
+          eventSelect.append(opt);
+        });
+      }
+
+      eventSelect.addEventListener("change", () => {
+        state.selectedIndex = parseInt(eventSelect.value, 10) || 0;
+        refreshEditor();
+      });
+
+      createEventBtn.addEventListener("click", () => {
+        const ev = makeDefaultEvent();
+        state.events.push(ev);
+        state.selectedIndex = state.events.length - 1;
+        populateEventSelect();
+        refreshEditor();
+      });
+
+      deleteEventBtn.addEventListener("click", () => {
+        if (state.selectedIndex < 0) return;
+        state.events.splice(state.selectedIndex, 1);
+        state.selectedIndex = Math.min(state.selectedIndex, state.events.length - 1);
+        populateEventSelect();
+        refreshEditor();
+      });
+
+      reloadBtn.addEventListener("click", () => reloadData());
+
+      saveBtn.addEventListener("click", () => {
+        // make sure whatever is currently shown in the form is applied to the selected
+        // event before we send the payload.
+        applyCurrentEventFields();
+
+        // also update the text/json output so users can inspect what will be saved
+        updateJsonOutput();
+
+        fetch("/api/tools/events/save-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ events: state.events }),
+        })
+          .then(r => r.json())
+          .then((result) => {
+            if (result.ok) {
+              setStatus("Saved successfully.");
+            } else {
+              setStatus("Save failed", true);
+            }
+          })
+          .catch(err => setStatus("Save error: " + err, true));
+      });
+
+      resetJsonBtn.addEventListener("click", () => {
+        updateJsonOutput();
+      });
+
+      copyJsonBtn.addEventListener("click", () => {
+        navigator.clipboard.writeText(jsonOutput.value);
+      });
+
+      addGemTypeBtn.addEventListener("click", () => {
+        buildListEditor(gemTypesEditor, [...readListEditor(gemTypesEditor), {}]);
+        applyCurrentEventFields();
+      });
+
+      addBurstItemBtn.addEventListener("click", () => {
+        buildListEditor(burstItemsEditor, [...readListEditor(burstItemsEditor), {}]);
+        applyCurrentEventFields();
+      });
+
+      // initialize
+      reloadData();
+    </script>
+  </body>
+</html>

@@ -17,8 +17,8 @@ from modules.block_registry import (
     DEFAULT_RUNTIME_BLOCK_ROLES,
 )
 from modules.chat_commands import process_chat_command
-from modules.command_runtime import apply_command_result
-from modules.editor_tools import load_texture47_configs, register_editor_routes
+from modules.command_runtime import apply_command_result, _choose_event_location
+from modules.editor_tools import load_texture47_configs, register_editor_routes, resolve_item_id as _resolve_item_id
 from modules.player_data import (
     create_token,
     get_db,
@@ -48,6 +48,7 @@ from modules.ws_runtime import broadcast_to_world, leave_world, ws_send
 from modules.ws_player_actions import respawn_player_to_door
 from modules.worldgen import generate_world_layers
 from modules import world_utils
+from modules import events
 from modules.world_utils import (
     world_cache,
     save_tasks,
@@ -69,6 +70,7 @@ from modules.world_utils import (
     serialize_gem_drops,
     serialize_seed_drops,
     serialize_planted_trees,
+    serialize_pinatas,
     sanitize_door,
     get_spawn_from_door,
     enforce_bedrock_under_door,
@@ -102,12 +104,14 @@ PUBLIC_DIR = BASE_DIR / "public"
 BLOCKS_PATH = PUBLIC_DIR / "data" / "blocks.json"
 SEEDS_PATH = PUBLIC_DIR / "data" / "seeds.json"
 WEATHER_PATH = PUBLIC_DIR / "data" / "weather.json"
+EVENTS_PATH = PUBLIC_DIR / "data" / "events.json"
 
 # configure world_utils shared constants and paths
 world_utils.PUBLIC_DIR = PUBLIC_DIR
 world_utils.BLOCKS_PATH = BLOCKS_PATH
 world_utils.SEEDS_PATH = SEEDS_PATH
 world_utils.WEATHER_PATH = WEATHER_PATH
+events.EVENTS_PATH = EVENTS_PATH
 
 world_utils.WORLD_WIDTH = WORLD_WIDTH
 world_utils.WORLD_HEIGHT = WORLD_HEIGHT
@@ -427,12 +431,12 @@ register_editor_routes(
     blocks_path=BLOCKS_PATH,
     seeds_path=SEEDS_PATH,
     weather_path=WEATHER_PATH,
+    events_path=EVENTS_PATH,
     load_blocks_payload=load_blocks_payload,
     load_seeds_payload=load_seeds_payload,
     load_weather_payload=load_weather_payload,
     refresh_block_definitions_if_changed=refresh_block_definitions_if_changed,
 )
-
 
 async def schedule_world_save(world_name: str, only_weather: bool = False) -> None:
     # delegate to world_utils implementation
@@ -638,6 +642,7 @@ clients: dict[str, dict[str, Any]] = {}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
+    global random  # ensure module-level random is used throughout handler
     await websocket.accept()
 
     client_id = secrets.token_hex(8)
@@ -783,6 +788,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "gemDrops": serialize_gem_drops(world),
                             "seedDrops": serialize_seed_drops(world),
                             "plantedTrees": serialize_planted_trees(world),
+                            "pinatas": serialize_pinatas(world),
                         },
                         "selfId": client_id,
                         "gems": int(world["players"][client_id].get("gems", 0)),
@@ -910,8 +916,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     current_inventory,
                 )
                 if overflow:
-                    # notify the player that their inventory is full
-                    await ws_send(websocket, {"type": "system_message", "message": "Inventory full"})
+                    # notify the player that their inventory is full, but avoid spamming the client repeatedly
+                    now = time.time()
+                    last_alert = float(player.get("_last_inventory_full_alert", 0))
+                    if now - last_alert > 1.0:
+                        player["_last_inventory_full_alert"] = now
+                        await ws_send(websocket, {"type": "system_message", "message": "Inventory full"})
                 if collected_item_drop_ids:
                     await schedule_world_save(world["name"])
                     item_counts: dict[tuple[str, int], int] = {}
@@ -1074,6 +1084,98 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await schedule_world_save(world["name"])
                 continue
 
+            if msg_type == "pinata_hit":
+                # player is hitting a spawned pinata
+                pinata_id = str(msg.get("id", "")).strip()
+                if pinata_id:
+                    pinatas = world.setdefault("pinatas", {})
+                    pinata = pinatas.get(pinata_id)
+                    if isinstance(pinata, dict):
+                        # decrement strength
+                        try:
+                            pinata["strength"] = max(0, int(pinata.get("strength", 1)) - 1)
+                        except Exception:
+                            pinata["strength"] = 0
+                        if pinata["strength"] <= 0:
+                            # break it
+                            pinatas.pop(pinata_id, None)
+                            await broadcast_to_world(world, {"type": "pinata_remove", "id": pinata_id})
+                            # spawn burst items as defined on the pinata
+                            base_x = int(pinata.get("x", 0))
+                            base_y = int(pinata.get("y", 0))
+                            items = pinata.get("burst_items", [])
+                            radius = int(pinata.get("burst_radius", 0))
+                            mode = str(pinata.get("burst_mode", "area")).lower()
+                            width = int(world.get("width", 0))
+                            height = int(world.get("height", 0))
+                            for entry in items:
+                                if not isinstance(entry, dict):
+                                    continue
+                                try:
+                                    chance = float(entry.get("CHANCE", 1.0))
+                                except Exception:
+                                    chance = 1.0
+                                if random.random() >= chance:
+                                    continue
+                                try:
+                                    minc = int(entry.get("MIN", 1))
+                                except Exception:
+                                    minc = 1
+                                try:
+                                    maxc = int(entry.get("MAX", minc))
+                                except Exception:
+                                    maxc = minc
+                                if maxc < minc:
+                                    maxc = minc
+                                count = random.randint(minc, maxc) if maxc > minc else minc
+                                item_type = str(entry.get("ITEM_TYPE", "seed"))
+                                try:
+                                    item_id = int(entry.get("ITEM_ID", -1))
+                                except Exception:
+                                    item_id = -1
+                                for _ in range(count):
+                                    # choose a tile that is open (not occupied by a block)
+                                    if radius > 0:
+                                        # sample a few points within the radius until we find an open spot
+                                        tx, ty = base_x, base_y
+                                        for _try in range(20):
+                                            cand_x = base_x + random.randint(-radius, radius)
+                                            cand_y = base_y + random.randint(-radius, radius)
+                                            if width > 0 and height > 0:
+                                                cand_x = max(0, min(width - 1, cand_x))
+                                                cand_y = max(0, min(height - 1, cand_y))
+                                            fg = world.get("foreground", [])
+                                            idx = cand_y * width + cand_x
+                                            if idx < len(fg) and fg[idx] == 0:
+                                                tx, ty = cand_x, cand_y
+                                                break
+                                        else:
+                                            # fallback: ask command_runtime helper
+                                            tx, ty = _choose_event_location(world, "any")
+                                    else:
+                                        tx, ty = _choose_event_location(world, "any")
+                                    drop = spawn_item_drop_center(world, tx, ty, item_id, item_type=item_type, allow_tile_stack=True)
+                                    if drop is not None:
+                                        await broadcast_to_world(
+                                            world,
+                                            {
+                                                "type": "seed_drop_spawn",
+                                                "drop": {
+                                                    "id": str(drop.get("id", "")),
+                                                    "x": float(drop.get("x", 0)),
+                                                    "y": float(drop.get("y", 0)),
+                                                    "itemId": int(
+                                                        drop.get("item_id", drop.get("seed_id", -1))
+                                                    ),
+                                                    "itemType": str(drop.get("item_type", "seed")),
+                                                },
+                                            },
+                                        )
+                            await schedule_world_save(world["name"])
+                        else:
+                            await broadcast_to_world(world, {"type": "pinata_update", "id": pinata_id, "strength": pinata["strength"]})
+                continue
+
             if msg_type == "set_tile":
                 refresh_block_definitions_if_changed()
 
@@ -1104,41 +1206,60 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if action == "break":
                     removed_tree = remove_planted_tree_at(world, x, y)
                     if removed_tree is not None:
-                        tree_drops = get_tree_item_drops(removed_tree, int(time.time() * 1000))
-                        for tree_drop in tree_drops:
+                        tree_drops = get_tree_item_drops(removed_tree, int(time.time() * 1000)) or []
+                        print(f"[tree] computed tree_drops={tree_drops} for tree at {x},{y}")
+                        if not tree_drops:
+                            print(f"[tree] no drops defined for seed_id={removed_tree.get('seed_id')}\n")
+                        for tree_drop in tree_drops or []:
+                            # support both camelCase and uppercase keys
+                            tree_item_id = _resolve_item_id(tree_drop, "itemId", "ITEM_ID", "ID", "SEED_ID", default=-1)
                             try:
-                                tree_item_id = int(tree_drop.get("itemId", -1))
+                                tree_item_id = int(tree_item_id)
                             except Exception:
                                 tree_item_id = -1
-                            tree_item_type = normalize_item_type(tree_drop.get("itemType", "seed"))
+                            tree_item_type = normalize_item_type(
+                                tree_drop.get("itemType", tree_drop.get("ITEM_TYPE", "seed")),
+                                default="seed",
+                            )
                             if tree_item_id < 0:
                                 continue
 
-                            tree_seed_drop = spawn_item_drop_center(
-                                world,
-                                x,
-                                y,
-                                tree_item_id,
-                                item_type=tree_item_type,
-                                allow_tile_stack=True,
-                            )
-                            if tree_seed_drop is not None:
-                                await broadcast_to_world(
+                            minc = int(tree_drop.get("MIN", tree_drop.get("COUNT", tree_drop.get("count", 1))))
+                            maxc = int(tree_drop.get("MAX", minc))
+                            if maxc < minc:
+                                maxc = minc
+                            drop_count = minc if maxc == minc else random.randint(minc, maxc)
+
+                            for _ in range(drop_count):
+                                tree_seed_drop = spawn_item_drop_center(
                                     world,
-                                    {
-                                        "type": "seed_drop_spawn",
-                                        "drop": {
-                                            "id": str(tree_seed_drop["id"]),
-                                            "x": float(tree_seed_drop["x"]),
-                                            "y": float(tree_seed_drop["y"]),
-                                            "itemId": int(tree_seed_drop.get("item_id", tree_seed_drop.get("seed_id", -1))),
-                                            "itemType": str(tree_seed_drop.get("item_type", "seed")),
-                                        },
-                                    },
+                                    x,
+                                    y,
+                                    tree_item_id,
+                                    item_type=tree_item_type,
+                                    allow_tile_stack=True,
                                 )
+                                if tree_seed_drop is not None:
+                                    print(f"[tree] spawned seed drop {tree_seed_drop} from tree at {x},{y}")
+                                    await broadcast_to_world(
+                                        world,
+                                        {
+                                            "type": "seed_drop_spawn",
+                                            "drop": {
+                                                "id": str(tree_seed_drop["id"]),
+                                                "x": float(tree_seed_drop["x"]),
+                                                "y": float(tree_seed_drop["y"]),
+                                                "itemId": int(tree_seed_drop.get("item_id", tree_seed_drop.get("seed_id", -1))),
+                                                "itemType": str(tree_seed_drop.get("item_type", "seed")),
+                                            },
+                                        },
+                                    )
+                                else:
+                                    print(f"[tree] failed to spawn seed drop for item {tree_item_id} at {x},{y}")
                         # gems from trees
                         gem_total = get_tree_gem_drop_total(removed_tree)
                         if gem_total > 0:
+                            print(f"[tree] spawning {gem_total} gems from tree at {x},{y}")
                             spawned_drops = spawn_gem_drops(world, x, y, gem_total)
                             for drop in spawned_drops:
                                 await broadcast_to_world(

@@ -101,6 +101,8 @@ def load_weather_payload() -> Dict[str, Any]:
     return output
 
 
+
+
 # utility helpers for blocks and drops
 
 def get_item_definition(item_id: int, item_type: str = "seed") -> Dict[str, Any] | None:
@@ -488,7 +490,82 @@ def get_tree_item_drops(tree: Dict[str, Any], now_ms: int) -> List[Dict[str, Any
         if isinstance(raw_tree.get("FRUIT_DROPS"), list):
             raw_fruit_drops = raw_tree.get("FRUIT_DROPS", [])
 
-    # ... (rest of file continues unchanged)
+    # convert raw_drops entries into normalized dicts
+    for rd in raw_drops:
+        if not isinstance(rd, dict):
+            continue
+        try:
+            item_id = int(rd.get("ITEM_ID", rd.get("ID", rd.get("SEED_ID", -1))))
+        except Exception:
+            continue
+        if item_id < 0:
+            continue
+        item_type = str(rd.get("ITEM_TYPE", rd.get("TYPE", "seed"))).lower()
+        if item_type not in {"seed", "block", "furniture", "clothes"}:
+            item_type = "seed"
+        try:
+            chance = float(rd.get("CHANCE", 1.0))
+        except Exception:
+            chance = 1.0
+        chance = max(0.0, min(1.0, chance))
+        try:
+            minc = int(rd.get("MIN", rd.get("COUNT", rd.get("count", 1))))
+        except Exception:
+            minc = 1
+        try:
+            maxc = int(rd.get("MAX", minc))
+        except Exception:
+            maxc = minc
+        if maxc < minc:
+            maxc = minc
+        drops.append({
+            "ITEM_TYPE": item_type,
+            "ITEM_ID": item_id,
+            "CHANCE": chance,
+            "MIN": minc,
+            "MAX": maxc,
+        })
+
+    # also convert fruit-style drops
+    for rf in raw_fruit_drops:
+        if not isinstance(rf, dict):
+            continue
+        try:
+            item_type = str(rf.get("ITEM_TYPE", "seed")).lower()
+        except Exception:
+            item_type = "seed"
+        if item_type not in {"seed", "block", "furniture", "clothes"}:
+            item_type = "seed"
+        try:
+            item_id = int(rf.get("ITEM_ID", -1))
+        except Exception:
+            item_id = -1
+        if item_id < 0:
+            continue
+        try:
+            chance = float(rf.get("CHANCE", 1.0))
+        except Exception:
+            chance = 1.0
+        chance = max(0.0, min(1.0, chance))
+        try:
+            minc = int(rf.get("MIN", rf.get("COUNT", 1)))
+        except Exception:
+            minc = 1
+        try:
+            maxc = int(rf.get("MAX", minc))
+        except Exception:
+            maxc = minc
+        if maxc < minc:
+            maxc = minc
+        drops.append({
+            "ITEM_TYPE": item_type,
+            "ITEM_ID": item_id,
+            "CHANCE": chance,
+            "MIN": minc,
+            "MAX": maxc,
+        })
+
+    return drops
 def ensure_world_gem_state(world: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     gem_drops = world.setdefault("gem_drops", {})
     if not isinstance(gem_drops, dict):
@@ -511,6 +588,23 @@ def ensure_world_tree_state(world: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         world["planted_trees"] = {}
         planted_trees = world["planted_trees"]
     return planted_trees
+
+
+def ensure_world_pinata_state(world: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    pinatas = world.setdefault("pinatas", {})
+    if not isinstance(pinatas, dict):
+        world["pinatas"] = {}
+        pinatas = world["pinatas"]
+    return pinatas
+
+
+def serialize_pinatas(world: Dict[str, Any]) -> List[Dict[str, Any]]:
+    payload: List[Dict[str, Any]] = []
+    for pinata in ensure_world_pinata_state(world).values():
+        if not isinstance(pinata, dict):
+            continue
+        payload.append(pinata)
+    return payload
 
 
 def get_tree_key(x: int, y: int) -> str:
@@ -881,6 +975,44 @@ def spawn_item_drop_center(
     )
 
 
+def spawn_pinata(
+    world: Dict[str, Any],
+    x: int,
+    y: int,
+    *,
+    strength: int = 1,
+    atlas: str = "",
+    rect: str = "",
+    spawn_mode: str = "any",
+    timeout: float = 0,
+    burst_mode: str = "area",
+    burst_radius: int = 0,
+    burst_items: list[dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    """Add a pinata entity to ``world`` and return its record.
+
+    The returned dictionary includes all supplied fields along with a unique
+    ``id`` key. The pinata will be stored in ``world["pinatas"]``.
+    """
+    pinatas = ensure_world_pinata_state(world)
+    pid = secrets.token_hex(6)
+    pinata: Dict[str, Any] = {
+        "id": pid,
+        "x": int(x),
+        "y": int(y),
+        "strength": max(1, int(strength)),
+        "atlas": str(atlas or ""),
+        "rect": str(rect or ""),
+        "spawn_mode": str(spawn_mode or "any"),
+        "timeout": float(timeout or 0),
+        "burst_mode": str(burst_mode or "area"),
+        "burst_radius": int(burst_radius or 0),
+        "burst_items": list(burst_items) if isinstance(burst_items, list) else [],
+    }
+    pinatas[pid] = pinata
+    return pinata
+
+
 def collect_gems_for_player(world: Dict[str, Any], player: Dict[str, Any]) -> Tuple[List[str], int]:
     gem_drops = ensure_world_gem_state(world)
     if not gem_drops:
@@ -969,30 +1101,51 @@ def collect_item_drops_for_player(
             candidate_ids.append(str(drop_id))
             candidate_items.append({"itemId": item_id, "itemType": item_type})
 
-    # capacity check
+    # Decide which candidate drops can actually be picked up (and allow stacking into existing inventory even when "full").
     overflowed = False
-    if inventory_slots is not None and candidate_items:
-        inv = inventory if inventory is not None else normalize_inventory(player.get("inventory", {}))
-        used = len(inv)
-        new_keys = set()
-        for entry in candidate_items:
-            key = make_inventory_key(entry.get("itemType", "seed"), entry.get("itemId", -1))
-            if key and key not in inv:
-                new_keys.add(key)
-        if used + len(new_keys) > inventory_slots:
-            # cannot pick up; leave drops in the world
-            overflowed = True
-            return [], [], overflowed
-
-    # actually remove and return
     collected_ids: List[str] = []
     collected_items: List[Dict[str, Any]] = []
 
-    for idx, entry in enumerate(candidate_items):
-        drop_id = candidate_ids[idx]
+    if candidate_items:
+        inv = inventory if inventory is not None else normalize_inventory(player.get("inventory", {}))
+        existing_keys = set(inv.keys())
+        free_slots = None
+        if inventory_slots is not None:
+            free_slots = inventory_slots - len(existing_keys)
+
+        # Prioritize items that already exist in inventory (so they can stack even when no free slots remain).
+        prioritized = sorted(
+            zip(candidate_ids, candidate_items),
+            key=lambda pair: 1
+            if make_inventory_key(pair[1].get("itemType", "seed"), pair[1].get("itemId", -1)) not in existing_keys
+            else 0,
+        )
+
+        for drop_id, entry in prioritized:
+            key = make_inventory_key(entry.get("itemType", "seed"), entry.get("itemId", -1))
+            if not key:
+                continue
+
+            needs_new_slot = key not in existing_keys
+            if free_slots is not None and needs_new_slot and free_slots <= 0:
+                # Could not pick this drop because there are no free inventory slots left.
+                overflowed = True
+                continue
+
+            collected_ids.append(drop_id)
+            collected_items.append(entry)
+
+            if needs_new_slot and free_slots is not None:
+                free_slots -= 1
+                existing_keys.add(key)
+
+        # If there were drops in range that were not collected due to inventory capacity, report overflow.
+        if inventory_slots is not None and len(collected_ids) < len(candidate_ids):
+            overflowed = True
+
+    # Remove any drops that were actually collected
+    for drop_id in collected_ids:
         item_drops.pop(drop_id, None)
-        collected_ids.append(drop_id)
-        collected_items.append(entry)
 
     return collected_ids, collected_items, overflowed
 

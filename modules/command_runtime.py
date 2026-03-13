@@ -4,6 +4,76 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from modules.ws_player_actions import teleport_player
+from modules.events import apply_event_effects
+
+import random
+import asyncio
+import time
+
+# helpers --------------------------------------------------------------------
+
+def _choose_event_location(world: dict[str, Any], mode: str) -> tuple[int, int]:
+    """Return a (x,y) pair satisfying *mode* or a random tile on failure.
+
+    Modes:
+    - ``any``: an *open* tile (foreground and background both 0)
+    - ``open``: same as ``any`` (alias retained for legacy)
+    - ``above``: foreground empty, background nonzero
+    - ``player``: caller's position isn't handled here (caller must override)
+    """
+    try:
+        width = int(world.get("width", 0))
+        height = int(world.get("height", 0))
+    except Exception:
+        width = height = 0
+
+    if width <= 0 or height <= 0:
+        return 0, 0
+
+    fg = world.get("foreground", [])
+    bg = world.get("background", [])
+    mode = (mode or "any").strip().lower()
+    if mode == "open":
+        mode = "any"  # treat open as alias for any
+
+    for _ in range(200):  # a few attempts
+        x = random.randrange(width)
+        y = random.randrange(height)
+        idx = y * width + x
+        if mode == "any":
+            # only foreground must be empty; background may be anything
+            if idx < len(fg) and fg[idx] == 0:
+                return x, y
+        elif mode == "above":
+            if (idx < len(fg) and fg[idx] == 0) and (idx < len(bg) and bg[idx] != 0):
+                return x, y
+        else:
+            # unknown mode, fall back to completely random
+            return x, y
+
+    # if we didn't find a spot by random sampling, do a full scan
+    if mode == "any":
+        for y in range(height):
+            for x in range(width):
+                idx = y * width + x
+                if idx < len(fg) and fg[idx] == 0:
+                    return x, y
+    elif mode == "above":
+        for y in range(height):
+            for x in range(width):
+                idx = y * width + x
+                if (
+                    idx < len(fg)
+                    and fg[idx] == 0
+                    and idx < len(bg)
+                    and bg[idx] != 0
+                ):
+                    return x, y
+    # if still nothing, just pick a random point
+    return random.randrange(width), random.randrange(height)
+    # if nothing found, just pick a random point
+    return random.randrange(width), random.randrange(height)
+
 
 
 async def apply_command_result(
@@ -21,6 +91,7 @@ async def apply_command_result(
     enforce_bedrock_under_door: Callable[..., bool],
     get_spawn_from_door: Callable[..., tuple[float, float]],
 ) -> None:
+    global random  # ensure we always use module-level random rather than any accidental local binding
     sender_message = str(command_result.get("sender_message", "")).strip()
     if sender_message:
         await ws_send(
@@ -106,6 +177,20 @@ async def apply_command_result(
         # Save only weather state, not door or tiles
         await schedule_world_save(world["name"], only_weather=True)
         # continue on so door_move might still be processed if present
+
+    # handle manual event triggers
+    event_trigger = command_result.get("event_trigger")
+    if isinstance(event_trigger, dict):
+        await apply_event_effects(
+            world=world,
+            event_trigger=event_trigger,
+            websocket=websocket,
+            ws_send=ws_send,
+            broadcast_to_world=broadcast_to_world,
+            choose_event_location=_choose_event_location,
+            schedule_world_save=schedule_world_save,
+            command_sender_original=command_sender_original,
+        )
 
     door_move = command_result.get("door_move")
     if not isinstance(door_move, dict):

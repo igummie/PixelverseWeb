@@ -176,11 +176,12 @@ export function createAssetsLoaderController({ state, settings, elements, callba
 
     for (const atlas of atlasSpecs) {
       const image = await loadImage(atlas.SRC);
-      state.atlases.set(atlas.ATLAS_ID, {
+      const key = String(atlas.ATLAS_ID || "").trim().toLowerCase();
+      state.atlases.set(key, {
         ...atlas,
         image,
       });
-      reportAssetProgress(`atlas ${atlas.ATLAS_ID}`);
+      reportAssetProgress(`atlas ${key}`);
     }
 
     for (const block of data.blocks || []) {
@@ -192,6 +193,12 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       block.ITEM_ID = normalizedBlockId;
       block.ID = normalizedBlockId;
       block.ITEM_TYPE = "block";
+      // normalize atlas id to string key to match state.atlases keys
+      try {
+        block.ATLAS_ID = String(block.ATLAS_ID || "").trim().toLowerCase();
+      } catch {
+        block.ATLAS_ID = String(block.ATLAS_ID || "").trim().toLowerCase();
+      }
       state.blockDefs.set(normalizedBlockId, block);
       if (blockHasRegularAnimation(block) && Number.isInteger(blockId)) {
         state.animatedBlockIds.add(normalizedBlockId);
@@ -208,6 +215,8 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       // legacy field only kept for backwards compatibility; not used elsewhere
       delete seed.SEED_ID;
       seed.ITEM_TYPE = "seed";
+      // normalize seed atlas id to string key
+      seed.SEED_ATLAS_ID = String(seed.SEED_ATLAS_ID ?? seed.ATLAS_ID ?? "").trim().toLowerCase();
       state.seedDefs.set(normalizedSeedId, seed);
     }
 
@@ -216,6 +225,17 @@ export function createAssetsLoaderController({ state, settings, elements, callba
         const weatherId = Number(entry?.WEATHER_ID ?? entry?.ITEM_ID);
         if (!Number.isFinite(weatherId) || weatherId < 0) {
           continue;
+        }
+        // normalize any atlas ids inside weather layers so lookups match state.atlases
+        try {
+          const layers = Array.isArray(entry.LAYERS) ? entry.LAYERS : [];
+          for (const layer of layers) {
+            if (layer && layer.ATLAS_ID != null) {
+              layer.ATLAS_ID = String(layer.ATLAS_ID).trim().toLowerCase();
+            }
+          }
+        } catch (e) {
+          // ignore
         }
         state.weatherDefs.set(Math.floor(weatherId), entry);
       }

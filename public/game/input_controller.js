@@ -213,6 +213,14 @@ export function createInputController({ state, screens, canvas, constants, actio
 
         return;
       } else {
+        // check for a pinata at this location first
+        for (const pinata of state.pinatas.values()) {
+          if (Math.floor(pinata.x) === tileX && Math.floor(pinata.y) === tileY) {
+            sendWs({ type: "pinata_hit", id: pinata.id });
+            return;
+          }
+        }
+
         sendWs({
           type: "set_tile",
           action: "break",

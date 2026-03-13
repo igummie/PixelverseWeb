@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from typing import Any
+from modules import world_utils
+from modules.events import trigger_event
 
 
-COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>, /weather <id>"
+COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>, /weather <id>, /event <id>"
 
 
 def _normalize_name(value: Any) -> str:
@@ -201,6 +203,39 @@ def process_chat_command(
             "teleports": [],
             "state_update": None,
             "weather_change": new_weather,
+        }
+
+    if command == "event":
+        if len(args) != 1:
+            return {
+                "sender_message": "Usage: /event <id>",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+        try:
+            eid = int(args[0])
+        except Exception:
+            return {
+                "sender_message": "Event id must be an integer. Usage: /event <id>",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+        ev = trigger_event(world, eid)
+        if not ev:
+            return {
+                "sender_message": f"Event {eid} not found or not enabled.",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+        return {
+            "sender_message": f"Triggered event {eid}.",
+            "direct_messages": [],
+            "teleports": [],
+            "state_update": None,
+            "event_trigger": ev,
         }
 
     if command in {"door", "movedoor"}:

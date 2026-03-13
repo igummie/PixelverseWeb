@@ -192,6 +192,33 @@ export function createWorldDropsController({ state, settings }) {
     };
   }
 
+  function normalizePinata(entry) {
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+    const id = String(entry.id || "").trim();
+    const x = Number(entry.x);
+    const y = Number(entry.y);
+    let strength = Number(entry.strength);
+    if (!id || !Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+    if (!Number.isFinite(strength) || strength < 0) {
+      strength = 1;
+    }
+    return {
+      id,
+      x: Math.floor(x),
+      y: Math.floor(y),
+      strength: Math.floor(strength),
+      atlas: String(entry.atlas || "").trim().toLowerCase(),
+      rect: String(entry.rect || ""),
+      burst_mode: String(entry.burst_mode || "area"),
+      burst_radius: Math.floor(Number(entry.burst_radius) || 0),
+      burst_items: Array.isArray(entry.burst_items) ? entry.burst_items : [],
+    };
+  }
+
   function getTreeMapKey(x, y) {
     return `${Math.floor(Number(x) || 0)}:${Math.floor(Number(y) || 0)}`;
   }
@@ -204,6 +231,15 @@ export function createWorldDropsController({ state, settings }) {
         continue;
       }
       state.plantedTrees.set(getTreeMapKey(normalized.x, normalized.y), normalized);
+    }
+  }
+
+  function applyPinataSnapshot(pinatas) {
+    state.pinatas.clear();
+    for (const entry of pinatas || []) {
+      const normalized = normalizePinata(entry);
+      if (!normalized) continue;
+      state.pinatas.set(normalized.id, normalized);
     }
   }
 
@@ -229,6 +265,20 @@ export function createWorldDropsController({ state, settings }) {
     state.plantedTrees.delete(getTreeMapKey(x, y));
   }
 
+  function upsertPinata(entry) {
+    const normalized = normalizePinata(entry);
+    if (!normalized) {
+      return;
+    }
+    state.pinatas.set(normalized.id, normalized);
+  }
+
+  function removePinataById(pinataId) {
+    const normalizedId = String(pinataId || "").trim();
+    if (!normalizedId) return;
+    state.pinatas.delete(normalizedId);
+  }
+
   return {
     applyGemDropSnapshot,
     upsertGemDrop,
@@ -239,5 +289,8 @@ export function createWorldDropsController({ state, settings }) {
     applyPlantedTreeSnapshot,
     upsertPlantedTree,
     removePlantedTree,
+    applyPinataSnapshot,
+    upsertPinata,
+    removePinataById,
   };
 }
