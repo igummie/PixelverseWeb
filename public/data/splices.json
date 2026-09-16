@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "a",
+      "type": "seed",
+      "x": 0.0,
+      "y": 0.0,
+      "data": {
+        "seedId": "12"
+      }
+    },
+    {
+      "id": "b",
+      "type": "seed",
+      "x": -1.0,
+      "y": 333.0,
+      "data": {
+        "seedId": "13"
+      }
+    },
+    {
+      "id": "r",
+      "type": "seed",
+      "x": 476.0,
+      "y": 101.0,
+      "data": {
+        "seedId": "14"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "a",
+      "target": "r",
+      "targetPort": 0
+    },
+    {
+      "source": "b",
+      "target": "r",
+      "targetPort": 1
+    }
+  ]
+}

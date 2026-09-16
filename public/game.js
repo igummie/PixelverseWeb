@@ -1593,6 +1593,17 @@ function handleSocketMessage(msg) {
     return;
   }
 
+  if (msg.type === "splice_result") {
+    const messageText = String(msg.message || "").trim();
+    if (!messageText) {
+      return;
+    }
+
+    appendChatLine("system", messageText);
+    setPlayerChatBubble(String(msg.playerId || state.selfId || ""), messageText);
+    return;
+  }
+
   if (msg.type === "server_update") {
     const messageText = String(msg.message || "Game is updating. You will be disconnected");
     const countdown = Number(msg.countdown);

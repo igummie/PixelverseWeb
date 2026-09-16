@@ -105,6 +105,12 @@ class SaveNewsDataBody(BaseModel):
     pages: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class SaveSpliceDataBody(BaseModel):
+    version: int = Field(default=1, ge=1)
+    nodes: list[dict[str, Any]] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+
+
 def normalize_name(value: str | None, fallback: str = "") -> str:
     return (value or fallback).strip().lower()
 
@@ -831,11 +837,76 @@ def register_editor_routes(
     weather_path: Path,
     events_path: Path,
     news_path: Path,
+    splices_path: Path,
     load_blocks_payload: Callable[[], dict[str, Any]],
     load_seeds_payload: Callable[[], dict[str, Any]],
     load_weather_payload: Callable[[], dict[str, Any]],
     refresh_block_definitions_if_changed: Callable[..., None],
 ) -> None:
+    @app.get("/api/tools/splices/editor-data")
+    def get_splices_editor_data() -> dict[str, Any]:
+        try:
+            with splices_path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except (FileNotFoundError, json.JSONDecodeError):
+            payload = {"version": 1, "nodes": [], "edges": []}
+
+        if not isinstance(payload, dict):
+            payload = {"version": 1, "nodes": [], "edges": []}
+
+        return {
+            "version": max(1, int(payload.get("version", 1) or 1)),
+            "nodes": payload.get("nodes", []) if isinstance(payload.get("nodes"), list) else [],
+            "edges": payload.get("edges", []) if isinstance(payload.get("edges"), list) else [],
+        }
+
+    @app.post("/api/tools/splices/save-data")
+    def save_splices_data(payload: SaveSpliceDataBody) -> dict[str, Any]:
+        nodes: list[dict[str, Any]] = []
+        node_ids: set[str] = set()
+        for raw_node in payload.nodes:
+            if not isinstance(raw_node, dict):
+                raise HTTPException(status_code=400, detail="Each splice node must be an object")
+            node_id = str(raw_node.get("id", "")).strip()
+            node_type = str(raw_node.get("type", "")).strip().lower()
+            if not node_id or len(node_id) > 80 or node_id in node_ids:
+                raise HTTPException(status_code=400, detail="Splice nodes need unique ids")
+            if node_type not in {"seed", "basic", "advance"}:
+                raise HTTPException(status_code=400, detail=f"Unsupported splice node type: {node_type}")
+            node_ids.add(node_id)
+            nodes.append({
+                "id": node_id,
+                "type": "seed",
+                "x": max(-10000, min(10000, float(raw_node.get("x", 0) or 0))),
+                "y": max(-10000, min(10000, float(raw_node.get("y", 0) or 0))),
+                "data": raw_node.get("data") if isinstance(raw_node.get("data"), dict) else {},
+            })
+
+        edges: list[dict[str, str]] = []
+        seen_edges: set[tuple[str, int]] = set()
+        for raw_edge in payload.edges:
+            if not isinstance(raw_edge, dict):
+                continue
+            source = str(raw_edge.get("source", "")).strip()
+            target = str(raw_edge.get("target", "")).strip()
+            try:
+                target_port = int(raw_edge.get("targetPort", raw_edge.get("target_port", 0)))
+            except (TypeError, ValueError):
+                target_port = 0
+            if target_port not in {0, 1}:
+                continue
+            edge_key = (source, target_port)
+            if source not in node_ids or target not in node_ids or source == target or edge_key in seen_edges:
+                continue
+            seen_edges.add(edge_key)
+            edges.append({"source": source, "target": target, "targetPort": target_port})
+
+        with splices_path.open("w", encoding="utf-8") as handle:
+            json.dump({"version": payload.version, "nodes": nodes, "edges": edges}, handle, indent=2)
+            handle.write("\n")
+
+        return {"ok": True, "path": "data/splices.json", "nodeCount": len(nodes), "edgeCount": len(edges)}
+
     @app.get("/api/tools/news")
     def get_news_editor_data() -> dict[str, Any]:
         try:

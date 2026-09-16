@@ -1,0 +1,63 @@
+:root { color-scheme: dark; --ink: #e8edf2; --muted: #94a3b8; --panel: #17212b; --panel-2: #0f1821; --line: #344554; --accent: #f5b942; --teal: #46d6c2; --pink: #ef8fb4; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; overflow: hidden; color: var(--ink); background: #0a1118; font-family: "Trebuchet MS", "Segoe UI", sans-serif; }
+.editorSwitcher { position: fixed; top: 10px; left: 10px; z-index: 60; display: flex; gap: 8px; padding: 6px; border: 1px solid #374151; border-radius: 10px; background: rgba(17, 24, 39, .92); }
+.switchBtn { display: inline-block; padding: 6px 10px; border: 1px solid #334155; border-radius: 8px; color: #bfdbfe; background: #0f172a; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size: 12px; font-weight: 700; text-decoration: none; }
+.switchBtn.active { border-color: #22c55e; color: #052e16; background: #86efac; }
+.appShell { display: grid; grid-template-columns: 250px minmax(500px, 1fr) 280px; height: 100vh; padding-top: 58px; }
+.sidebar, .inspector { min-width: 0; padding: 16px; border-right: 1px solid var(--line); background: var(--panel); overflow: auto; }
+.inspector { border-right: 0; border-left: 1px solid var(--line); }
+.title { font-size: 20px; font-weight: 900; letter-spacing: .02em; }
+.subtitle, .tiny { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.subtitle { margin: 5px 0 18px; }
+.sectionTitle { margin: 20px 0 8px; color: var(--accent); font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+button, select, input { font: inherit; }
+button { padding: 8px 10px; border: 1px solid #486071; border-radius: 5px; color: #f7fafc; background: #244458; cursor: pointer; font-size: 12px; font-weight: 800; }
+button:hover { border-color: var(--teal); background: #2d5967; }
+button.secondary { color: #c5d1d8; background: #182630; }
+button.danger { border-color: #8e4d5f; background: #492936; }
+.toolbar { display: flex; gap: 7px; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid var(--line); background: #101a23; }
+.toolbar button { padding: 6px 9px; }
+#status { min-height: 18px; margin-left: auto; color: #9ce4bd; font-size: 12px; align-self: center; }
+.palette { display: grid; gap: 7px; }
+.palette button { text-align: left; }
+.palette button span { display: block; color: var(--muted); font-size: 10px; font-weight: 400; }
+.canvasWrap { position: relative; min-width: 0; overflow: hidden; background-color: #0c151d; background-image: radial-gradient(#263845 1px, transparent 1px); background-size: 22px 22px; }
+#edgeLayer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.edge { fill: none; stroke: #6c8190; stroke-width: 2; pointer-events: stroke; }
+.edge.active { stroke: var(--accent); stroke-width: 3; }
+#edgeLayer { z-index: 1; }
+.edge.preview { stroke: var(--accent); stroke-width: 3; stroke-dasharray: 7 6; pointer-events: none; }
+#nodeLayer { position: absolute; inset: 0; z-index: 2; }
+.node { position: absolute; width: 264px; min-height: 168px; border: 1px solid #506474; border-radius: 7px; background: var(--panel); box-shadow: 0 10px 24px rgba(0,0,0,.24); user-select: none; }
+.node.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(245,185,66,.2), 0 10px 24px rgba(0,0,0,.24); }
+.nodeHead { display: flex; align-items: center; justify-content: space-between; padding: 8px 9px; border-bottom: 1px solid #344554; color: #f5f7f9; background: #20303c; font-size: 12px; font-weight: 900; cursor: grab; }
+.nodeType { color: var(--teal); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.nodeBody { display: grid; gap: 7px; padding: 9px; color: var(--muted); font-size: 11px; }
+.nodeVisuals { display: grid; gap: 7px; }
+.nodeSpriteRow { display: flex; align-items: center; gap: 7px; min-height: 48px; }
+.nodeSprite { width: 48px; height: 48px; border: 1px solid #405767; background: #091119; image-rendering: pixelated; image-rendering: crisp-edges; }
+.nodeSprite.tree { width: 42px; height: 42px; }
+.nodeSprite.drop { width: 28px; height: 28px; }
+.nodeSpriteLabel { min-width: 0; color: #d4dee4; font-size: 10px; line-height: 1.2; }
+.nodeDropList { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.nodeDrop { display: inline-flex; align-items: center; gap: 3px; padding: 2px 4px; border: 1px solid #304553; border-radius: 4px; color: #a9bac5; background: #101b24; font-size: 9px; }
+.nodeDropEmpty { color: #718594; font-size: 10px; }
+.nodeBody select, .nodeBody input, .field input, .field select { width: 100%; padding: 7px; border: 1px solid #3a5262; border-radius: 4px; color: var(--ink); background: var(--panel-2); }
+.port { position: absolute; z-index: 3; top: 50%; width: 18px; height: 18px; padding: 0; border: 3px solid #d9e5ea; border-radius: 50%; background: var(--teal); transform: translateY(-50%); cursor: crosshair; }
+.port.input { left: -7px; background: var(--pink); }
+.port.input-0 { top: 32%; }
+.port.input-1 { top: 68%; }
+.port.output { right: -7px; }
+.field { display: grid; gap: 5px; margin-bottom: 12px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.inspectorEmpty { padding: 14px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.graphStats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 18px; }
+.stat { padding: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+.stat strong { display: block; color: var(--accent); font-size: 18px; }
+.stat span { color: var(--muted); font-size: 10px; }
+@media (max-width: 1000px) { .appShell { grid-template-columns: 210px minmax(400px, 1fr); } .inspector { position: absolute; right: 0; top: 58px; bottom: 0; z-index: 10; width: 260px; } }
+@media (max-width: 680px) { body { overflow: auto; } .appShell { display: block; height: auto; padding-top: 106px; } .sidebar, .inspector { border: 0; } .canvasWrap { height: 650px; } .inspector { position: static; width: auto; } .editorSwitcher { position: absolute; } }
+.canvasWrap { cursor: grab; }
+.canvasWrap:active { cursor: grabbing; }
+#graphWorld { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
+.toolbar { position: relative; z-index: 5; }

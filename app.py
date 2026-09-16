@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import json
 import os
 import random
+import re
 import secrets
 import subprocess
 import sys
@@ -111,6 +112,7 @@ SEEDS_PATH = PUBLIC_DIR / "data" / "seeds.json"
 WEATHER_PATH = PUBLIC_DIR / "data" / "weather.json"
 EVENTS_PATH = PUBLIC_DIR / "data" / "events.json"
 NEWS_PATH = PUBLIC_DIR / "data" / "news.json"
+SPLICES_PATH = PUBLIC_DIR / "data" / "splices.json"
 
 # configure world_utils shared constants and paths
 world_utils.PUBLIC_DIR = PUBLIC_DIR
@@ -157,6 +159,57 @@ def load_blocks_payload() -> dict[str, Any]:
 
 def load_seeds_payload() -> dict[str, Any]:
     return world_utils.load_seeds_payload()
+
+
+def load_splices_payload() -> dict[str, Any]:
+    try:
+        with SPLICES_PATH.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"version": 1, "nodes": [], "edges": []}
+    return payload if isinstance(payload, dict) else {"version": 1, "nodes": [], "edges": []}
+
+
+def find_splice_result_seed_id(first_seed_id: int, second_seed_id: int) -> int | None:
+    payload = load_splices_payload()
+    nodes = {
+        str(node.get("id")): node
+        for node in payload.get("nodes", [])
+        if isinstance(node, dict) and str(node.get("id", "")).strip()
+    }
+    incoming: dict[str, dict[int, str]] = {}
+    for edge in payload.get("edges", []):
+        if not isinstance(edge, dict):
+            continue
+        source = str(edge.get("source", "")).strip()
+        target = str(edge.get("target", "")).strip()
+        try:
+            target_port = int(edge.get("targetPort", edge.get("target_port", 0)))
+        except (TypeError, ValueError):
+            continue
+        if source in nodes and target in nodes and target_port in {0, 1}:
+            incoming.setdefault(target, {})[target_port] = source
+
+    for target_id, ports in incoming.items():
+        if set(ports) != {0, 1}:
+            continue
+        source_ids = [ports[0], ports[1]]
+        source_seed_ids: list[int] = []
+        valid = True
+        for source_id in source_ids:
+            data = nodes[source_id].get("data", {})
+            try:
+                source_seed_ids.append(int(data.get("seedId")))
+            except (TypeError, ValueError):
+                valid = False
+                break
+        if valid and sorted(source_seed_ids) == sorted([int(first_seed_id), int(second_seed_id)]):
+            try:
+                result_id = int(nodes[target_id].get("data", {}).get("seedId"))
+            except (TypeError, ValueError):
+                return None
+            return result_id if result_id >= 0 else None
+    return None
 
 
 def load_weather_payload() -> dict[str, Any]:
@@ -447,6 +500,7 @@ register_editor_routes(
     weather_path=WEATHER_PATH,
     events_path=EVENTS_PATH,
     news_path=NEWS_PATH,
+    splices_path=SPLICES_PATH,
     load_blocks_payload=load_blocks_payload,
     load_seeds_payload=load_seeds_payload,
     load_weather_payload=load_weather_payload,
@@ -1678,6 +1732,66 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if target_foreground != 0:
                     continue
 
+                existing_tree = get_planted_tree_at(world, x, y)
+                if existing_tree is not None:
+                    first_seed_id = int(existing_tree.get("seed_id", -1))
+                    result_seed_id = find_splice_result_seed_id(first_seed_id, seed_id)
+                    if result_seed_id is None:
+                        await ws_send(
+                            websocket,
+                            {
+                                "type": "splice_result",
+                                "playerId": client_id,
+                                "success": False,
+                                "message": "These seeds can't be spliced",
+                            },
+                        )
+                        continue
+
+                    result_seed = get_item_definition(result_seed_id, "seed")
+                    if result_seed is None:
+                        continue
+
+                    existing_tree["seed_id"] = int(result_seed_id)
+                    existing_tree["planted_at_ms"] = int(time.time() * 1000)
+                    if not creative_planting and inventory is not None and seed_inventory_key:
+                        next_seed_count = current_seed_count - 1
+                        if next_seed_count <= 0:
+                            inventory.pop(seed_inventory_key, None)
+                        else:
+                            inventory[seed_inventory_key] = next_seed_count
+                        player["inventory"] = inventory
+                        if isinstance(client.get("user_id"), int) and int(client["user_id"]) > 0:
+                            await asyncio.to_thread(set_user_inventory, int(client["user_id"]), inventory)
+                        elif isinstance(client.get("guest_profile_id"), int) and int(client["guest_profile_id"]) > 0:
+                            await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
+                        await ws_send(websocket, {"type": "inventory_update", "inventory": inventory_to_client_payload(inventory)})
+
+                    tree_name = str(result_seed.get("NAME", "")).strip()
+                    if tree_name:
+                        tree_name = re.sub(r"\bseed\b", "Tree", tree_name, flags=re.IGNORECASE)
+                    else:
+                        tree_name = str(result_seed.get("TREE", {}).get("NAME", f"Tree {result_seed_id}")).strip()
+                    message = f"I spliced the seeds into a {tree_name if tree_name.lower().endswith('tree') else f'{tree_name} Tree'}!"
+                    await schedule_world_save(world["name"])
+                    await ws_send(websocket, {"type": "splice_result", "playerId": client_id, "success": True, "message": message})
+                    await broadcast_to_world(
+                        world,
+                        {
+                            "type": "tree_planted",
+                            "tree": {
+                                "id": str(existing_tree.get("id", "")),
+                                "x": int(x),
+                                "y": int(y),
+                                "itemId": int(result_seed_id),
+                                "seedId": int(result_seed_id),
+                                "plantedAtMs": int(existing_tree.get("planted_at_ms", 0)),
+                            },
+                            "serverTimeMs": int(time.time() * 1000),
+                        },
+                    )
+                    continue
+
                 # Planting requires a supporting solid foreground block directly below.
                 below_y = y + 1
                 if below_y >= world["height"]:
@@ -1695,9 +1809,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 # Background-type blocks are not valid support for planted trees.
                 if support_tile in BACKGROUND_BLOCK_IDS:
-                    continue
-
-                if get_planted_tree_at(world, x, y) is not None:
                     continue
 
                 planted_tree = place_planted_tree(world, x, y, seed_id, int(time.time() * 1000))

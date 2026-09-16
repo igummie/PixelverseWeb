@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixelverse Splice Editor</title>
+    <link rel="stylesheet" href="/styles/splice-editor.css?v=3" />
+  </head>
+  <body>
+    <div class="editorSwitcher" aria-label="Editor Switcher">
+      <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
+      <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
+      <a class="switchBtn" href="/seed-editor.html">Seed Editor</a>
+      <a class="switchBtn active" href="/splice-editor.html">Splice Editor</a>
+      <a class="switchBtn" href="/weather-editor.html">Weather Editor</a>
+      <a class="switchBtn" href="/event-editor.html">Event Editor</a>
+      <a class="switchBtn" href="/news-editor.html">News Editor</a>
+      <a class="switchBtn" href="/item-manager.html">Item Manager</a>
+    </div>
+
+    <main class="appShell">
+      <aside class="sidebar">
+        <div class="title">Splice Editor</div>
+        <div class="subtitle">Map seed ancestry with one simple node type. Every seed node has an input and output.</div>
+
+        <div class="sectionTitle">Nodes</div>
+        <div class="palette">
+          <button type="button" data-add-type="seed">Seed Node <span>Choose a Seed ID and connect it anywhere</span></button>
+        </div>
+
+        <div class="sectionTitle">Connections</div>
+        <div class="tiny">Drag nodes into a family tree. Every node has an input and output. Click an output port, then another node's input port. Scroll to zoom; hold Shift or use the middle mouse button to pan.</div>
+        <div class="graphStats">
+          <div class="stat"><strong id="nodeCount">0</strong><span>nodes</span></div>
+          <div class="stat"><strong id="edgeCount">0</strong><span>parent links</span></div>
+        </div>
+      </aside>
+
+      <section class="canvasWrap" id="canvasWrap" aria-label="Splice family tree canvas">
+        <div id="graphWorld">
+          <svg id="edgeLayer" aria-hidden="true"></svg>
+          <div id="nodeLayer"></div>
+        </div>
+        <div class="toolbar">
+          <button id="reloadBtn" class="secondary" type="button">Reload</button>
+          <button id="saveBtn" type="button">Save Tree</button>
+          <button id="resetViewBtn" class="secondary" type="button">Reset View</button>
+          <span id="status" role="status"></span>
+        </div>
+      </section>
+
+      <aside class="inspector">
+        <div class="sectionTitle">Inspector</div>
+        <div id="inspectorEmpty" class="inspectorEmpty">Select a node to edit it.</div>
+        <div id="inspectorForm" hidden>
+          <div class="nodeBadge" id="inspectorType"></div>
+          <div class="field"><label for="nodeSeed">Seed ID</label><select id="nodeSeed"></select></div>
+          <button id="deleteNodeBtn" class="danger" type="button">Delete Node</button>
+        </div>
+        <div class="sectionTitle">Selection</div>
+        <div id="selectionInfo" class="tiny">No selection.</div>
+      </aside>
+    </main>
+
+    <script type="module">
+      const canvasWrap = document.getElementById("canvasWrap");
+      const graphWorld = document.getElementById("graphWorld");
+      const nodeLayer = document.getElementById("nodeLayer");
+      const edgeLayer = document.getElementById("edgeLayer");
+      const status = document.getElementById("status");
+      const nodeCount = document.getElementById("nodeCount");
+      const edgeCount = document.getElementById("edgeCount");
+      const inspectorEmpty = document.getElementById("inspectorEmpty");
+      const inspectorForm = document.getElementById("inspectorForm");
+      const inspectorType = document.getElementById("inspectorType");
+      const selectionInfo = document.getElementById("selectionInfo");
+      const nodeSeed = document.getElementById("nodeSeed");
+      const seedField = document.getElementById("nodeSeed").closest(".field");
+
+      const labels = { seed: "Seed Node" };
+      const state = { nodes: [], edges: [], seeds: [], blocks: [], atlases: [], atlasImageCache: new Map(), selectedNodeId: null, selectedEdgeIndex: -1, connectingFrom: null, connectingPoint: null, drag: null, pan: null, zoom: 1, panX: 0, panY: 0 };
+
+      function setStatus(message, isError = false) {
+        status.textContent = message;
+        status.style.color = isError ? "#f29bab" : "#9ce4bd";
+      }
+
+      function applyGraphTransform() {
+        graphWorld.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
+      }
+
+      function resetView() {
+        state.zoom = 1;
+        state.panX = 0;
+        state.panY = 0;
+        applyGraphTransform();
+        drawEdges();
+        setStatus("View reset.");
+      }
+
+      function pointerToWorld(event) {
+        const rect = canvasWrap.getBoundingClientRect();
+        return {
+          x: (event.clientX - rect.left - state.panX) / state.zoom,
+          y: (event.clientY - rect.top - state.panY) / state.zoom,
+        };
+      }
+
+      function makeId(type) {
+        return `${type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      }
+
+      function seedId(seed) { return String(seed.ITEM_ID ?? seed.SEED_ID ?? ""); }
+
+      function seedName(id) {
+        const seed = state.seeds.find((entry) => seedId(entry) === String(id));
+        return seed ? `${seed.NAME || "Unnamed seed"} (#${seedId(seed)})` : "Choose a seed";
+      }
+
+      function seedTitle(id) {
+        const seed = state.seeds.find((entry) => seedId(entry) === String(id));
+        return seed?.NAME || "Unassigned Seed";
+      }
+
+      function normalizeAtlasId(value) {
+        if (typeof value === "number" && Number.isInteger(value)) return value;
+        const text = String(value ?? "").trim();
+        if (!text) return "";
+        return /^-?\d+$/.test(text) ? Number.parseInt(text, 10) : text.toLowerCase();
+      }
+
+      function getAtlas(atlasId) {
+        const key = String(normalizeAtlasId(atlasId));
+        return state.atlases.find((atlas) => String(normalizeAtlasId(atlas?.ATLAS_ID)) === key) || null;
+      }
+
+      function getAtlasImage(atlasId) {
+        const key = String(normalizeAtlasId(atlasId));
+        if (state.atlasImageCache.has(key)) return state.atlasImageCache.get(key);
+        const atlas = getAtlas(atlasId);
+        if (!atlas?.SRC) return Promise.resolve(null);
+        const promise = new Promise((resolve) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => resolve(null);
+          image.src = String(atlas.SRC);
+        });
+        state.atlasImageCache.set(key, promise);
+        return promise;
+      }
+
+      function drawSprite(canvas, atlasId, texture, tint = "") {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#091119";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const rect = texture || { x: 0, y: 0, w: 16, h: 16 };
+        getAtlasImage(atlasId).then((image) => {
+          if (!image) return;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(image, Number(rect.x) || 0, Number(rect.y) || 0, Math.max(1, Number(rect.w) || 16), Math.max(1, Number(rect.h) || 16), 1, 1, canvas.width - 2, canvas.height - 2);
+          if (/^#[0-9a-f]{6}$/i.test(String(tint || ""))) {
+            ctx.globalCompositeOperation = "source-atop";
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = tint;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = "source-over";
+          }
+        });
+      }
+
+      function collectAncestorSeeds(node, visited = new Set()) {
+        if (!node || visited.has(node.id)) return [];
+        visited.add(node.id);
+        if (node.type === "seed") {
+          const seed = state.seeds.find((entry) => seedId(entry) === String(node.data?.seedId || ""));
+          return seed ? [seed] : [];
+        }
+        const parents = state.edges.filter((edge) => edge.target === node.id).flatMap((edge) => {
+          return collectAncestorSeeds(state.nodes.find((entry) => entry.id === edge.source), visited);
+        });
+        return parents.filter((seed, index, list) => list.findIndex((entry) => seedId(entry) === seedId(seed)) === index);
+      }
+
+      function getNodeLabel(node) {
+        return node.data?.seedId ? seedTitle(node.data.seedId) : labels.seed;
+      }
+
+      function getDropAsset(drop) {
+        const id = String(drop?.ITEM_ID ?? "");
+        if (String(drop?.ITEM_TYPE || "seed").toLowerCase() === "seed") {
+          const seed = state.seeds.find((entry) => seedId(entry) === id);
+          return seed ? { atlasId: seed.SEED_ATLAS_ID, texture: seed.SEED_ATLAS_TEXTURE, label: `Seed #${id}` } : null;
+        }
+        const block = state.blocks.find((entry) => String(entry?.ITEM_ID ?? entry?.ID) === id);
+        return block?.ATLAS_TEXTURE ? { atlasId: block.ATLAS_ID, texture: block.ATLAS_TEXTURE, label: `${block.NAME || "Block"} #${id}` } : null;
+      }
+
+      function renderNodeVisuals(node, body) {
+        const seeds = collectAncestorSeeds(node).slice(0, 3);
+        const visuals = document.createElement("div");
+        visuals.className = "nodeVisuals";
+        if (!seeds.length) {
+          visuals.innerHTML = `<span class="nodeDropEmpty">Choose a Seed ID to preview its seed family.</span>`;
+          body.append(visuals);
+          return;
+        }
+
+        for (const seed of seeds) {
+          const row = document.createElement("div");
+          row.className = "nodeSpriteRow";
+          const seedCanvas = document.createElement("canvas");
+          seedCanvas.width = 48;
+          seedCanvas.height = 48;
+          seedCanvas.className = "nodeSprite";
+          drawSprite(seedCanvas, seed.SEED_ATLAS_ID, seed.SEED_ATLAS_TEXTURE, seed.SEED_TINT);
+          const label = document.createElement("span");
+          label.className = "nodeSpriteLabel";
+          label.textContent = `${seed.NAME} / ${seed.TREE?.NAME || "Tree"}`;
+          row.append(seedCanvas, label);
+          visuals.append(row);
+
+          const treeRow = document.createElement("div");
+          treeRow.className = "nodeDropList";
+          for (const stage of (seed.TREE?.STAGES || []).slice(0, 4)) {
+            const treeCanvas = document.createElement("canvas");
+            treeCanvas.width = 42;
+            treeCanvas.height = 42;
+            treeCanvas.className = "nodeSprite tree";
+            drawSprite(treeCanvas, stage.ATLAS_ID, stage.ATLAS_TEXTURE, seed.TREE?.TINT);
+            treeRow.append(treeCanvas);
+          }
+          visuals.append(treeRow);
+
+          const drops = (Array.isArray(seed.FRUIT_DROPS) ? seed.FRUIT_DROPS : []).slice(0, 6);
+          const dropRow = document.createElement("div");
+          dropRow.className = "nodeDropList";
+          for (const drop of drops) {
+            const asset = getDropAsset(drop);
+            const dropWrap = document.createElement("span");
+            dropWrap.className = "nodeDrop";
+            if (asset) {
+              const dropCanvas = document.createElement("canvas");
+              dropCanvas.width = 28;
+              dropCanvas.height = 28;
+              dropCanvas.className = "nodeSprite drop";
+              drawSprite(dropCanvas, asset.atlasId, asset.texture);
+              dropWrap.append(dropCanvas);
+            }
+            dropWrap.append(document.createTextNode(asset?.label || `${drop.ITEM_TYPE || "item"} #${drop.ITEM_ID}`));
+            dropRow.append(dropWrap);
+          }
+          if (!drops.length) dropRow.innerHTML = `<span class="nodeDropEmpty">No drops defined</span>`;
+          visuals.append(dropRow);
+        }
+        body.append(visuals);
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char]));
+      }
+
+      function createNode(type) {
+        const firstSeed = state.seeds[0] ? seedId(state.seeds[0]) : "";
+        const node = {
+          id: makeId(type),
+          type,
+          x: 80 + (state.nodes.length % 3) * 230,
+          y: 110 + Math.floor(state.nodes.length / 3) * 150,
+          data: { label: labels.seed, seedId: firstSeed },
+        };
+        state.nodes.push(node);
+        state.selectedNodeId = node.id;
+        state.selectedEdgeIndex = -1;
+        render();
+      }
+
+      function renderSeedOptions(selected) {
+        nodeSeed.innerHTML = `<option value="">Choose a seed</option>` + state.seeds.map((seed) => {
+          const id = seedId(seed);
+          return `<option value="${escapeHtml(id)}">${escapeHtml(seedName(id))}</option>`;
+        }).join("");
+        nodeSeed.value = selected || "";
+      }
+
+      function canConnect(source, target) {
+        return source && target && source.id !== target.id;
+      }
+
+      function renderNode(node) {
+        const element = document.createElement("article");
+        const selected = state.selectedNodeId === node.id;
+        element.className = `node ${node.type}${selected ? " selected" : ""}`;
+        element.dataset.nodeId = node.id;
+        element.style.left = `${node.x}px`;
+        element.style.top = `${node.y}px`;
+        const body = `<span class="seedLabel">Seed ID</span><strong>${node.data.seedId ? escapeHtml(seedName(node.data.seedId)) : "No Seed ID assigned"}</strong>`;
+        element.innerHTML = `<div class="nodeHead"><span>${escapeHtml(getNodeLabel(node))}</span><span class="nodeType">${labels.seed}</span></div><div class="nodeBody">${body}</div>`;
+        renderNodeVisuals(node, element.querySelector(".nodeBody"));
+        element.insertAdjacentHTML("beforeend", `<button class="port input input-0" data-port="0" type="button" aria-label="Seed node input 1"></button><button class="port input input-1" data-port="1" type="button" aria-label="Seed node input 2"></button>`);
+        element.insertAdjacentHTML("beforeend", `<button class="port output" type="button" aria-label="Seed node output"></button>`);
+        element.addEventListener("click", (event) => {
+          if (event.target.classList.contains("port")) return;
+          event.stopPropagation();
+          state.selectedNodeId = node.id;
+          state.selectedEdgeIndex = -1;
+          render();
+        });
+        element.querySelector(".nodeHead").addEventListener("pointerdown", (event) => beginDrag(event, node));
+        element.querySelectorAll(".port").forEach((port) => port.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (port.classList.contains("output")) {
+            state.connectingFrom = node.id;
+            const sourceElement = document.querySelector(`[data-node-id="${CSS.escape(node.id)}"]`);
+            state.connectingPoint = {
+              x: sourceElement.offsetLeft + sourceElement.offsetWidth,
+              y: sourceElement.offsetTop + sourceElement.offsetHeight / 2,
+            };
+            drawEdges();
+            setStatus("Choose another node's input port.");
+            return;
+          }
+          const source = state.nodes.find((entry) => entry.id === state.connectingFrom);
+          if (!canConnect(source, node)) {
+            setStatus("Choose another node's input port.", true);
+            return;
+          }
+          const targetPort = Number.parseInt(port.dataset.port, 10);
+          if (!state.edges.some((edge) => edge.target === node.id && Number(edge.targetPort ?? 0) === targetPort)) {
+            state.edges = state.edges.filter((edge) => !(edge.source === source.id && edge.target === node.id));
+            state.edges.push({ source: source.id, target: node.id, targetPort });
+          }
+          state.connectingFrom = null;
+          state.selectedNodeId = node.id;
+          render();
+          setStatus("Parent link connected.");
+        }));
+        return element;
+      }
+
+      function render() {
+        nodeLayer.innerHTML = "";
+        state.nodes.forEach((node) => nodeLayer.appendChild(renderNode(node)));
+        applyGraphTransform();
+        drawEdges();
+        updateInspector();
+        nodeCount.textContent = state.nodes.length;
+        edgeCount.textContent = state.edges.length;
+      }
+
+      function drawEdges() {
+        edgeLayer.setAttribute("viewBox", `0 0 ${canvasWrap.clientWidth} ${canvasWrap.clientHeight}`);
+        const edgeMarkup = state.edges.map((edge, index) => {
+          const source = document.querySelector(`[data-node-id="${CSS.escape(edge.source)}"]`);
+          const target = document.querySelector(`[data-node-id="${CSS.escape(edge.target)}"]`);
+          if (!source || !target) return "";
+          const sx = source.offsetLeft + source.offsetWidth;
+          const sy = source.offsetTop + source.offsetHeight / 2;
+          const tx = target.offsetLeft;
+          const targetPort = Number(edge.targetPort) === 1 ? 1 : 0;
+          const ty = target.offsetTop + target.offsetHeight * (targetPort === 1 ? 0.68 : 0.32);
+          const bend = Math.max(40, Math.abs(tx - sx) * .45);
+          return `<path class="edge${state.selectedEdgeIndex === index ? " active" : ""}" data-edge-index="${index}" d="M ${sx} ${sy} C ${sx + bend} ${sy}, ${tx - bend} ${ty}, ${tx} ${ty}" />`;
+        }).join("");
+        let previewMarkup = "";
+        if (state.connectingFrom && state.connectingPoint) {
+          const source = document.querySelector(`[data-node-id="${CSS.escape(state.connectingFrom)}"]`);
+          if (source) {
+            const sx = source.offsetLeft + source.offsetWidth;
+            const sy = source.offsetTop + source.offsetHeight / 2;
+            const bend = Math.max(40, Math.abs(state.connectingPoint.x - sx) * .45);
+            previewMarkup = `<path class="edge preview" d="M ${sx} ${sy} C ${sx + bend} ${sy}, ${state.connectingPoint.x - bend} ${state.connectingPoint.y}, ${state.connectingPoint.x} ${state.connectingPoint.y}" />`;
+          }
+        }
+        edgeLayer.innerHTML = edgeMarkup + previewMarkup;
+        edgeLayer.querySelectorAll(".edge").forEach((edge) => edge.addEventListener("click", (event) => {
+          event.stopPropagation();
+          state.selectedEdgeIndex = Number(edge.dataset.edgeIndex);
+          state.selectedNodeId = null;
+          render();
+        }));
+      }
+
+      function updateInspector() {
+        const node = state.nodes.find((entry) => entry.id === state.selectedNodeId);
+        inspectorEmpty.hidden = Boolean(node);
+        inspectorForm.hidden = !node;
+        if (!node) {
+          selectionInfo.textContent = state.selectedEdgeIndex >= 0 ? `Parent link ${state.selectedEdgeIndex + 1} selected.` : "No selection.";
+          return;
+        }
+        inspectorType.textContent = labels.seed;
+        selectionInfo.textContent = getNodeLabel(node);
+        seedField.hidden = false;
+        seedField.style.display = "grid";
+        renderSeedOptions(node.data.seedId);
+      }
+
+      function beginDrag(event, node) {
+        if (event.button !== 0) return;
+        state.drag = { node, startX: event.clientX, startY: event.clientY, originX: node.x, originY: node.y };
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.currentTarget.addEventListener("pointermove", moveDrag);
+        event.currentTarget.addEventListener("pointerup", endDrag, { once: true });
+      }
+
+      function moveDrag(event) {
+        if (!state.drag) return;
+        const { node, startX, startY, originX, originY } = state.drag;
+        node.x = originX + (event.clientX - startX) / state.zoom;
+        node.y = originY + (event.clientY - startY) / state.zoom;
+        const element = document.querySelector(`[data-node-id="${CSS.escape(node.id)}"]`);
+        if (element) { element.style.left = `${node.x}px`; element.style.top = `${node.y}px`; drawEdges(); }
+      }
+
+      function endDrag(event) {
+        event.currentTarget.removeEventListener("pointermove", moveDrag);
+        state.drag = null;
+      }
+
+      async function loadData() {
+        setStatus("Loading family tree...");
+        try {
+          const [graphResponse, seedResponse] = await Promise.all([fetch("/api/tools/splices/editor-data", { cache: "no-store" }), fetch("/api/tools/seeds/editor-data", { cache: "no-store" })]);
+          if (!graphResponse.ok || !seedResponse.ok) throw new Error("Could not load editor data.");
+          const graph = await graphResponse.json();
+          const seedPayload = await seedResponse.json();
+          state.seeds = Array.isArray(seedPayload.seeds) ? seedPayload.seeds : [];
+          state.blocks = Array.isArray(seedPayload.blocks) ? seedPayload.blocks : [];
+          state.atlases = Array.isArray(seedPayload.atlases) ? seedPayload.atlases : [];
+          state.atlasImageCache.clear();
+          state.nodes = Array.isArray(graph.nodes)
+            ? graph.nodes
+              .filter((node) => node && ["seed", "basic", "advance"].includes(node.type))
+              .map((node) => ({
+                ...node,
+                type: "seed",
+                data: { ...(node.data || {}), seedId: String(node.data?.seedId ?? "") },
+              }))
+            : [];
+          const nodeIds = new Set(state.nodes.map((node) => node.id));
+          state.edges = Array.isArray(graph.edges)
+            ? graph.edges
+              .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+              .map((edge) => ({ ...edge, targetPort: Number(edge.targetPort) === 1 ? 1 : 0 }))
+            : [];
+          state.selectedNodeId = null;
+          state.selectedEdgeIndex = -1;
+          render();
+          setStatus(`Loaded ${state.nodes.length} family nodes.`);
+        } catch (error) { setStatus(String(error.message || error), true); }
+      }
+
+      async function saveData() {
+        setStatus("Saving family tree...");
+        try {
+          const response = await fetch("/api/tools/splices/save-data", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: 1, nodes: state.nodes, edges: state.edges }) });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.detail || `Save failed (${response.status})`);
+          setStatus(`Saved ${data.nodeCount} nodes and ${data.edgeCount} parent links.`);
+        } catch (error) { setStatus(String(error.message || error), true); }
+      }
+
+      function applyInspectorChange() {
+        const node = state.nodes.find((entry) => entry.id === state.selectedNodeId);
+        if (!node) return;
+        node.data.seedId = nodeSeed.value;
+        render();
+      }
+
+      document.querySelectorAll("[data-add-type]").forEach((button) => button.addEventListener("click", () => createNode(button.dataset.addType)));
+      nodeSeed.addEventListener("input", applyInspectorChange);
+      document.getElementById("deleteNodeBtn").addEventListener("click", () => {
+        if (!state.selectedNodeId) return;
+        const removed = state.selectedNodeId;
+        state.nodes = state.nodes.filter((node) => node.id !== removed);
+        state.edges = state.edges.filter((edge) => edge.source !== removed && edge.target !== removed);
+        state.selectedNodeId = null;
+        render();
+      });
+      document.getElementById("reloadBtn").addEventListener("click", loadData);
+      document.getElementById("saveBtn").addEventListener("click", saveData);
+      document.getElementById("resetViewBtn").addEventListener("click", resetView);
+      canvasWrap.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const rect = canvasWrap.getBoundingClientRect();
+        const before = pointerToWorld(event);
+        const factor = event.deltaY < 0 ? 1.1 : 0.9;
+        state.zoom = Math.max(0.2, Math.min(3.5, state.zoom * factor));
+        state.panX = event.clientX - rect.left - before.x * state.zoom;
+        state.panY = event.clientY - rect.top - before.y * state.zoom;
+        applyGraphTransform();
+        drawEdges();
+      }, { passive: false });
+      canvasWrap.addEventListener("pointerdown", (event) => {
+        const panGesture = event.button === 1 || event.button === 2 || (event.button === 0 && event.shiftKey);
+        if (!panGesture) return;
+        event.preventDefault();
+        state.pan = { startX: event.clientX, startY: event.clientY, originX: state.panX, originY: state.panY };
+        canvasWrap.setPointerCapture(event.pointerId);
+      });
+      canvasWrap.addEventListener("pointermove", (event) => {
+        if (state.pan) {
+          state.panX = state.pan.originX + event.clientX - state.pan.startX;
+          state.panY = state.pan.originY + event.clientY - state.pan.startY;
+          applyGraphTransform();
+          return;
+        }
+        if (!state.connectingFrom) return;
+        state.connectingPoint = pointerToWorld(event);
+        drawEdges();
+      });
+      canvasWrap.addEventListener("pointerup", () => { state.pan = null; });
+      canvasWrap.addEventListener("contextmenu", (event) => event.preventDefault());
+      canvasWrap.addEventListener("click", () => { state.selectedNodeId = null; state.selectedEdgeIndex = -1; state.connectingFrom = null; state.connectingPoint = null; render(); });
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && state.connectingFrom) { state.connectingFrom = null; state.connectingPoint = null; render(); setStatus("Connection cancelled."); return; }
+        if (event.key !== "Delete") return;
+        if (state.selectedEdgeIndex >= 0) { state.edges.splice(state.selectedEdgeIndex, 1); state.selectedEdgeIndex = -1; render(); }
+        else if (state.selectedNodeId) document.getElementById("deleteNodeBtn").click();
+      });
+      window.addEventListener("resize", drawEdges);
+      loadData();
+    </script>
+  </body>
+</html>
