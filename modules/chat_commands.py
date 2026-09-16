@@ -5,7 +5,7 @@ from modules import world_utils
 from modules.events import trigger_event
 
 
-COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>, /weather <id>, /event <id>"
+COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>, /weather <id>, /event <id>, /update <countdown>"
 
 
 def _normalize_name(value: Any) -> str:
@@ -132,6 +132,36 @@ def process_chat_command(
                 "flyEnabled": fly_enabled,
                 "noclipEnabled": noclip_enabled,
             },
+        }
+
+    if command == "update":
+        if len(args) != 1:
+            return {
+                "sender_message": "Usage: /update <countdown in seconds>",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+
+        try:
+            countdown = int(args[0])
+        except Exception:
+            countdown = 0
+
+        if countdown < 1:
+            return {
+                "sender_message": "Update countdown must be a positive integer. Usage: /update <countdown>",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+
+        return {
+            "sender_message": f"Server update scheduled in {countdown} seconds.",
+            "direct_messages": [],
+            "teleports": [],
+            "state_update": None,
+            "update_countdown": countdown,
         }
 
     if command in {"pull", "to"}:

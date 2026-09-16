@@ -270,6 +270,10 @@ const networkClient = createNetworkClientController({
       gameStatus.textContent = "Disconnected";
       stopPingTimer();
       state.debugPingMs = null;
+      if (state.reloadOnReconnect) {
+        forceHardReloadForBundleUpdate();
+        return;
+      }
       if (state.world && state.token) {
         beginReconnectFlow();
       }
@@ -1541,17 +1545,20 @@ function handleSocketMessage(msg) {
   }
 
   if (msg.type === "server_update") {
-    const messageText = String(msg.message || "Game is updating. You will be disconnected and should reload when reconnecting; you'll be reconnected automatically.");
+    const messageText = String(msg.message || "Game is updating. You will be disconnected and the page will reload.");
+    const countdown = Number(msg.countdown);
 
     // show in chat drawer if in-game / loading / world
     appendChatLine("system", messageText);
     state.reloadOnReconnect = true;
-    try {
-      if (state.ws) {
-        state.ws.close();
+    if (!Number.isFinite(countdown) || countdown <= 0) {
+      try {
+        if (state.ws) {
+          state.ws.close();
+        }
+      } catch (e) {
+        // ignore
       }
-    } catch (e) {
-      // ignore
     }
 
     // ensure chat drawer is visible if available

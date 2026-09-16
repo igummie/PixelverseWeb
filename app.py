@@ -474,30 +474,18 @@ async def prepare_restart() -> JSONResponse:
     """Notify all connected clients that the server is updating, then close sockets.
 
     This endpoint is intended to be called by local administration tooling (start.bat)
-    prior to killing the process so clients receive a graceful notice and will
-    refetch client resources when they reconnect.
+    prior to killing the process so clients receive a graceful notice and hard-refresh.
     """
-    payload = {
-        "type": "server_update",
-        "message": "Game is updating. You will be disconnected and should reload when reconnecting; you'll be reconnected automatically.",
-    }
-
-    # Broadcast to all players in every world
-    for world in list(world_cache.values()):
-        try:
-            await broadcast_to_world(world, payload)
-        except Exception:
-            pass
-
-    # Also notify any connected client sockets that aren't yet in a world
-    for client_id, client in list(clients.items()):
-        try:
-            await ws_send(client["ws"], payload)
-        except Exception:
-            pass
+    await _broadcast_to_all_clients(
+        {
+            "type": "server_update",
+            "countdown": 0,
+            "message": "Game is updating. You will be disconnected and the page will reload.",
+        }
+    )
 
     # Close sockets to ensure clients enter reconnect flow promptly.
-    for client_id, client in list(clients.items()):
+    for client in list(clients.values()):
         try:
             await client["ws"].close()
         except Exception:
@@ -652,6 +640,60 @@ def get_public_cache_headers(safe_path: str) -> dict[str, str]:
 
 
 clients: dict[str, dict[str, Any]] = {}
+server_update_task: asyncio.Task[None] | None = None
+
+
+async def _broadcast_to_all_clients(payload: dict[str, Any]) -> None:
+    for client in list(clients.values()):
+        try:
+            await ws_send(client["ws"], payload)
+        except Exception:
+            pass
+
+
+async def _run_server_update(countdown: int) -> None:
+    for remaining in range(countdown, 0, -1):
+        await _broadcast_to_all_clients(
+            {
+                "type": "server_update",
+                "countdown": remaining,
+                "message": f"Game is updating in {remaining} second{'s' if remaining != 1 else ''}.",
+            }
+        )
+        await asyncio.sleep(1)
+
+    await _broadcast_to_all_clients(
+        {
+            "type": "server_update",
+            "countdown": 0,
+            "message": "Game is updating now. The page will reload.",
+        }
+    )
+
+    for world in list(world_cache.values()):
+        await asyncio.to_thread(save_world, world)
+
+    for client in list(clients.values()):
+        try:
+            await client["ws"].close()
+        except Exception:
+            pass
+
+    creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    subprocess.Popen(
+        [sys.executable, str(BASE_DIR / "app.py")],
+        cwd=BASE_DIR,
+        env=os.environ.copy(),
+        creationflags=creationflags,
+    )
+    os._exit(0)
+
+
+async def schedule_server_update(countdown: int) -> None:
+    global server_update_task
+    if server_update_task is not None and not server_update_task.done():
+        return
+    server_update_task = asyncio.create_task(_run_server_update(countdown))
 
 
 @app.websocket("/ws")
@@ -1680,6 +1722,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         get_spawn_from_door=get_spawn_from_door,
                     )
 
+                    update_countdown = command_result.get("update_countdown")
+                    if update_countdown is not None:
+                        await schedule_server_update(int(update_countdown))
+
                     continue
 
                 await broadcast_to_world(
@@ -1693,7 +1739,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 )
                 continue
 
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
         await leave_world(client, world_cache)
