@@ -151,15 +151,13 @@ def refresh_block_definitions_if_changed(force: bool = False) -> None:
 def load_blocks_payload() -> dict[str, Any]:
     return BLOCK_CATALOG.load_payload()
 
+
 def load_seeds_payload() -> dict[str, Any]:
     return world_utils.load_seeds_payload()
+
 
 def load_weather_payload() -> dict[str, Any]:
     return world_utils.load_weather_payload()
-
-
-def load_seeds_payload() -> dict[str, Any]:
-    return world_utils.load_seeds_payload()
 
 
 def get_item_definition(item_id: int, item_type: str = "seed") -> dict[str, Any] | None:
@@ -523,7 +521,10 @@ def register(payload: RegisterBody) -> dict[str, Any]:
             "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
             (username, password_hash, now),
         )
-        user_id = int(cursor.lastrowid)
+        lastrowid = cursor.lastrowid
+        if lastrowid is None:
+            raise HTTPException(status_code=500, detail="Failed to create user")
+        user_id = int(lastrowid)
 
     token = create_token(user_id, username)
     return {"token": token, "user": {"id": user_id, "username": username}}
@@ -591,7 +592,7 @@ def list_worlds(authorization: str | None = Header(default=None)) -> dict[str, A
 
 
 @app.get("/api/bootstrap")
-def bootstrap_payload(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+def bootstrap_payload(authorization: str | None = Header(default=None)) -> JSONResponse:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
 

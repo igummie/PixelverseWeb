@@ -20,6 +20,9 @@ def load_events_payload() -> Dict[str, Any]:
     The structure is expected to be {"events": [...]} with arbitrary additional
     metadata. The loader preserves unknown metadata but omits VERSION.
     """
+    if EVENTS_PATH is None:
+        return {"events": []}
+
     try:
         with EVENTS_PATH.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
@@ -71,7 +74,7 @@ async def apply_event_effects(
     ws_send: Callable[..., Awaitable[Any]],
     broadcast_to_world: Callable[..., Awaitable[Any]],
     choose_event_location: Callable[[dict[str, Any], str], tuple[int, int]],
-    schedule_world_save: Callable[[str, bool], Awaitable[None]],
+    schedule_world_save: Callable[..., Awaitable[None]],
     command_sender_original: tuple[float, float] | None = None,
 ) -> None:
     """Perform side effects for a triggered event.
