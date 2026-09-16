@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -99,6 +100,11 @@ class SaveEventsDataBody(BaseModel):
     events: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class SaveNewsDataBody(BaseModel):
+    activeId: str = ""
+    pages: list[dict[str, Any]] = Field(default_factory=list)
+
+
 def normalize_name(value: str | None, fallback: str = "") -> str:
     return (value or fallback).strip().lower()
 
@@ -129,6 +135,50 @@ def sanitize_asset_filename(filename: str) -> str:
         return ""
 
     return f"{stem}{ext}"
+
+
+def sanitize_news_page(raw: Any, index: int) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+
+    page_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(raw.get("id", "")).strip()).strip("-").lower()
+    if not page_id:
+        page_id = f"news-{index + 1}"
+
+    image = str(raw.get("image", "")).strip()
+    if image and not re.fullmatch(r"/(?:assets/news|assets/atlases)/[a-zA-Z0-9._/-]+", image):
+        image = ""
+
+    def normalize_color(value: Any, fallback: str) -> str:
+        color = str(value or "").strip()
+        return color.lower() if re.fullmatch(r"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", color) else fallback
+
+    button_action = str(raw.get("buttonAction", "close")).strip().lower()
+    if button_action not in {"close", "link"}:
+        button_action = "close"
+    button_url = str(raw.get("buttonUrl", "")).strip()[:500]
+    if button_url and not re.fullmatch(r"(?:https?://|/)[^\s<>\"]+", button_url, re.IGNORECASE):
+        button_url = ""
+
+    try:
+        revision = max(1, int(raw.get("revision", 1) or 1))
+    except Exception:
+        revision = 1
+
+    return {
+        "id": page_id[:80],
+        "title": str(raw.get("title", "Untitled news")).strip()[:120] or "Untitled news",
+        "image": image,
+        "markdown": str(raw.get("markdown", "")).strip()[:20000],
+        "background": normalize_color(raw.get("background"), "#f4eee2"),
+        "border": normalize_color(raw.get("border"), "#e6b35a"),
+        "textColor": normalize_color(raw.get("textColor"), "#26353b"),
+        "buttonLabel": str(raw.get("buttonLabel", "Continue")).strip()[:80] or "Continue",
+        "buttonAction": button_action,
+        "buttonUrl": button_url,
+        "revision": revision,
+        "updatedAt": int(raw.get("updatedAt", 0) or 0),
+    }
 
 
 def normalize_atlas_id_value(value: Any) -> int | str | None:
@@ -780,11 +830,84 @@ def register_editor_routes(
     seeds_path: Path,
     weather_path: Path,
     events_path: Path,
+    news_path: Path,
     load_blocks_payload: Callable[[], dict[str, Any]],
     load_seeds_payload: Callable[[], dict[str, Any]],
     load_weather_payload: Callable[[], dict[str, Any]],
     refresh_block_definitions_if_changed: Callable[..., None],
 ) -> None:
+    @app.get("/api/tools/news")
+    def get_news_editor_data() -> dict[str, Any]:
+        try:
+            with news_path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except (FileNotFoundError, json.JSONDecodeError):
+            payload = {"activeId": "", "pages": []}
+
+        pages = []
+        for index, raw in enumerate(payload.get("pages", [])):
+            page = sanitize_news_page(raw, index)
+            if page:
+                pages.append(page)
+        return {"activeId": str(payload.get("activeId", "")), "pages": pages}
+
+    @app.post("/api/tools/news/save")
+    def save_news_data(payload: SaveNewsDataBody) -> dict[str, Any]:
+        try:
+            with news_path.open("r", encoding="utf-8") as handle:
+                previous_document = json.load(handle)
+        except (FileNotFoundError, json.JSONDecodeError):
+            previous_document = {"pages": []}
+        previous_pages = {
+            page["id"]: page
+            for index, raw in enumerate(previous_document.get("pages", []))
+            if (page := sanitize_news_page(raw, index))
+        }
+        pages: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        now = int(time.time())
+        for index, raw in enumerate(payload.pages):
+            page = sanitize_news_page(raw, index)
+            if page is None or page["id"] in seen_ids:
+                raise HTTPException(status_code=400, detail="News pages need unique valid ids")
+            seen_ids.add(page["id"])
+            previous = previous_pages.get(page["id"])
+            content_changed = not previous or any(page[key] != previous.get(key) for key in ("title", "image", "markdown", "background", "border", "textColor", "buttonLabel", "buttonAction", "buttonUrl"))
+            page["revision"] = max(1, int(previous.get("revision", 0) if previous and not content_changed else page["revision"] + 1))
+            page["updatedAt"] = now
+            pages.append(page)
+
+        active_id = str(payload.activeId or "").strip().lower()
+        if active_id and active_id not in seen_ids:
+            raise HTTPException(status_code=400, detail="Active news page does not exist")
+
+        previous_active_id = str(previous_document.get("activeId", "")).strip().lower()
+        try:
+            previous_active_revision = max(1, int(previous_document.get("activeRevision", 1) or 1))
+        except Exception:
+            previous_active_revision = 1
+        active_revision = previous_active_revision + 1 if active_id != previous_active_id else previous_active_revision
+
+        with news_path.open("w", encoding="utf-8") as handle:
+            json.dump({"activeId": active_id, "activeRevision": active_revision, "pages": pages}, handle, indent=2)
+            handle.write("\n")
+        return {"ok": True, "activeId": active_id, "activeRevision": active_revision, "pageCount": len(pages)}
+
+    @app.post("/api/tools/news/upload")
+    async def upload_news_image(file: UploadFile = File(...)) -> dict[str, Any]:
+        allowed_extensions = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+        safe_name = sanitize_asset_filename(file.filename or "")
+        if not safe_name or Path(safe_name).suffix.lower() not in allowed_extensions:
+            raise HTTPException(status_code=400, detail="Unsupported news image type")
+
+        news_dir = public_dir / "assets" / "news"
+        news_dir.mkdir(parents=True, exist_ok=True)
+        data = await file.read()
+        if not data or len(data) > 8 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="News image must be under 8MB")
+        (news_dir / safe_name).write_bytes(data)
+        return {"ok": True, "src": f"/assets/news/{safe_name}"}
+
     @app.post("/api/tools/atlases/upload")
     async def upload_regular_atlas(file: UploadFile = File(...)) -> dict[str, Any]:
         allowed_extensions = {".png", ".svg", ".jpg", ".jpeg", ".webp"}

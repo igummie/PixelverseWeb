@@ -40,6 +40,7 @@ def initialize_db() -> None:
                 password_hash TEXT NOT NULL,
                 inventory_json TEXT NOT NULL DEFAULT '{}',
                 inventory_slots INTEGER NOT NULL DEFAULT 20,
+                news_seen_revision TEXT NOT NULL DEFAULT '',
                 created_at INTEGER NOT NULL
             )
             """
@@ -69,6 +70,7 @@ def initialize_db() -> None:
                 gems INTEGER NOT NULL DEFAULT 0,
                 inventory_json TEXT NOT NULL DEFAULT '{}',
                 inventory_slots INTEGER NOT NULL DEFAULT 20,
+                news_seen_revision TEXT NOT NULL DEFAULT '',
                 created_at INTEGER NOT NULL
             )
             """
@@ -96,6 +98,8 @@ def initialize_db() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN inventory_json TEXT NOT NULL DEFAULT '{}' ")
         if "inventory_slots" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN inventory_slots INTEGER NOT NULL DEFAULT 20")
+        if "news_seen_revision" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN news_seen_revision TEXT NOT NULL DEFAULT ''")
 
         guest_columns = {
             str(row["name"]).lower()
@@ -105,6 +109,30 @@ def initialize_db() -> None:
             conn.execute("ALTER TABLE guest_profiles ADD COLUMN inventory_json TEXT NOT NULL DEFAULT '{}' ")
         if "inventory_slots" not in guest_columns:
             conn.execute("ALTER TABLE guest_profiles ADD COLUMN inventory_slots INTEGER NOT NULL DEFAULT 20")
+        if "news_seen_revision" not in guest_columns:
+            conn.execute("ALTER TABLE guest_profiles ADD COLUMN news_seen_revision TEXT NOT NULL DEFAULT ''")
+
+
+def get_news_seen_revision(profile_type: str, profile_id: int) -> str:
+    if profile_id <= 0 or profile_type not in {"user", "guest"}:
+        return ""
+
+    table = "users" if profile_type == "user" else "guest_profiles"
+    with get_db() as conn:
+        row = conn.execute(f"SELECT news_seen_revision FROM {table} WHERE id = ?", (profile_id,)).fetchone()
+    return str(row["news_seen_revision"] or "") if row else ""
+
+
+def set_news_seen_revision(profile_type: str, profile_id: int, revision: str) -> None:
+    if profile_id <= 0 or profile_type not in {"user", "guest"}:
+        return
+
+    table = "users" if profile_type == "user" else "guest_profiles"
+    with get_db() as conn:
+        conn.execute(
+            f"UPDATE {table} SET news_seen_revision = ? WHERE id = ?",
+            (str(revision or "")[:160], profile_id),
+        )
 
 
 def normalize_name(value: str | None, fallback: str = "") -> str:

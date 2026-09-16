@@ -1,0 +1,34 @@
+{
+  "activeId": "news-2",
+  "activeRevision": 9,
+  "pages": [
+    {
+      "id": "welcome",
+      "title": "Welcome to Pixelverse",
+      "image": "",
+      "markdown": "**Welcome, builder!**\n\nCheck back here for the latest game news and events.",
+      "background": "#f5e0e7",
+      "border": "#0c4544",
+      "textColor": "#26353b",
+      "buttonLabel": "Continue",
+      "buttonAction": "close",
+      "buttonUrl": "",
+      "revision": 2,
+      "updatedAt": 1789595894
+    },
+    {
+      "id": "news-2",
+      "title": "News 2",
+      "image": "/assets/news/bouncingcow.gif",
+      "markdown": "![bouncingcow](/assets/news/bouncingcow.gif){width=15%;align=center}\n\n\nhuh\n\n![sbox-dev_wn03uEbRw5](/assets/news/sbox-dev_wn03uEbRw5.png){width=70%;align=center}",
+      "background": "#000000",
+      "border": "#e6b35a",
+      "textColor": "#ffffff",
+      "buttonLabel": "Go",
+      "buttonAction": "close",
+      "buttonUrl": "",
+      "revision": 8,
+      "updatedAt": 1789595894
+    }
+  ]
+}

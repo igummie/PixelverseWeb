@@ -148,6 +148,50 @@ const pauseLogoutBtn = document.getElementById("pauseLogoutBtn");
 const pauseBackBtn = document.getElementById("pauseBackBtn");
 const gameHud = document.getElementById("gameHud");
 const gameTopbar = document.querySelector(".gameTopbar");
+const newsOverlay = document.getElementById("newsOverlay");
+const newsBody = document.getElementById("newsBody");
+const newsActions = document.getElementById("newsActions");
+
+function escapeNewsHtml(value) {
+  return String(value ?? "").replace(/[&<>\"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;",
+  })[character]);
+}
+
+function renderNewsMarkdown(markdown) {
+  let html = escapeNewsHtml(markdown);
+  html = html.replace(/!\[([^\]]*)\]\((\/assets\/(?:news|atlases)\/[a-zA-Z0-9._/-]+)\)(?:\{width=(\d{1,3}%|\d+px|auto);align=(left|center|right)\})?/g, (_, alt, src, width = "100%", align = "center") => `<img alt="${alt}" src="${src}" class="newsMarkdownImage imageAlign-${align}" style="width:${width}">`);
+  html = html.replace(/^### (.*)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>");
+  return html.split(/\n{2,}/).map((block) => {
+    const trimmed = block.trim();
+    return /^<(h[1-3]|img)/.test(trimmed) ? trimmed : `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
+  }).join("");
+}
+
+function showNewsWidget(news) {
+  if (!newsOverlay || !news || !String(news.markdown || "").trim()) return;
+  const colorPattern = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
+  newsOverlay.querySelector(".newsCard").style.backgroundColor = colorPattern.test(news.background || "")
+    ? news.background
+    : "#f4eee2";
+  newsOverlay.querySelector(".newsCard").style.borderColor = colorPattern.test(news.border || "")
+    ? news.border
+    : "#e6b35a";
+  newsOverlay.querySelector(".newsCard").style.color = colorPattern.test(news.textColor || "")
+    ? news.textColor
+    : "#26353b";
+  newsBody.innerHTML = renderNewsMarkdown(news.markdown || "");
+  const label = escapeNewsHtml(news.buttonLabel || "Continue");
+  newsActions.innerHTML = news.buttonAction === "link" && /^(?:https?:\/\/|\/)[^\s<>\"]+$/i.test(news.buttonUrl || "")
+    ? `<a class="newsActionButton" href="${escapeNewsHtml(news.buttonUrl)}" target="_blank" rel="noopener">${label}</a>`
+    : `<button class="newsActionButton" type="button">${label}</button>`;
+  newsActions.querySelector("button")?.addEventListener("click", () => newsOverlay.classList.add("hidden"));
+  newsOverlay.classList.remove("hidden");
+}
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -314,6 +358,7 @@ const authWorldFlow = createAuthWorldFlowController({
     clearActiveWorldRuntimeState,
     clearAuthSession,
     setPauseMenuOpen: (open) => pauseMenu.setPauseMenuOpen(open),
+    showNewsWidget,
   },
 });
 
@@ -1409,6 +1454,7 @@ function handleSocketMessage(msg) {
     state.noclipEnabled = false;
 
     gameStatus.textContent = `World: ${msg.world.name} | Players: ${state.players.size}`;
+    showNewsWidget(msg.news);
     showScreen("game");
     return;
   }
@@ -1545,7 +1591,7 @@ function handleSocketMessage(msg) {
   }
 
   if (msg.type === "server_update") {
-    const messageText = String(msg.message || "Game is updating. You will be disconnected and the page will reload.");
+    const messageText = String(msg.message || "Game is updating. You will be disconnected");
     const countdown = Number(msg.countdown);
 
     // show in chat drawer if in-game / loading / world

@@ -28,6 +28,7 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     clearActiveWorldRuntimeState,
     clearAuthSession,
     setPauseMenuOpen,
+    showNewsWidget,
   } = callbacks;
 
   function beginLoadingForUser(username) {    console.log(`[auth] begin loading for ${username}`);    // do not wipe existing log; keep historical messages across reconnects
@@ -69,6 +70,14 @@ export function createAuthWorldFlowController({ state, elements, callbacks }) {
     console.log("[auth] world list loaded");
     appendChatLine("system", `welcome ${username}!`);
     showScreen("world");
+    try {
+      const newsResponse = await requestJson("/api/news", {
+        headers: { Authorization: `Bearer ${state.token}` },
+      });
+      showNewsWidget(newsResponse.news);
+    } catch (error) {
+      console.warn("[news] failed to load joining news", error);
+    }
 
     // remove focus from the world name field to stop any pending key events
     // (like the Enter that logged the user in) from immediately firing our

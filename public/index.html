@@ -65,7 +65,7 @@
           <button id="joinWorldBtn">Enter World</button>
           <button id="refreshWorldsBtn">Refresh</button>
         </div>
-        <a class="buttonLink" href="/texture47-editor.html" target="_blank" rel="noopener">Pixelverse Dev Tools</a>
+        <a class="buttonLink" href="/news-editor.html" target="_blank" rel="noopener">Pixelverse Dev Tools</a>
         <button id="logoutBtn">Logout</button>
         <div id="worldError" class="error"></div>
       </div>
@@ -170,6 +170,13 @@
         </div>
       <canvas id="game"></canvas>
     </section>
+
+    <div id="newsOverlay" class="newsOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
+      <article class="newsCard">
+        <div id="newsBody" class="newsBody"></div>
+        <div id="newsActions" class="newsActions"></div>
+      </article>
+    </div>
 
     <script src="/build/game.bundle.js"></script>
   </body>

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixelverse News Editor</title>
+  <link rel="stylesheet" href="/styles/news-editor.css" />
+</head>
+<body>
+  <div class="editorSwitcher" aria-label="Editor Switcher">
+    <a class="switchBtn" href="/texture47-editor.html">Texture47 Editor</a>
+    <a class="switchBtn" href="/atlas-editor.html">Block Editor</a>
+    <a class="switchBtn" href="/seed-editor.html">Seed Editor</a>
+    <a class="switchBtn" href="/weather-editor.html">Weather Editor</a>
+    <a class="switchBtn" href="/event-editor.html">Event Editor</a>
+    <a class="switchBtn active" href="/news-editor.html">News Editor</a>
+    <a class="switchBtn" href="/item-manager.html">Item Manager</a>
+  </div>
+
+  <main class="layout">
+    <section class="panel pagePanel">
+      <div class="title">News Editor</div>
+      <div class="subtitle">Publish welcome screens, update notes, and event announcements. Players only see a revision once.</div>
+      <div class="toolbar">
+        <button id="newBtn" type="button">New Page</button>
+        <button id="deleteBtn" class="secondary" type="button">Delete</button>
+        <button id="saveBtn" type="button">Save & Publish</button>
+        <span id="status" class="status"></span>
+      </div>
+      <label>Current news ID for joining players<select id="activeSelect"><option value="">No active news</option></select></label>
+      <div id="pageList" class="pageList"></div>
+    </section>
+
+    <section class="panel editorPanel">
+      <div class="fieldGrid">
+        <label>Page ID<input id="idInput" maxlength="80" placeholder="update-1" /></label>
+        <label class="wide">Title<input id="titleInput" maxlength="120" placeholder="A new adventure begins" /></label>
+        <div class="colorPickerGroup">
+          <label>Background<input id="backgroundInput" type="color" value="#f4eee2" /></label>
+          <label>Border<input id="borderInput" type="color" value="#e6b35a" /></label>
+          <label>Text<input id="textColorInput" type="color" value="#26353b" /></label>
+        </div>
+        <label>Button label<input id="buttonLabelInput" maxlength="80" placeholder="Continue" /></label>
+        <label>Button action<select id="buttonActionInput"><option value="close">Close news</option><option value="link">Open link</option></select></label>
+        <label class="wide" id="buttonUrlField">Button URL<input id="buttonUrlInput" maxlength="500" placeholder="https://example.com or /world/start" /></label>
+      </div>
+      <div class="uploadRow">
+        <input id="imageFile" type="file" accept=".png,.jpg,.jpeg,.webp,.gif" />
+        <button id="uploadBtn" class="secondary" type="button">Upload Image</button>
+        <label class="imageLayoutControl">Width <input id="imageWidthInput" type="range" min="10" max="100" step="5" value="100" /></label>
+        <output id="imageWidthOutput">100%</output>
+        <label class="imageLayoutControl">Align <select id="imageAlignInput"><option value="left">Left</option><option value="center" selected>Center</option><option value="right">Right</option></select></label>
+      </div>
+      <div class="newsWorkspace">
+        <div class="previewColumn">
+          <div class="previewHeading">Preview</div>
+          <article id="preview" class="newsPreview"></article>
+        </div>
+        <label class="markdownLabel"><span>Markdown</span><textarea id="markdownInput" spellcheck="false" placeholder="## What's new?\n\nWrite the update here..."></textarea></label>
+      </div>
+    </section>
+  </main>
+
+<script>
+const state = { pages: [], activeId: "", selectedId: "" };
+const $ = (id) => document.getElementById(id);
+const pageList = $("pageList");
+const activeSelect = $("activeSelect");
+const preview = $("preview");
+const fields = { id: $("idInput"), title: $("titleInput"), background: $("backgroundInput"), border: $("borderInput"), textColor: $("textColorInput"), buttonLabel: $("buttonLabelInput"), buttonAction: $("buttonActionInput"), buttonUrl: $("buttonUrlInput"), markdown: $("markdownInput") };
+function escapeHtml(value) { return String(value ?? "").replace(/[&<>\"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char])); }
+function renderMarkdown(source) {
+  let html = escapeHtml(source).replace(/!\[([^\]]*)\]\((\/assets\/(?:news|atlases)\/[a-zA-Z0-9._/-]+)\)(?:\{width=(\d{1,3}%|\d+px|auto);align=(left|center|right)\})?/g, (_, alt, src, width = "100%", align = "center") => `<img alt="${alt}" src="${src}" class="newsMarkdownImage imageAlign-${align}" style="width:${width}">`);
+  html = html.replace(/^### (.*)$/gm, '<h3>$1</h3>').replace(/^## (.*)$/gm, '<h2>$1</h2>').replace(/^# (.*)$/gm, '<h1>$1</h1>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return html.split(/\n{2,}/).map((block) => /^<(h[1-3]|img)/.test(block.trim()) ? block : `<p>${block.replace(/\n/g, '<br>')}</p>`).join("");
+}
+function currentPage() { return state.pages.find((page) => page.id === state.selectedId); }
+function loadPage(page) { state.selectedId = page.id; for (const key of Object.keys(fields)) fields[key].value = page[key] ?? (key === "background" ? "#f4eee2" : key === "border" ? "#e6b35a" : key === "textColor" ? "#26353b" : key === "buttonAction" ? "close" : key === "buttonLabel" ? "Continue" : ""); updateButtonUrlVisibility(); previewPage(); renderList(); }
+function renderButton() { const label = escapeHtml(fields.buttonLabel.value || "Continue"); if (fields.buttonAction.value === "link" && fields.buttonUrl.value.trim()) return `<a class="previewNewsButton" href="${escapeHtml(fields.buttonUrl.value.trim())}" target="_blank" rel="noopener">${label}</a>`; return `<button class="previewNewsButton" type="button">${label}</button>`; }
+function previewPage() { preview.style.backgroundColor = fields.background.value || "#f4eee2"; preview.style.borderColor = fields.border.value || "#e6b35a"; preview.style.color = fields.textColor.value || "#26353b"; preview.innerHTML = `<div class="previewBody">${renderMarkdown(fields.markdown.value)}</div>${renderButton()}`; }
+function updateButtonUrlVisibility() { $("buttonUrlField").hidden = fields.buttonAction.value !== "link"; }
+function syncFields() { const page = currentPage(); if (!page) return; Object.keys(fields).forEach((key) => page[key] = fields[key].value); }
+function renderList() { pageList.innerHTML = state.pages.map((page) => `<button class="pageCard ${page.id === state.selectedId ? "selected" : ""}" data-id="${escapeHtml(page.id)}"><strong>${escapeHtml(page.id)}${page.id === state.activeId ? " · LIVE" : ""}</strong><span>${escapeHtml(page.title || "Untitled")}</span></button>`).join(""); activeSelect.innerHTML = `<option value="">No active news</option>${state.pages.map((page) => `<option value="${escapeHtml(page.id)}">${escapeHtml(page.id)}</option>`).join("")}`; activeSelect.value = state.activeId; pageList.querySelectorAll("[data-id]").forEach((button) => button.onclick = () => loadPage(state.pages.find((page) => page.id === button.dataset.id))); }
+async function load(preferredId = state.selectedId) { const response = await fetch("/api/tools/news"); const data = await response.json(); state.pages = data.pages || []; state.activeId = data.activeId || ""; if (!state.pages.length) { addPage(); } else loadPage(state.pages.find((page) => page.id === preferredId) || state.pages[0]); renderList(); }
+function addPage() { const page = { id: `news-${state.pages.length + 1}`, title: "Untitled news", image: "", background: "#f4eee2", border: "#e6b35a", textColor: "#26353b", buttonLabel: "Continue", buttonAction: "close", buttonUrl: "", markdown: "", revision: 0 }; state.pages.push(page); loadPage(page); }
+$("newBtn").onclick = addPage;
+activeSelect.onchange = () => { state.activeId = activeSelect.value; renderList(); };
+$("deleteBtn").onclick = () => { if (state.pages.length <= 1) return; state.pages = state.pages.filter((page) => page.id !== state.selectedId); if (state.activeId === state.selectedId) state.activeId = ""; loadPage(state.pages[0]); };
+$("saveBtn").onclick = async () => { syncFields(); const selectedId = state.selectedId; const response = await fetch("/api/tools/news/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activeId: state.activeId, pages: state.pages }) }); const data = await response.json(); $("status").textContent = response.ok ? `Saved ${data.pageCount} page(s). Active: ${data.activeId || "none"}` : data.detail || "Save failed"; if (response.ok) await load(selectedId); };
+$("uploadBtn").onclick = async () => { const file = $("imageFile").files[0]; if (!file) return; const body = new FormData(); body.append("file", file); const response = await fetch("/api/tools/news/upload", { method: "POST", body }); const data = await response.json(); if (response.ok) { const alt = file.name.replace(/\.[^.]+$/, ""); const width = `${$("imageWidthInput").value}%`; const align = $("imageAlignInput").value; fields.markdown.value += `${fields.markdown.value.trim() ? "\n\n" : ""}![${alt}](${data.src}){width=${width};align=${align}}`; syncFields(); previewPage(); $("status").textContent = "Image uploaded into Markdown."; } else $("status").textContent = data.detail || "Upload failed"; };
+$("imageWidthInput").addEventListener("input", () => { $("imageWidthOutput").value = `${$("imageWidthInput").value}%`; $("imageWidthOutput").textContent = `${$("imageWidthInput").value}%`; });
+for (const input of Object.values(fields)) { input.addEventListener("input", () => { syncFields(); updateButtonUrlVisibility(); previewPage(); }); input.addEventListener("change", () => { syncFields(); updateButtonUrlVisibility(); previewPage(); }); }
+pageList.addEventListener("contextmenu", (event) => { const card = event.target.closest("[data-id]"); if (!card) return; event.preventDefault(); state.activeId = card.dataset.id; renderList(); });
+load();
+</script>
+</body>
+</html>

@@ -32,6 +32,7 @@ from modules.player_data import (
     get_user_gems,
     get_user_inventory,
     get_user_inventory_slots,
+    get_news_seen_revision,
     set_user_inventory_slots,
     hash_password,
     initialize_db,
@@ -45,6 +46,7 @@ from modules.player_data import (
     set_guest_profile_inventory,
     set_user_gems,
     set_user_inventory,
+    set_news_seen_revision,
     verify_password,
 )
 from modules.ws_runtime import broadcast_to_world, leave_world, ws_send
@@ -108,6 +110,7 @@ BLOCKS_PATH = PUBLIC_DIR / "data" / "blocks.json"
 SEEDS_PATH = PUBLIC_DIR / "data" / "seeds.json"
 WEATHER_PATH = PUBLIC_DIR / "data" / "weather.json"
 EVENTS_PATH = PUBLIC_DIR / "data" / "events.json"
+NEWS_PATH = PUBLIC_DIR / "data" / "news.json"
 
 # configure world_utils shared constants and paths
 world_utils.PUBLIC_DIR = PUBLIC_DIR
@@ -443,6 +446,7 @@ register_editor_routes(
     seeds_path=SEEDS_PATH,
     weather_path=WEATHER_PATH,
     events_path=EVENTS_PATH,
+    news_path=NEWS_PATH,
     load_blocks_payload=load_blocks_payload,
     load_seeds_payload=load_seeds_payload,
     load_weather_payload=load_weather_payload,
@@ -480,7 +484,7 @@ async def prepare_restart() -> JSONResponse:
         {
             "type": "server_update",
             "countdown": 0,
-            "message": "Game is updating. You will be disconnected and the page will reload.",
+            "message": "Game is updating. You will be disconnected",
         }
     )
 
@@ -622,6 +626,27 @@ def bootstrap_payload(authorization: str | None = Header(default=None)) -> JSONR
     )
 
 
+@app.get("/api/news")
+def current_news(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    auth_user = parse_token(authorization[7:])
+    if not auth_user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    try:
+        user_id = int(auth_user.get("sub", 0))
+    except Exception:
+        user_id = 0
+    try:
+        guest_profile_id = int(auth_user.get("guestProfileId", 0))
+    except Exception:
+        guest_profile_id = 0
+
+    return {"news": get_unseen_news_for_client({"user_id": user_id, "guest_profile_id": guest_profile_id})}
+
+
 def get_public_cache_headers(safe_path: str) -> dict[str, str]:
     lower = safe_path.lower()
 
@@ -641,6 +666,38 @@ def get_public_cache_headers(safe_path: str) -> dict[str, str]:
 
 clients: dict[str, dict[str, Any]] = {}
 server_update_task: asyncio.Task[None] | None = None
+
+
+def get_unseen_news_for_client(client: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        with NEWS_PATH.open("r", encoding="utf-8") as handle:
+            news_document = json.load(handle)
+        active_id = str(news_document.get("activeId", ""))
+        active_page = next(
+            (page for page in news_document.get("pages", []) if isinstance(page, dict) and str(page.get("id")) == active_id),
+            None,
+        )
+        if not active_page:
+            return None
+
+        try:
+            active_revision = max(1, int(news_document.get("activeRevision", 1) or 1))
+        except Exception:
+            active_revision = 1
+        revision = f"{active_id}:{active_revision}:{int(active_page.get('revision', 1) or 1)}"
+        user_id = int(client.get("user_id") or 0)
+        guest_profile_id = int(client.get("guest_profile_id") or 0)
+        profile_type = "user" if user_id > 0 else "guest"
+        profile_id = user_id if user_id > 0 else guest_profile_id
+        if get_news_seen_revision(profile_type, profile_id) == revision:
+            return None
+
+        news_payload = dict(active_page)
+        news_payload["revision"] = revision
+        set_news_seen_revision(profile_type, profile_id, revision)
+        return news_payload
+    except Exception:
+        return None
 
 
 async def _broadcast_to_all_clients(payload: dict[str, Any]) -> None:
@@ -666,7 +723,7 @@ async def _run_server_update(countdown: int) -> None:
         {
             "type": "server_update",
             "countdown": 0,
-            "message": "Game is updating now. The page will reload.",
+            "message": "Game is updating now. You will be disconnected.",
         }
     )
 
@@ -753,6 +810,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 except Exception:
                     client["guest_profile_id"] = None
                 client["world_name"] = world["name"]
+                news_payload = get_unseen_news_for_client(client)
                 spawn_x, spawn_y = get_spawn_from_door(world)
 
                 reconnect_x = msg.get("reconnectX")
@@ -850,6 +908,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         "gems": int(world["players"][client_id].get("gems", 0)),
                         "inventory": inventory_to_client_payload(world["players"][client_id].get("inventory", {})),
                         "inventorySlots": int(world["players"][client_id].get("inventory_slots", persisted_slots)),
+                        "news": news_payload,
                     },
                 )
                 continue
