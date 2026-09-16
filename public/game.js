@@ -1,4 +1,5 @@
 import {
+  CAMERA_EDGE_INSET,
   CAMERA_ZOOM_STEP,
   CHAT_BUBBLE_FADE_MS,
   CHAT_BUBBLE_LIFETIME_MS,
@@ -2003,10 +2004,12 @@ function update() {
   state.camera.x = state.me.x * TILE_SIZE - viewportWorldW / 2;
   state.camera.y = state.me.y * TILE_SIZE - viewportWorldH / 2;
 
-  const maxCameraX = Math.max(0, state.world.width * TILE_SIZE - viewportWorldW);
-  const maxCameraY = Math.max(0, state.world.height * TILE_SIZE - viewportWorldH);
-  state.camera.x = Math.max(0, Math.min(state.camera.x, maxCameraX));
-  state.camera.y = Math.max(0, Math.min(state.camera.y, maxCameraY));
+  const maxCameraX = Math.max(0, state.world.width * TILE_SIZE - viewportWorldW - CAMERA_EDGE_INSET);
+  const maxCameraY = Math.max(0, state.world.height * TILE_SIZE - viewportWorldH - CAMERA_EDGE_INSET);
+  const minCameraX = Math.min(CAMERA_EDGE_INSET, maxCameraX);
+  const minCameraY = Math.min(CAMERA_EDGE_INSET, maxCameraY);
+  state.camera.x = Math.max(minCameraX, Math.min(state.camera.x, maxCameraX));
+  state.camera.y = Math.max(minCameraY, Math.min(state.camera.y, maxCameraY));
 }
 
 function drawWorld() {
@@ -2242,10 +2245,12 @@ function drawPinatas() {
     })();
     if (!tex) continue;
 
-    const screenX = (p.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
-    const screenY = (p.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
-    const drawW = tex.w * state.camera.zoom;
-    const drawH = tex.h * state.camera.zoom;
+    const tileX = Math.floor(Number(p.x) || 0);
+    const tileY = Math.floor(Number(p.y) || 0);
+    const screenX = (tileX * TILE_SIZE - state.camera.x) * state.camera.zoom;
+    const screenY = (tileY * TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const drawW = TILE_SIZE * state.camera.zoom;
+    const drawH = TILE_SIZE * state.camera.zoom;
     ctx.drawImage(atlas.image, tex.x, tex.y, tex.w, tex.h, screenX, screenY, drawW, drawH);
 
     // optionally render strength as text
@@ -2253,7 +2258,7 @@ function drawPinatas() {
       ctx.fillStyle = "#fff";
       ctx.font = `${Math.max(8, 10 * state.camera.zoom)}px sans-serif`;
       ctx.textAlign = "center";
-      ctx.fillText(String(p.strength), screenX + drawW/2, screenY - 2);
+      ctx.fillText(String(p.strength), screenX + drawW / 2, screenY - 2);
     }
 }
 }

@@ -1,0 +1,26 @@
+{
+  "events": [
+    {
+      "EVENT_ID": 0,
+      "NAME": "Tester",
+      "TYPE": "PINATA",
+      "ENABLED": true,
+      "STRENGTH": 5,
+      "TEXTURE_ATLAS": "0",
+      "TEXTURE_RECT": "96,16,16,16",
+      "SPAWN_MODE": "player",
+      "TIMEOUT": 0,
+      "BURST_MODE": "area",
+      "BURST_RADIUS": 5,
+      "SPAWN_ABOVE": true,
+      "BURST_ITEMS": [
+        {
+          "ITEM_ID": 1,
+          "CHANCE": 1,
+          "MIN": 10,
+          "MAX": 20
+        }
+      ]
+    }
+  ]
+}

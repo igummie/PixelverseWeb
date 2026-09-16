@@ -27,6 +27,14 @@
         margin-top: 4px;
         background: #000;
       }
+      .pinataDropColumns,
+      .pinataDropRow {
+        grid-template-columns: minmax(110px, 1fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) minmax(70px, 0.7fr) auto;
+      }
+      .pinataDropColumns span:first-child,
+      .pinataDropRow .fruitDropType {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -212,7 +220,7 @@
               <button id="addBurstItemBtn" class="secondary" type="button">+ Add Drop</button>
             </div>
             <div class="tiny" style="margin-top: 0">Specify what spawns when pinata is broken.</div>
-            <div class="fruitDropColumns" aria-hidden="true">
+            <div class="fruitDropColumns pinataDropColumns" aria-hidden="true">
               <span>Type</span>
               <span>Item ID</span>
               <span>Chance</span>
@@ -346,11 +354,11 @@
         jsonOutput.value = JSON.stringify({ events: state.events }, null, 2);
       }
 
-      function buildListEditor(container, rows) {
+      function buildListEditor(container, rows, includeType = true) {
         container.innerHTML = "";
         const appendRow = (entry) => {
           const row = document.createElement("div");
-          row.className = "fruitDropRow";
+          row.className = includeType ? "fruitDropRow" : "fruitDropRow pinataDropRow";
           const typeSelect = document.createElement("select");
           typeSelect.className = "fruitDropType";
           ALLOWED_ITEM_TYPES.forEach((it) => {
@@ -406,15 +414,18 @@
         for (const r of rows) appendRow(r);
       }
 
-      function readListEditor(container) {
+      function readListEditor(container, includeType = true) {
         const rows = [];
         container.querySelectorAll(".fruitDropRow").forEach(row => {
-          const itemType = normalizeItemType(row.querySelector(".fruitDropType").value);
           const itemId = Math.max(0, Number.parseInt(row.querySelector(".fruitDropItemId").value || "0", 10));
           const chance = Math.max(0, Math.min(1, Number(row.querySelector(".fruitDropChance").value) || 0));
           const min = Math.max(0, Number.parseInt(row.querySelector(".fruitDropMin").value || "0", 10));
           const max = Math.max(min, Number.parseInt(row.querySelector(".fruitDropMax").value || String(min), 10));
-          rows.push({ ITEM_TYPE: itemType, ITEM_ID: itemId, CHANCE: chance, MIN: min, MAX: max });
+          const next = { ITEM_ID: itemId, CHANCE: chance, MIN: min, MAX: max };
+          if (includeType) {
+            next.ITEM_TYPE = normalizeItemType(row.querySelector(".fruitDropType").value);
+          }
+          rows.push(next);
         });
         return rows;
       }
@@ -448,7 +459,7 @@
           ev.BURST_MODE = pinataBurstModeSelect.value;
           ev.BURST_RADIUS = Math.max(0, Number(pinataBurstRadiusInput.value) || 0);
           ev.SPAWN_ABOVE = pinataSpawnAboveToggle.value === "true";
-          ev.BURST_ITEMS = readListEditor(burstItemsEditor);
+          ev.BURST_ITEMS = readListEditor(burstItemsEditor, false);
           // remove gem-specific
           delete ev.GEM_COUNT_MIN; delete ev.GEM_COUNT_MAX; delete ev.GEM_TYPES;
         }
@@ -474,17 +485,21 @@
         } else if (ev.TYPE === "PINATA") {
           // ensure atlas options exist
           renderAtlasSelect(pinataAtlasSelect);
-          pinataAtlasSelect.value = normalizeAtlasId(ev.TEXTURE_ATLAS || "");
+          const eventAtlasId = normalizeAtlasId(ev.TEXTURE_ATLAS);
+          const selectedAtlasId = eventAtlasId && Array.from(pinataAtlasSelect.options).some((option) => option.value === eventAtlasId)
+            ? eventAtlasId
+            : String(pinataAtlasSelect.options[0]?.value || "");
+          pinataAtlasSelect.value = selectedAtlasId;
 
           pinataStrengthInput.value = String(ev.STRENGTH || 1);
-          pinataTextureAtlasInput.value = ev.TEXTURE_ATLAS || "";
+          pinataTextureAtlasInput.value = selectedAtlasId;
           pinataTextureRectInput.value = ev.TEXTURE_RECT || "";
           pinataSpawnModeSelect.value = ev.SPAWN_MODE || "any";
           pinataTimeoutInput.value = String(ev.TIMEOUT || 0);
           pinataBurstModeSelect.value = ev.BURST_MODE || "area";
           pinataBurstRadiusInput.value = String(ev.BURST_RADIUS || 0);
           pinataSpawnAboveToggle.value = ev.SPAWN_ABOVE ? "true" : "false";
-          buildListEditor(burstItemsEditor, ev.BURST_ITEMS || []);
+          buildListEditor(burstItemsEditor, ev.BURST_ITEMS || [], false);
           // refresh atlas preview
           loadPinataAtlas();
           updatePinataZoom(1);
@@ -499,9 +514,10 @@
           .then(data => {
             state.atlases = Array.isArray(data.atlases) ? data.atlases : [];
             state.events = Array.isArray(data.events) ? data.events : [];
-            state.selectedIndex = -1;
+            state.selectedIndex = state.events.length ? 0 : -1;
             populateEventSelect();
             renderEventCards();
+            refreshEditor();
             setStatus("Loaded", false);
             updateJsonOutput();
             // refresh atlas dropdown
@@ -515,7 +531,7 @@
       let pinataZoom = 1;
 
       function normalizeAtlasId(value) {
-        return String(value || "").trim().toLowerCase();
+        return String(value ?? "").trim().toLowerCase();
       }
 
       function renderAtlasSelect(selectEl) {
@@ -689,6 +705,9 @@
           opt.textContent = `${e.EVENT_ID} – ${e.NAME || e.TYPE}`;
           eventSelect.append(opt);
         });
+        if (state.selectedIndex >= 0 && state.selectedIndex < state.events.length) {
+          eventSelect.value = String(state.selectedIndex);
+        }
       }
 
       eventSelect.addEventListener("change", () => {
@@ -752,7 +771,7 @@
       });
 
       addBurstItemBtn.addEventListener("click", () => {
-        buildListEditor(burstItemsEditor, [...readListEditor(burstItemsEditor), {}]);
+        buildListEditor(burstItemsEditor, [...readListEditor(burstItemsEditor, false), {}], false);
         applyCurrentEventFields();
       });
 

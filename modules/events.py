@@ -206,7 +206,7 @@ async def apply_event_effects(
 
         mode = str(event_trigger.get("SPAWN_MODE", "any")).lower()
         # allow pinata-specific "spawn above" to translate to above mode
-        if bool(event_trigger.get("SPAWN_ABOVE", False)):
+        if mode != "player" and bool(event_trigger.get("SPAWN_ABOVE", False)):
             mode = "above"
 
         if base_x is None or base_y is None:

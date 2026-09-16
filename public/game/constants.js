@@ -7,6 +7,7 @@ export const EPSILON = 0.0001;
 export const MIN_CAMERA_ZOOM = 0.5;
 export const MAX_CAMERA_ZOOM = 3;
 export const CAMERA_ZOOM_STEP = 0.1;
+export const CAMERA_EDGE_INSET = 5;
 export const REMOTE_PLAYER_INTERP_SPEED = 14;
 export const REMOTE_PLAYER_SNAP_DISTANCE = 2.5;
 export const REMOTE_PLAYER_EXTRAPOLATE_BASE_MS = 65;

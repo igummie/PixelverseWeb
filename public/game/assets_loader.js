@@ -176,7 +176,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
 
     for (const atlas of atlasSpecs) {
       const image = await loadImage(atlas.SRC);
-      const key = String(atlas.ATLAS_ID || "").trim().toLowerCase();
+      const key = String(atlas.ATLAS_ID ?? "").trim().toLowerCase();
       state.atlases.set(key, {
         ...atlas,
         image,

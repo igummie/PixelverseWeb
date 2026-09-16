@@ -26,6 +26,7 @@ from modules.player_data import (
     get_db,
     get_guest_profile_gems,
     get_guest_profile_inventory,
+    set_guest_profile_inventory_slots,
     get_guest_profile_inventory_slots,
     get_or_create_guest_profile,
     get_user_gems,
@@ -821,12 +822,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if isinstance(client.get("user_id"), int) and client.get("user_id", 0) > 0:
                     await asyncio.to_thread(set_user_inventory_slots, int(client["user_id"]), slots)
                 elif isinstance(client.get("guest_profile_id"), int) and client.get("guest_profile_id", 0) > 0:
-                    # update guest record directly
-                    with await asyncio.to_thread(get_db) as conn:
-                        conn.execute(
-                            "UPDATE guest_profiles SET inventory_slots = ? WHERE id = ?",
-                            (slots, int(client["guest_profile_id"])),
-                        )
+                    await asyncio.to_thread(
+                        set_guest_profile_inventory_slots,
+                        int(client["guest_profile_id"]),
+                        slots,
+                    )
                 # also update our in‑memory player state if inside a world
                 if client_id and world_cache and client_id in world_cache[client.get("world_name", "")]["players"]:
                     world_cache[client.get("world_name")]["players"][client_id]["inventory_slots"] = slots
