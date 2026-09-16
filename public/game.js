@@ -780,8 +780,23 @@ const inputController = createInputController({
   },
 });
 
+function getEffectiveMinCameraZoom() {
+  if (!state.world) {
+    return MIN_CAMERA_ZOOM;
+  }
+  const cssW = canvas.clientWidth || window.innerWidth;
+  const cssH = canvas.clientHeight || Math.max(1, window.innerHeight);
+  const fitZoom = utils.getMinFitCameraZoom(
+    state.world.width * TILE_SIZE,
+    state.world.height * TILE_SIZE,
+    cssW,
+    cssH,
+  );
+  return Math.min(MAX_CAMERA_ZOOM, Math.max(MIN_CAMERA_ZOOM, fitZoom));
+}
+
 function setCameraZoom(nextZoom) {
-  const clamped = utils.clampCameraZoom(nextZoom, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
+  const clamped = utils.clampCameraZoom(nextZoom, getEffectiveMinCameraZoom(), MAX_CAMERA_ZOOM);
   if (Math.abs(clamped - state.camera.zoom) < 0.0001) {
     return;
   }
@@ -2054,6 +2069,15 @@ function update() {
   // use logical (CSS) canvas size rather than the scaled width/height
   const cssW = canvas.clientWidth || window.innerWidth;
   const cssH = canvas.clientHeight || Math.max(1, window.innerHeight);
+
+  // re-clamp zoom every frame: the viewport (and therefore the fit zoom) can
+  // change on resize/fullscreen toggles without going through setCameraZoom.
+  const minFitZoom = getEffectiveMinCameraZoom();
+  if (state.camera.zoom < minFitZoom) {
+    state.camera.zoom = minFitZoom;
+    updateZoomUi();
+  }
+
   const viewportWorldW = cssW / state.camera.zoom;
   const viewportWorldH = cssH / state.camera.zoom;
   state.camera.x = state.me.x * TILE_SIZE - viewportWorldW / 2;

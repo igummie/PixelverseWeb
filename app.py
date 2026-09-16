@@ -1734,6 +1734,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 existing_tree = get_planted_tree_at(world, x, y)
                 if existing_tree is not None:
+                    if bool(existing_tree.get("spliced", False)):
+                        await ws_send(
+                            websocket,
+                            {
+                                "type": "splice_result",
+                                "playerId": client_id,
+                                "success": False,
+                                "message": "This tree has already been spliced!",
+                            },
+                        )
+                        continue
+
                     first_seed_id = int(existing_tree.get("seed_id", -1))
                     result_seed_id = find_splice_result_seed_id(first_seed_id, seed_id)
                     if result_seed_id is None:
@@ -1754,6 +1766,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                     existing_tree["seed_id"] = int(result_seed_id)
                     existing_tree["planted_at_ms"] = int(time.time() * 1000)
+                    existing_tree["spliced"] = True
                     if not creative_planting and inventory is not None and seed_inventory_key:
                         next_seed_count = current_seed_count - 1
                         if next_seed_count <= 0:

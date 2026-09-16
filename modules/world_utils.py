@@ -699,6 +699,7 @@ def serialize_planted_trees(world: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "itemId": int(tree.get("seed_id", -1)),
                     "seedId": int(tree.get("seed_id", -1)),
                     "plantedAtMs": int(tree.get("planted_at_ms", 0)),
+                    "spliced": bool(tree.get("spliced", False)),
                 }
             )
         except Exception:
@@ -833,6 +834,7 @@ def parse_world_planted_trees(raw: Any, width: int, height: int) -> Dict[str, Di
             "y": y,
             "seed_id": seed_id,
             "planted_at_ms": max(0, planted_at_ms),
+            "spliced": bool(entry.get("spliced", False)),
         }
 
     return parsed

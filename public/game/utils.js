@@ -13,6 +13,15 @@ export function clampCameraZoom(value, minZoom, maxZoom) {
   return Math.max(minZoom, Math.min(maxZoom, value));
 }
 
+// Smallest zoom that still keeps the viewport fully covered by the world grid,
+// so zooming out never exposes the void beyond the world's edges.
+export function getMinFitCameraZoom(worldWidthPx, worldHeightPx, viewportW, viewportH) {
+  if (!(worldWidthPx > 0) || !(worldHeightPx > 0)) {
+    return 0;
+  }
+  return Math.max(viewportW / worldWidthPx, viewportH / worldHeightPx);
+}
+
 export function getMouseTile(state) {
   const zoom = Math.max(0.0001, Number(state?.camera?.zoom) || 1);
   const mouseWorldX = Number(state?.camera?.x || 0) + Number(state?.mouse?.x || 0) / zoom;

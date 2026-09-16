@@ -14,7 +14,7 @@
       "id": "b",
       "type": "seed",
       "x": -1.0,
-      "y": 333.0,
+      "y": 255.22222222222223,
       "data": {
         "seedId": "13"
       }
@@ -22,10 +22,30 @@
     {
       "id": "r",
       "type": "seed",
-      "x": 476.0,
-      "y": 101.0,
+      "x": 411.8024691358025,
+      "y": 92.35802469135803,
       "data": {
         "seedId": "14"
+      }
+    },
+    {
+      "id": "seed-mu4pw3qx-lk08",
+      "type": "seed",
+      "x": 391.1111111111111,
+      "y": 458.76543209876536,
+      "data": {
+        "label": "Seed Node",
+        "seedId": "12"
+      }
+    },
+    {
+      "id": "seed-mu4pxo6e-rft8",
+      "type": "seed",
+      "x": 832.2222222222222,
+      "y": 203.20987654320987,
+      "data": {
+        "label": "Seed Node",
+        "seedId": "16"
       }
     }
   ],
@@ -38,6 +58,16 @@
     {
       "source": "b",
       "target": "r",
+      "targetPort": 1
+    },
+    {
+      "source": "r",
+      "target": "seed-mu4pxo6e-rft8",
+      "targetPort": 0
+    },
+    {
+      "source": "seed-mu4pw3qx-lk08",
+      "target": "seed-mu4pxo6e-rft8",
       "targetPort": 1
     }
   ]
