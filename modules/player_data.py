@@ -54,6 +54,7 @@ def initialize_db() -> None:
                 tiles_json TEXT NOT NULL,
                 door_x INTEGER,
                 door_y INTEGER,
+                weather INTEGER NOT NULL DEFAULT 1,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )
@@ -82,6 +83,8 @@ def initialize_db() -> None:
             conn.execute("ALTER TABLE worlds ADD COLUMN door_x INTEGER")
         if "door_y" not in columns:
             conn.execute("ALTER TABLE worlds ADD COLUMN door_y INTEGER")
+        if "weather" not in columns:
+            conn.execute("ALTER TABLE worlds ADD COLUMN weather INTEGER NOT NULL DEFAULT 1")
 
         user_columns = {
             str(row["name"]).lower()

@@ -6,6 +6,8 @@ import json
 import os
 import random
 import secrets
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -388,6 +390,16 @@ class GuestLoginBody(BaseModel):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    bundle_path = PUBLIC_DIR / "build" / "game.bundle.js"
+    source_paths = [BASE_DIR / "scripts" / "build_bundle.py", PUBLIC_DIR / "game.js"]
+    source_paths.extend((PUBLIC_DIR / "game").glob("*.js"))
+    if not bundle_path.is_file() or any(path.stat().st_mtime > bundle_path.stat().st_mtime for path in source_paths):
+        subprocess.run(
+            [sys.executable, str(BASE_DIR / "scripts" / "build_bundle.py")],
+            cwd=BASE_DIR,
+            check=True,
+        )
+
     async def periodic_flush() -> None:
         while True:
             await asyncio.sleep(30)

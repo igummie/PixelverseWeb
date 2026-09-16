@@ -12,12 +12,6 @@
       "NAME": "GEMS_ATLAS",
       "SRC": "/assets/atlases/gems_atlas.svg",
       "TILE_SIZE": 16
-    },
-    {
-      "ATLAS_ID": 1,
-      "NAME": "GT_ATLAS",
-      "SRC": "/assets/atlases/gt.png",
-      "TILE_SIZE": 32
     }
   ],
   "blocks": [
