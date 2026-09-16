@@ -194,11 +194,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       block.ID = normalizedBlockId;
       block.ITEM_TYPE = "block";
       // normalize atlas id to string key to match state.atlases keys
-      try {
-        block.ATLAS_ID = String(block.ATLAS_ID || "").trim().toLowerCase();
-      } catch {
-        block.ATLAS_ID = String(block.ATLAS_ID || "").trim().toLowerCase();
-      }
+      block.ATLAS_ID = String(block.ATLAS_ID ?? "").trim().toLowerCase();
       state.blockDefs.set(normalizedBlockId, block);
       if (blockHasRegularAnimation(block) && Number.isInteger(blockId)) {
         state.animatedBlockIds.add(normalizedBlockId);
