@@ -1350,6 +1350,7 @@ def enforce_bedrock_under_door(
 
 
 def create_world(name: str) -> Dict[str, Any]:
+    created_at = int(time.time())
     generated = generate_world_layers(
         WORLD_WIDTH,
         WORLD_HEIGHT,
@@ -1366,6 +1367,8 @@ def create_world(name: str) -> Dict[str, Any]:
         "door": door,
         # each world has a persistent weather ID; default to 1
         "weather": 1,
+        "bio": "",
+        "created_at": created_at,
         "players": {},
         "tile_damage": {},
         "gem_drops": {},
@@ -1411,18 +1414,18 @@ def save_world(world: Dict[str, Any]) -> None:
             conn.execute(
                 """
                 UPDATE worlds
-                SET width = ?, height = ?, tiles_json = ?, door_x = ?, door_y = ?, weather = ?, updated_at = ?
+                SET width = ?, height = ?, tiles_json = ?, door_x = ?, door_y = ?, weather = ?, bio = ?, updated_at = ?
                 WHERE name = ?
                 """,
-                (world["width"], world["height"], tiles_json, door["x"], door["y"], int(world.get("weather", 0)), now, world["name"]),
+                (world["width"], world["height"], tiles_json, door["x"], door["y"], int(world.get("weather", 0)), str(world.get("bio", "")), now, world["name"]),
             )
         else:
             conn.execute(
                 """
-                INSERT INTO worlds (name, width, height, tiles_json, door_x, door_y, weather, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO worlds (name, width, height, tiles_json, door_x, door_y, weather, bio, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (world["name"], world["width"], world["height"], tiles_json, door["x"], door["y"], int(world.get("weather", 0)), now, now),
+                (world["name"], world["width"], world["height"], tiles_json, door["x"], door["y"], int(world.get("weather", 0)), str(world.get("bio", "")), now, now),
             )
 
 
@@ -1508,6 +1511,16 @@ def load_world(name: str) -> Dict[str, Any]:
     except Exception:
         weather_val = 1
 
+    try:
+        created_at = int(row["created_at"] or 0)
+    except Exception:
+        created_at = 0
+
+    try:
+        bio = str(row["bio"] or "")
+    except Exception:
+        bio = ""
+
     return {
         "name": name,
         "width": width,
@@ -1517,6 +1530,8 @@ def load_world(name: str) -> Dict[str, Any]:
         "door": resolved_door,
         "previous_door": parsed_door,
         "weather": weather_val,
+        "bio": bio,
+        "created_at": created_at,
         "players": {},
         "tile_damage": {},
         "gem_drops": gem_drops,

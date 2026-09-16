@@ -889,6 +889,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "door": sanitize_door(world.get("door"), world["width"], world["height"]),
                             "tiles": world["foreground"],
                             "weather": int(world.get("weather", 1)),
+                            "bio": str(world.get("bio", "")),
+                            "createdAt": int(world.get("created_at", 0)),
                             "players": [
                                 {
                                     "id": p["id"],

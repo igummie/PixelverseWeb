@@ -1,6 +1,10 @@
 export function createPauseMenuController({ state, screens, elements, actions }) {
   const {
     pauseOverlay,
+    pauseWorldName,
+    pausePlayerCount,
+    pauseWorldCreated,
+    pauseWorldBio,
     pauseExitWorldBtn,
     pauseRespawnBtn,
     pauseOptionsBtn,
@@ -9,7 +13,6 @@ export function createPauseMenuController({ state, screens, elements, actions })
   } = elements;
 
   const {
-    setChatInputOpen,
     sendWs,
     updateDebugUi,
     updateDebugInfo,
@@ -24,10 +27,29 @@ export function createPauseMenuController({ state, screens, elements, actions })
     pauseOverlay?.classList.toggle("hidden", !nextOpen);
 
     if (nextOpen) {
-      setChatInputOpen(false);
+      updatePauseInfo();
       state.keys.clear();
       state.jumpQueued = false;
       pauseBackBtn?.focus();
+    }
+  }
+
+  function updatePauseInfo() {
+    if (pauseWorldName) {
+      pauseWorldName.textContent = state.world?.name || "No world";
+    }
+    if (pausePlayerCount) {
+      pausePlayerCount.textContent = `Players: ${state.players.size}`;
+    }
+    if (pauseWorldCreated) {
+      const createdAt = Number(state.world?.createdAt ?? state.world?.created_at ?? 0);
+      pauseWorldCreated.textContent = Number.isFinite(createdAt) && createdAt > 0
+        ? `Created: ${new Date(createdAt * 1000).toLocaleDateString()}`
+        : "Created: Unknown";
+    }
+    if (pauseWorldBio) {
+      const worldBio = state.world?.motd || state.world?.bio || state.world?.description;
+      pauseWorldBio.textContent = String(worldBio || "No world bio available.").trim();
     }
   }
 
@@ -90,6 +112,7 @@ export function createPauseMenuController({ state, screens, elements, actions })
 
   return {
     setPauseMenuOpen,
+    updatePauseInfo,
     togglePauseMenu,
     isPauseMenuOpen,
     bindControls,

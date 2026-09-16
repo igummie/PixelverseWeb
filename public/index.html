@@ -73,34 +73,26 @@
 
     <section id="gameScreen" class="screen">
       <div id="gameHud">
-        <div class="gameTopbar">
-          <div id="gameStatus">Connecting...</div>
-          <div id="gemCount" style="font-size: 12px; opacity: 0.95; min-width: 88px">Gems: 0</div>
-          <span id="blockHudControl" class="creativeHudControl hidden">
-            <label for="blockSelect">Block:</label>
-            <select id="blockSelect"></select>
-          </span>
-          <span id="seedHudControl" class="creativeHudControl hidden">
-            <label for="itemSelectHud">Item:</label>
-            <select id="itemSelectHud"></select>
-          </span>
-          <div id="blockTypeInfo" class="creativeHudControl hidden" style="font-size: 12px; opacity: 0.8"></div>
-          <button id="zoomOutBtn" type="button">-</button>
-          <div id="zoomLevel" style="font-size: 12px; opacity: 0.9; min-width: 66px; text-align: center">Zoom 1.00x</div>
-          <button id="zoomInBtn" type="button">+</button>
-          <button id="zoomResetBtn" type="button">1x</button>
-          <button id="debugToggleBtn" type="button">Debug</button>
-          <div class="spacer">LMB: break | RMB: build/plant selected item | Q: drop selected seed | WASD/Arrows: move | Enter: chat | ESC: pause</div>
-        </div>
+        <div id="gameStatus" class="hidden">Connecting...</div>
+        <div id="gemCount" class="gemHud" aria-label="Gems">Gems: 0</div>
         </div>
         <div id="pauseOverlay" class="pauseOverlay hidden" role="dialog" aria-modal="true" aria-label="Pause Menu">
-          <div class="pausePanel">
-            <div class="pauseTitle">Paused</div>
-            <button id="pauseExitWorldBtn" type="button">Exit world</button>
-            <button id="pauseRespawnBtn" type="button">Respawn</button>
-            <button id="pauseOptionsBtn" type="button">Options</button>
-            <button id="pauseLogoutBtn" type="button">Logout</button>
-            <button id="pauseBackBtn" type="button">Back</button>
+          <div class="pauseLayout">
+            <aside class="pauseWorldInfo">
+              <div class="pauseInfoLabel">World Information</div>
+              <div id="pauseWorldName" class="pauseWorldName">World</div>
+              <div id="pausePlayerCount" class="pausePlayerCount">Players: 0</div>
+              <div id="pauseWorldCreated" class="pauseWorldCreated">Created: Unknown</div>
+              <div id="pauseWorldBio" class="pauseWorldBio">No world bio available.</div>
+            </aside>
+            <div class="pausePanel">
+              <div class="pauseTitle">What do you wanna do?</div>
+              <button id="pauseExitWorldBtn" type="button">Exit world</button>
+              <button id="pauseRespawnBtn" type="button">Respawn</button>
+              <button id="pauseOptionsBtn" type="button">Debug Options</button>
+              <button id="pauseLogoutBtn" type="button">Logout</button>
+              <button id="pauseBackBtn" type="button">Back</button>
+            </div>
           </div>
         </div>
         <div id="debugOverlay" class="debugOverlay hidden">

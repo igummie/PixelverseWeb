@@ -25,16 +25,6 @@ export function createInputController({ state, screens, canvas, constants, actio
           return;
         }
 
-        if (state.chatInputOpen) {
-          setChatInputOpen(false);
-          return;
-        }
-
-        if (state.inventoryOpen) {
-          setInventoryOpen(false);
-          return;
-        }
-
         pauseMenu.togglePauseMenu();
         return;
       }

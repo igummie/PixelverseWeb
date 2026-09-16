@@ -2,15 +2,12 @@ import { getMouseTile } from "./utils.js";
 
 export function createHudController({ state, screens, canvas, ctx, elements, settings }) {
   const {
-    zoomLevel,
     gemCount,
     debugOverlay,
     debugInfo,
     debugGridToggle,
     debugHitboxesToggle,
     debugCreativeToggle,
-    creativeHudControls,
-    gameTopbar,
     chatDrawer,
     chatInputPanel,
     chatInput,
@@ -29,13 +26,6 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     DEBUG_INFO_REFRESH_MS,
   } = settings;
 
-  function updateZoomUi() {
-    if (!zoomLevel) {
-      return;
-    }
-    zoomLevel.textContent = `Zoom ${state.camera.zoom.toFixed(2)}x`;
-  }
-
   function updateGemUi() {
     if (!gemCount) {
       return;
@@ -53,11 +43,6 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     }
     if (debugCreativeToggle) {
       debugCreativeToggle.checked = !!state.creativeEnabled;
-    }
-    if (Array.isArray(creativeHudControls)) {
-      for (const control of creativeHudControls) {
-        control?.classList.toggle("hidden", !state.creativeEnabled);
-      }
     }
     if (debugInventorySlotsInput) {
       debugInventorySlotsInput.value = String(Number(state.inventorySlotLimit) || 20);
@@ -117,7 +102,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
       return;
     }
 
-    const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
+    const topbarHeight = 0;
     const visibleDrawerHeight = Math.max(0, state.chatDrawerHeight + state.chatDrawerOffsetY);
     const drawerPushDown = Math.max(0, visibleDrawerHeight - CHAT_DRAWER_HANDLE_PEEK);
     const debugTop = topbarHeight + 10 + drawerPushDown;
@@ -230,7 +215,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
       return;
     }
 
-    const topbarHeight = gameTopbar ? gameTopbar.offsetHeight : 58;
+    const topbarHeight = 0;
     screens.game.style.setProperty("--hud-height", `${topbarHeight}px`);
 
     // account for devicePixelRatio so that zooming the browser (or using
@@ -285,7 +270,6 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
   }
 
   return {
-    updateZoomUi,
     updateGemUi,
     updateDebugUi,
     updateDebugInfo,

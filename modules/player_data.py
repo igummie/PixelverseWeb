@@ -56,6 +56,7 @@ def initialize_db() -> None:
                 door_x INTEGER,
                 door_y INTEGER,
                 weather INTEGER NOT NULL DEFAULT 1,
+                bio TEXT NOT NULL DEFAULT '',
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )
@@ -87,6 +88,8 @@ def initialize_db() -> None:
             conn.execute("ALTER TABLE worlds ADD COLUMN door_y INTEGER")
         if "weather" not in columns:
             conn.execute("ALTER TABLE worlds ADD COLUMN weather INTEGER NOT NULL DEFAULT 1")
+        if "bio" not in columns:
+            conn.execute("ALTER TABLE worlds ADD COLUMN bio TEXT NOT NULL DEFAULT ''")
 
         user_columns = {
             str(row["name"]).lower()

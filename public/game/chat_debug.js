@@ -1,7 +1,6 @@
 export function createChatDebugController({ state, screens, canvas, ctx, elements, settings, actions }) {
   const {
     chatToggleBtn,
-    debugToggleBtn,
     chatDrawerHandle,
     chatDrawer,
     chatLog,
@@ -360,12 +359,6 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
   function bindControls() {
     chatToggleBtn?.addEventListener("click", () => {
       setChatLogOpen(!state.chatLogOpen);
-    });
-
-    debugToggleBtn?.addEventListener("click", () => {
-      state.debugEnabled = !state.debugEnabled;
-      updateDebugUi();
-      updateDebugInfo(true);
     });
 
     debugGridToggle?.addEventListener("change", () => {

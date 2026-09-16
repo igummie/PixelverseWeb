@@ -102,17 +102,11 @@ const mainError = document.getElementById("mainError");
 
 const gameStatus = document.getElementById("gameStatus");
 const gemCount = document.getElementById("gemCount");
-const blockSelect = document.getElementById("blockSelect");
-const itemSelectHud = document.getElementById("itemSelectHud");
-const blockHudControl = document.getElementById("blockHudControl");
-const seedHudControl = document.getElementById("seedHudControl"); // remains named for CSS
-const blockTypeInfo = document.getElementById("blockTypeInfo");
-const zoomOutBtn = document.getElementById("zoomOutBtn");
-const zoomInBtn = document.getElementById("zoomInBtn");
-const zoomResetBtn = document.getElementById("zoomResetBtn");
-const zoomLevel = document.getElementById("zoomLevel");
+const blockSelect = null;
+const itemSelectHud = null;
+const blockTypeInfo = null;
+const zoomLevel = null;
 const chatToggleBtn = document.getElementById("chatToggleBtn");
-const debugToggleBtn = document.getElementById("debugToggleBtn");
 const chatDrawerHandle = document.getElementById("chatDrawerHandle");
 const chatDrawer = document.getElementById("chatDrawer");
 const chatLogPanel = document.getElementById("chatLogPanel");
@@ -141,13 +135,16 @@ const debugSimPingInput = document.getElementById("debugSimPingInput");
 const debugSimJitterInput = document.getElementById("debugSimJitterInput");
 const debugSimLossInput = document.getElementById("debugSimLossInput");
 const pauseOverlay = document.getElementById("pauseOverlay");
+const pauseWorldName = document.getElementById("pauseWorldName");
+const pausePlayerCount = document.getElementById("pausePlayerCount");
+const pauseWorldCreated = document.getElementById("pauseWorldCreated");
+const pauseWorldBio = document.getElementById("pauseWorldBio");
 const pauseExitWorldBtn = document.getElementById("pauseExitWorldBtn");
 const pauseRespawnBtn = document.getElementById("pauseRespawnBtn");
 const pauseOptionsBtn = document.getElementById("pauseOptionsBtn");
 const pauseLogoutBtn = document.getElementById("pauseLogoutBtn");
 const pauseBackBtn = document.getElementById("pauseBackBtn");
 const gameHud = document.getElementById("gameHud");
-const gameTopbar = document.querySelector(".gameTopbar");
 const newsOverlay = document.getElementById("newsOverlay");
 const newsBody = document.getElementById("newsBody");
 const newsActions = document.getElementById("newsActions");
@@ -375,8 +372,7 @@ const hud = createHudController({
     debugGridToggle,
     debugHitboxesToggle,
     debugCreativeToggle,
-    creativeHudControls: [blockHudControl, seedHudControl, blockTypeInfo],
-    gameTopbar,
+    creativeHudControls: [],
     chatDrawer,
     chatInputPanel,
     chatInput,
@@ -402,7 +398,6 @@ const chatDebug = createChatDebugController({
   ctx,
   elements: {
     chatToggleBtn,
-    debugToggleBtn,
     chatDrawerHandle,
     chatDrawer,
     chatLog,
@@ -717,6 +712,10 @@ const pauseMenu = createPauseMenuController({
   screens,
   elements: {
     pauseOverlay,
+    pauseWorldName,
+    pausePlayerCount,
+    pauseWorldCreated,
+    pauseWorldBio,
     pauseExitWorldBtn,
     pauseRespawnBtn,
     pauseOptionsBtn,
@@ -728,6 +727,7 @@ const pauseMenu = createPauseMenuController({
     sendWs,
     updateDebugUi,
     updateDebugInfo,
+    updatePauseInfo: () => pauseMenu.updatePauseInfo(),
     appendChatLine,
     leaveWorld,
     logout,
@@ -1452,6 +1452,7 @@ function handleSocketMessage(msg) {
     appendChatLine("system", `Joined world ${msg.world.name}`);
     state.flyEnabled = false;
     state.noclipEnabled = false;
+    pauseMenu.updatePauseInfo();
 
     gameStatus.textContent = `World: ${msg.world.name} | Players: ${state.players.size}`;
     showNewsWidget(msg.news);
@@ -1474,6 +1475,7 @@ function handleSocketMessage(msg) {
   if (msg.type === "player_joined") {
     initializeRemotePlayerTracking(msg.player);
     state.players.set(msg.player.id, msg.player);
+    pauseMenu.updatePauseInfo();
     gameStatus.textContent = `World: ${state.world.name} | Players: ${state.players.size}`;
     const joinedName = msg.player.username || "player";
     appendChatLine("system", `${joinedName} joined`);
@@ -1496,6 +1498,7 @@ function handleSocketMessage(msg) {
     addTransientSystemBubble(anchorX, anchorY, `${username} has left.`);
 
     state.players.delete(msg.id);
+    pauseMenu.updatePauseInfo();
     gameStatus.textContent = `World: ${state.world.name} | Players: ${state.players.size}`;
     return;
   }
@@ -1796,18 +1799,6 @@ guestBtn.addEventListener("click", authGuest);
 joinWorldBtn.addEventListener("click", () => enterWorld());
 refreshWorldsBtn.addEventListener("click", loadWorldList);
 logoutBtn.addEventListener("click", logout);
-blockSelect.addEventListener("change", () => {
-  const nextId = Number(blockSelect.value);
-  if (!Number.isNaN(nextId)) {
-    inventory.setSelectedItem(nextId, "block");
-    if (state.creativeEnabled) {
-      state.creativePlaceType = "block";
-    }
-    const block = state.blockDefs.get(nextId);
-    blockTypeInfo.textContent = block?.BLOCK_TYPE || "UNKNOWN";
-  }
-});
-
 itemSelectHud?.addEventListener("change", () => {
   const nextId = Number(itemSelectHud.value);
   if (state.creativeEnabled) {
@@ -2051,7 +2042,7 @@ function update() {
 
   // use logical (CSS) canvas size rather than the scaled width/height
   const cssW = canvas.clientWidth || window.innerWidth;
-  const cssH = canvas.clientHeight || Math.max(1, window.innerHeight - (gameTopbar ? gameTopbar.offsetHeight : 58));
+  const cssH = canvas.clientHeight || Math.max(1, window.innerHeight);
   const viewportWorldW = cssW / state.camera.zoom;
   const viewportWorldH = cssH / state.camera.zoom;
   state.camera.x = state.me.x * TILE_SIZE - viewportWorldW / 2;
@@ -2446,18 +2437,6 @@ function drawTransientWorldTexts() {
   const now = performance.now();
   chatBubbles.drawTransientSystemBubbles(now);
 }
-
-zoomOutBtn?.addEventListener("click", () => {
-  adjustCameraZoom(-CAMERA_ZOOM_STEP);
-});
-
-zoomInBtn?.addEventListener("click", () => {
-  adjustCameraZoom(CAMERA_ZOOM_STEP);
-});
-
-zoomResetBtn?.addEventListener("click", () => {
-  setCameraZoom(1);
-});
 
 function loop() {
   const now = performance.now();

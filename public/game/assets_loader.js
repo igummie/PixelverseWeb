@@ -385,12 +385,14 @@ export function createAssetsLoaderController({ state, settings, elements, callba
 
     const placeableBlocks = Array.from(state.blockDefs.values()).filter((block) => block.PLACEABLE);
 
-    blockSelect.innerHTML = "";
-    for (const block of placeableBlocks) {
-      const option = document.createElement("option");
-      option.value = String(block.ID);
-      option.textContent = `${block.ID} - ${block.NAME}`;
-      blockSelect.appendChild(option);
+    if (blockSelect) {
+      blockSelect.innerHTML = "";
+      for (const block of placeableBlocks) {
+        const option = document.createElement("option");
+        option.value = String(block.ID);
+        option.textContent = `${block.ID} - ${block.NAME}`;
+        blockSelect.appendChild(option);
+      }
     }
 
     if (placeableBlocks.length > 0) {
@@ -401,12 +403,16 @@ export function createAssetsLoaderController({ state, settings, elements, callba
         if (blockSelect) {
           blockSelect.value = String(placeableBlocks[0].ID);
         }
-        blockTypeInfo.textContent = placeableBlocks[0].BLOCK_TYPE;
+        if (blockTypeInfo) {
+          blockTypeInfo.textContent = placeableBlocks[0].BLOCK_TYPE;
+        }
       } else if (blockSelect && state.selectedItemType === "block") {
         // Keep the UI in sync if the user already has a block selected.
         blockSelect.value = String(state.selectedItemId);
         const currentBlock = state.blockDefs.get(Number(state.selectedItemId));
-        blockTypeInfo.textContent = currentBlock?.BLOCK_TYPE || "";
+        if (blockTypeInfo) {
+          blockTypeInfo.textContent = currentBlock?.BLOCK_TYPE || "";
+        }
       }
     }
 

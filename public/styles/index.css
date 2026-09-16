@@ -164,33 +164,38 @@
         align-items: stretch;
         justify-content: flex-start;
         overflow: hidden;
-        --hud-height: 58px;
+        --hud-height: 0px;
       }
       #gameScreen.active {
         display: flex;
       }
 
       #gameHud {
-        width: 100%;
-        position: relative;
-        z-index: 6;
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        pointer-events: none;
       }
 
-      .gameTopbar {
-        min-height: 58px;
-        width: 100%;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding: 10px 12px;
+      .gemHud {
+        position: fixed;
+        top: 30vh;
+        right: 14px;
+        z-index: 31;
+        min-width: 92px;
+        padding: 8px 12px;
         box-sizing: border-box;
-        background: #1f2937;
-        border-bottom: 1px solid #374151;
-        position: relative;
-        z-index: 5;
+        color: #fde68a;
+        background: rgba(17, 24, 39, 0.88);
+        border: 1px solid rgba(250, 204, 21, 0.55);
+        border-radius: 7px;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+        font-size: 13px;
+        font-weight: 700;
+        text-align: center;
+        transform: translateY(-50%);
+        white-space: nowrap;
+        pointer-events: auto;
       }
 
       .creativeHudControl {
@@ -201,14 +206,6 @@
 
       .hidden {
         display: none !important;
-      }
-
-      .spacer {
-        margin-left: auto;
-        font-size: 12px;
-        opacity: 0.9;
-        white-space: nowrap;
-        flex: 1;
       }
 
       #game {
@@ -527,14 +524,13 @@
       }
 
       .pauseOverlay {
-        position: absolute;
+        position: fixed;
         inset: 0;
         z-index: 40;
         display: flex;
         align-items: center;
         justify-content: center;
         background: rgba(2, 6, 23, 0.72);
-        backdrop-filter: blur(3px);
         pointer-events: auto;
       }
 
@@ -553,12 +549,85 @@
         box-shadow: 0 18px 48px rgba(2, 6, 23, 0.5);
       }
 
+      .pauseLayout {
+        position: relative;
+        width: min(320px, calc(100vw - 28px));
+      }
+
       .pauseTitle {
         font-size: 18px;
         font-weight: 700;
         letter-spacing: 0.02em;
         text-align: center;
         margin-bottom: 4px;
+      }
+
+      .pauseWorldInfo {
+        position: absolute;
+        top: 0;
+        right: calc(100% + 14px);
+        width: min(270px, 42vw);
+        padding: 18px 16px;
+        box-sizing: border-box;
+        border: 1px solid #0f766e;
+        border-radius: 12px;
+        background: #123b40;
+        color: #ccfbf1;
+        box-shadow: 0 18px 48px rgba(2, 6, 23, 0.38);
+        text-align: left;
+      }
+
+      .pauseInfoLabel {
+        margin-bottom: 7px;
+        color: #99f6e4;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .pauseWorldName {
+        overflow: hidden;
+        font-size: 20px;
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pausePlayerCount {
+        margin-top: 4px;
+        color: #a7f3d0;
+        font-size: 12px;
+      }
+
+      .pauseWorldCreated {
+        margin-top: 3px;
+        color: #99f6e4;
+        font-size: 11px;
+      }
+
+      .pauseWorldBio {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(153, 246, 228, 0.28);
+        color: #d1fae5;
+        font-size: 13px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      @media (max-width: 640px) {
+        .pauseLayout {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+
+        .pauseWorldInfo,
+        .pausePanel {
+          position: static;
+          width: min(320px, calc(100vw - 28px));
+        }
       }
 
       .debugHead {
