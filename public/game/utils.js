@@ -13,6 +13,16 @@ export function clampCameraZoom(value, minZoom, maxZoom) {
   return Math.max(minZoom, Math.min(maxZoom, value));
 }
 
+export function getMouseTile(state) {
+  const zoom = Math.max(0.0001, Number(state?.camera?.zoom) || 1);
+  const mouseWorldX = Number(state?.camera?.x || 0) + Number(state?.mouse?.x || 0) / zoom;
+  const mouseWorldY = Number(state?.camera?.y || 0) + Number(state?.mouse?.y || 0) / zoom;
+  return {
+    x: Math.floor(mouseWorldX / TILE_SIZE),
+    y: Math.floor(mouseWorldY / TILE_SIZE),
+  };
+}
+
 export function normalizeAnimFrame(entry) {
   if (!entry || typeof entry !== "object") {
     return null;

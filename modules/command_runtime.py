@@ -83,6 +83,7 @@ async def apply_command_result(
     world: dict[str, Any],
     client_id: str,
     command_sender_original: tuple[float, float] | None,
+    mouse_tile: dict[str, Any] | None,
     ws_send: Callable[..., Awaitable[Any]],
     broadcast_to_world: Callable[..., Awaitable[Any]],
     clear_tile_damage: Callable[..., list[dict[str, Any]]],
@@ -190,6 +191,7 @@ async def apply_command_result(
             choose_event_location=_choose_event_location,
             schedule_world_save=schedule_world_save,
             command_sender_original=command_sender_original,
+            mouse_tile=mouse_tile,
         )
 
     door_move = command_result.get("door_move")

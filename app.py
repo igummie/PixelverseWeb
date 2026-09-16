@@ -1713,6 +1713,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         world=world,
                         client_id=client_id,
                         command_sender_original=command_sender_original,
+                        mouse_tile=msg.get("mouseTile"),
                         ws_send=ws_send,
                         broadcast_to_world=broadcast_to_world,
                         clear_tile_damage=clear_tile_damage,

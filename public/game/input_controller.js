@@ -1,5 +1,7 @@
+import { getMouseTile } from "./utils.js";
+
 export function createInputController({ state, screens, canvas, constants, actions }) {
-  const { CAMERA_ZOOM_STEP, TILE_SIZE } = constants;
+  const { CAMERA_ZOOM_STEP } = constants;
   const {
     setChatInputOpen,
     setChatLogOpen,
@@ -48,7 +50,8 @@ export function createInputController({ state, screens, canvas, constants, actio
         if (state.chatInputOpen) {
           const nextMessage = String(actions.getChatInputValue?.() || "").trim();
           if (nextMessage.length > 0) {
-            sendWs({ type: "chat_message", message: nextMessage });
+            const mouseTile = state.world ? getMouseTile(state) : null;
+            sendWs({ type: "chat_message", message: nextMessage, mouseTile });
           }
           setChatInputOpen(false);
         } else {
@@ -134,10 +137,9 @@ export function createInputController({ state, screens, canvas, constants, actio
         event.preventDefault();
       }
 
-      const worldMouseX = state.camera.x + state.mouse.x / state.camera.zoom;
-      const worldMouseY = state.camera.y + state.mouse.y / state.camera.zoom;
-      const tileX = Math.floor(worldMouseX / TILE_SIZE);
-      const tileY = Math.floor(worldMouseY / TILE_SIZE);
+      const mouseTile = getMouseTile(state);
+      const tileX = mouseTile.x;
+      const tileY = mouseTile.y;
 
       if (tileX < 0 || tileX >= state.world.width || tileY < 0 || tileY >= state.world.height) {
         return;

@@ -1,3 +1,5 @@
+import { getMouseTile } from "./utils.js";
+
 export function createHudController({ state, screens, canvas, ctx, elements, settings }) {
   const {
     zoomLevel,
@@ -19,7 +21,6 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
   } = elements;
 
   const {
-    TILE_SIZE,
     CHAT_DRAWER_HANDLE_PEEK,
     CHAT_INPUT_PANEL_HEIGHT,
     CHAT_LOG_DRAWER_HEIGHT,
@@ -79,10 +80,9 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     const worldH = Number(state.world?.height || 0);
     const playerTileX = Math.floor(state.me.x);
     const playerTileY = Math.floor(state.me.y);
-    const mouseWorldX = state.camera.x + state.mouse.x / Math.max(0.0001, state.camera.zoom);
-    const mouseWorldY = state.camera.y + state.mouse.y / Math.max(0.0001, state.camera.zoom);
-    const hoveredTileX = Math.floor(mouseWorldX / TILE_SIZE);
-    const hoveredTileY = Math.floor(mouseWorldY / TILE_SIZE);
+    const mouseTile = getMouseTile(state);
+    const hoveredTileX = mouseTile.x;
+    const hoveredTileY = mouseTile.y;
     const hoverTileInBounds =
       hoveredTileX >= 0 && hoveredTileX < worldW && hoveredTileY >= 0 && hoveredTileY < worldH;
     const hoverTileText = hoverTileInBounds ? `${hoveredTileX}, ${hoveredTileY}` : "out";

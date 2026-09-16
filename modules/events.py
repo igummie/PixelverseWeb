@@ -76,6 +76,7 @@ async def apply_event_effects(
     choose_event_location: Callable[[dict[str, Any], str], tuple[int, int]],
     schedule_world_save: Callable[..., Awaitable[None]],
     command_sender_original: tuple[float, float] | None = None,
+    mouse_tile: dict[str, Any] | None = None,
 ) -> None:
     """Perform side effects for a triggered event.
 
@@ -209,8 +210,19 @@ async def apply_event_effects(
 
         mode = str(event_trigger.get("SPAWN_MODE", "any")).lower()
         # allow pinata-specific "spawn above" to translate to above mode
-        if mode != "player" and bool(event_trigger.get("SPAWN_ABOVE", False)):
+        if mode not in {"player", "mouse"} and bool(event_trigger.get("SPAWN_ABOVE", False)):
             mode = "above"
+        if mode == "mouse":
+            base_x = base_y = None
+
+        if mode == "mouse" and isinstance(mouse_tile, dict):
+            try:
+                candidate_x = int(mouse_tile["x"])
+                candidate_y = int(mouse_tile["y"])
+                if 0 <= candidate_x < width and 0 <= candidate_y < height:
+                    base_x, base_y = candidate_x, candidate_y
+            except (KeyError, TypeError, ValueError):
+                pass
 
         if base_x is None or base_y is None:
             if width > 0 and height > 0:
@@ -219,7 +231,7 @@ async def apply_event_effects(
             else:
                 base_x = base_y = 0
 
-        if mode != "player":
+        if mode not in {"player", "mouse"}:
             base_x, base_y = choose_event_location(world, mode)
 
         strength = int(event_trigger.get("STRENGTH", 1))
