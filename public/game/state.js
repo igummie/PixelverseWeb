@@ -43,7 +43,7 @@ export const state = {
   onGround: false,
   jumpQueued: false,
   worldRender: null,
-  crackAtlas: null,
+  crackAtlases: [],
   tileDamage: new Map(),
   chatLogLines: [],
   chatLogOpen: false,
@@ -81,6 +81,11 @@ export const state = {
   debugHitboxesEnabled: false,
   creativeEnabled: false,
   creativePlaceType: "block",
+  // item chosen from the creative item picker popup; separate from the
+  // regular inventory selection so creative placement isn't limited to
+  // items the player actually owns.
+  creativeSelectedItemId: -1,
+  creativeSelectedItemType: "block",
   debugFps: 0,
   debugPingMs: null,
   netSimPingMs: 0,

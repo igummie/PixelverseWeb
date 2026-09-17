@@ -4,7 +4,7 @@ import * as worldUtils from "./world_utils.js";
 export function createAssetsLoaderController({ state, settings, elements, callbacks }) {
   const {
     TILE_SIZE,
-    CRACK_ATLAS_SRC,
+    CRACK_ATLAS_SRCS,
     CRACK_ATLAS_COLUMNS,
     CRACK_ATLAS_ROWS,
     TEXTURE47_COLS,
@@ -117,7 +117,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     state.seedDropSpriteCache.clear();
     state.treeSpriteCache.clear();
     state.texture47.clear();
-    state.crackAtlas = null;
+    state.crackAtlases = [];
 
     const atlasSpecsById = new Map();
 
@@ -165,7 +165,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       }
     }
 
-    const totalAssets = atlasSpecs.length + 1 + texture47AtlasIds.size;
+    const totalAssets = atlasSpecs.length + CRACK_ATLAS_SRCS.length + texture47AtlasIds.size;
     let loadedAssets = 0;
     const reportAssetProgress = (label) => {
       loadedAssets += 1;
@@ -259,20 +259,23 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       }
     }
 
-    try {
-      const crackImage = await loadImage(CRACK_ATLAS_SRC);
-      state.crackAtlas = {
-        image: crackImage,
-        columns: CRACK_ATLAS_COLUMNS,
-        rows: CRACK_ATLAS_ROWS,
-        frameWidth: Math.floor(crackImage.width / CRACK_ATLAS_COLUMNS),
-        frameHeight: Math.floor(crackImage.height / CRACK_ATLAS_ROWS),
-      };
-    } catch {
-      state.crackAtlas = null;
-    } finally {
-      reportAssetProgress("cracks atlas");
-    }
+    const crackAtlases = await Promise.all(CRACK_ATLAS_SRCS.map(async (src) => {
+      try {
+        const crackImage = await loadImage(src);
+        return {
+          image: crackImage,
+          columns: CRACK_ATLAS_COLUMNS,
+          rows: CRACK_ATLAS_ROWS,
+          frameWidth: Math.floor(crackImage.width / CRACK_ATLAS_COLUMNS),
+          frameHeight: Math.floor(crackImage.height / CRACK_ATLAS_ROWS),
+        };
+      } catch {
+        return null;
+      } finally {
+        reportAssetProgress("cracks atlas");
+      }
+    }));
+    state.crackAtlases = crackAtlases.filter(Boolean);
 
     for (const atlasId of texture47AtlasIds) {
       try {

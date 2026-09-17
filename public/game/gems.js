@@ -7,18 +7,19 @@ export function getGemFrameForValue(value, gemValueToFrame) {
   return gemValueToFrame[1];
 }
 
-export function getGemDrawSizeForValue(value, zoom) {
+export function getGemDrawSizeForValue(value, zoom, tileSize = 32) {
   const v = Math.max(1, Math.floor(Number(value) || 1));
-  let baseSize = 12;
+  // ratios preserve the original look tuned for a 32px tile
+  let ratio = 0.375;
   if (v >= 100) {
-    baseSize = 16;
+    ratio = 0.5;
   } else if (v >= 50) {
-    baseSize = 15;
+    ratio = 0.46875;
   } else if (v >= 10) {
-    baseSize = 14;
+    ratio = 0.4375;
   } else if (v >= 5) {
-    baseSize = 13;
+    ratio = 0.40625;
   }
 
-  return Math.max(8, baseSize * zoom);
+  return Math.max(8, ratio * tileSize * zoom);
 }

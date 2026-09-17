@@ -29,12 +29,16 @@ export function createDamageOverlayController({ state, ctx, canvas, settings }) 
       return;
     }
 
-    state.tileDamage.set(getTileDamageKey(x, y, layer), {
+    const damageKey = getTileDamageKey(x, y, layer);
+    const existingDamage = state.tileDamage.get(damageKey);
+    state.tileDamage.set(damageKey, {
       x,
       y,
       layer,
       hits,
       maxHits,
+      crackAtlasIndex: existingDamage?.crackAtlasIndex
+        ?? Math.floor(Math.random() * state.crackAtlases.length),
     });
   }
 
@@ -53,13 +57,9 @@ export function createDamageOverlayController({ state, ctx, canvas, settings }) 
   }
 
   function drawDamageOverlays() {
-    if (!state.world || state.tileDamage.size === 0 || !state.crackAtlas?.image) {
+    if (!state.world || state.tileDamage.size === 0 || state.crackAtlases.length === 0) {
       return;
     }
-
-    const frameWidth = Math.max(1, Number(state.crackAtlas.frameWidth) || 1);
-    const frameHeight = Math.max(1, Number(state.crackAtlas.frameHeight) || 1);
-    const frameCount = Math.max(1, Number(state.crackAtlas.columns) || 1);
 
     for (const damage of state.tileDamage.values()) {
       const progress = Math.max(0, Math.min(1, damage.hits / damage.maxHits));
@@ -80,13 +80,18 @@ export function createDamageOverlayController({ state, ctx, canvas, settings }) 
         continue;
       }
 
+      const crackAtlas = state.crackAtlases[damage.crackAtlasIndex] || state.crackAtlases[0];
+      const frameWidth = Math.max(1, Number(crackAtlas.frameWidth) || 1);
+      const frameHeight = Math.max(1, Number(crackAtlas.frameHeight) || 1);
+      const frameCount = Math.max(1, Number(crackAtlas.columns) || 1);
+
       const frameIndex = Math.max(0, Math.min(frameCount - 1, Math.ceil(progress * frameCount) - 1));
       const sourceX = frameIndex * frameWidth;
       const sourceY = 0;
 
       ctx.globalAlpha = 0.35 + progress * 0.65;
       ctx.drawImage(
-        state.crackAtlas.image,
+        crackAtlas.image,
         sourceX,
         sourceY,
         frameWidth,

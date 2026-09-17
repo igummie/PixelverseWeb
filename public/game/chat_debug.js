@@ -21,6 +21,11 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     debugSimJitterInput,
     debugSimLossInput,
     debugInventorySlotsInput, // new field
+    creativeChooseItemBtn,
+    creativeItemModal,
+    creativeItemModalGrid,
+    creativeItemSearchInput,
+    creativeItemModalCloseBtn,
   } = elements;
 
   const {
@@ -41,7 +46,82 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
     getLoadingChatDrawerHiddenOffset,
     updateDebugUi,
     updateDebugInfo,
+    updateCreativeHud,
+    getItemDropSprite,
   } = actions;
+
+  function closeCreativeItemPicker() {
+    creativeItemModal?.classList.add("hidden");
+  }
+
+  function selectCreativeItem(itemId, itemType) {
+    state.creativeSelectedItemId = itemId;
+    state.creativeSelectedItemType = itemType;
+    updateCreativeHud?.();
+    closeCreativeItemPicker();
+  }
+
+  function renderCreativeItemPicker() {
+    if (!creativeItemModalGrid) {
+      return;
+    }
+
+    const filterText = String(creativeItemSearchInput?.value || "").trim().toLowerCase();
+    creativeItemModalGrid.innerHTML = "";
+
+    const entries = [];
+    for (const block of state.blockDefs.values()) {
+      const itemId = Number(block.ITEM_ID);
+      entries.push({ itemId, itemType: "block", name: String(block.NAME || `Block ${itemId}`) });
+    }
+    for (const seed of state.seedDefs.values()) {
+      const itemId = Number(seed.ITEM_ID);
+      entries.push({ itemId, itemType: "seed", name: String(seed.NAME || `Seed ${itemId}`) });
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of entries) {
+      if (filterText && !entry.name.toLowerCase().includes(filterText)) {
+        continue;
+      }
+
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "creativeItemCard";
+      if (entry.itemId === state.creativeSelectedItemId && entry.itemType === state.creativeSelectedItemType) {
+        card.classList.add("selected");
+      }
+
+      const sprite = getItemDropSprite?.(entry.itemId, entry.itemType);
+      if (sprite) {
+        const icon = document.createElement("img");
+        icon.className = "creativeItemIcon";
+        icon.alt = "";
+        icon.src = sprite.toDataURL("image/png");
+        card.appendChild(icon);
+      }
+
+      const label = document.createElement("span");
+      label.className = "creativeItemName";
+      label.textContent = entry.name;
+      card.appendChild(label);
+
+      card.title = entry.name;
+      card.addEventListener("click", () => {
+        selectCreativeItem(entry.itemId, entry.itemType);
+      });
+
+      creativeItemModalGrid.appendChild(card);
+    }
+  }
+
+  function openCreativeItemPicker() {
+    if (creativeItemSearchInput) {
+      creativeItemSearchInput.value = "";
+    }
+    renderCreativeItemPicker();
+    creativeItemModal?.classList.remove("hidden");
+  }
 
   function stopPingTimer() {
     if (state.pingTimerId) {
@@ -375,6 +455,27 @@ export function createChatDebugController({ state, screens, canvas, ctx, element
       state.creativeEnabled = !!debugCreativeToggle.checked;
       updateDebugUi();
       updateDebugInfo(true);
+      if (!state.creativeEnabled) {
+        closeCreativeItemPicker();
+      }
+    });
+
+    creativeChooseItemBtn?.addEventListener("click", () => {
+      openCreativeItemPicker();
+    });
+
+    creativeItemModalCloseBtn?.addEventListener("click", () => {
+      closeCreativeItemPicker();
+    });
+
+    creativeItemSearchInput?.addEventListener("input", () => {
+      renderCreativeItemPicker();
+    });
+
+    creativeItemModal?.addEventListener("click", (event) => {
+      if (event.target === creativeItemModal) {
+        closeCreativeItemPicker();
+      }
     });
 
     debugPingToolsToggle?.addEventListener("change", () => {

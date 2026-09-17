@@ -75,6 +75,10 @@
       <div id="gameHud">
         <div id="gameStatus" class="hidden">Connecting...</div>
         <div id="gemCount" class="gemHud" aria-label="Gems">Gems: 0</div>
+        <div id="creativeHud" class="creativeHud hidden">
+          <span id="creativeSelectedLabel" class="creativeSelectedLabel">No item selected</span>
+          <button id="creativeChooseItemBtn" type="button">Choose Item</button>
+        </div>
         </div>
         <div id="pauseOverlay" class="pauseOverlay hidden" role="dialog" aria-modal="true" aria-label="Pause Menu">
           <div class="pauseLayout">
@@ -168,6 +172,17 @@
         <div id="newsBody" class="newsBody"></div>
         <div id="newsActions" class="newsActions"></div>
       </article>
+    </div>
+
+    <div id="creativeItemModal" class="creativeItemModalBackdrop hidden" role="dialog" aria-modal="true" aria-labelledby="creativeItemModalTitle">
+      <div class="creativeItemModalCard">
+        <div class="creativeItemModalHeader">
+          <strong id="creativeItemModalTitle">Choose Creative Item</strong>
+          <button id="creativeItemModalCloseBtn" type="button">Close</button>
+        </div>
+        <input id="creativeItemSearchInput" class="creativeItemSearchInput" placeholder="Search items..." />
+        <div id="creativeItemModalGrid" class="creativeItemModalGrid"></div>
+      </div>
     </div>
 
     <script src="/build/game.bundle.js"></script>

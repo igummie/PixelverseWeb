@@ -10,7 +10,7 @@ import {
   INVENTORY_DRAWER_HANDLE_PEEK,
   CRACK_ATLAS_COLUMNS,
   CRACK_ATLAS_ROWS,
-  CRACK_ATLAS_SRC,
+  CRACK_ATLAS_SRCS,
   DEBUG_INFO_REFRESH_MS,
   DEBUG_PING_INTERVAL_MS,
   DEFAULT_TEXTURE47_VALID_MASKS,
@@ -134,6 +134,14 @@ const debugNetSimStats = document.getElementById("debugNetSimStats");
 const debugSimPingInput = document.getElementById("debugSimPingInput");
 const debugSimJitterInput = document.getElementById("debugSimJitterInput");
 const debugSimLossInput = document.getElementById("debugSimLossInput");
+const debugInventorySlotsInput = document.getElementById("debugInventorySlotsInput");
+const creativeHud = document.getElementById("creativeHud");
+const creativeSelectedLabel = document.getElementById("creativeSelectedLabel");
+const creativeChooseItemBtn = document.getElementById("creativeChooseItemBtn");
+const creativeItemModal = document.getElementById("creativeItemModal");
+const creativeItemModalGrid = document.getElementById("creativeItemModalGrid");
+const creativeItemSearchInput = document.getElementById("creativeItemSearchInput");
+const creativeItemModalCloseBtn = document.getElementById("creativeItemModalCloseBtn");
 const pauseOverlay = document.getElementById("pauseOverlay");
 const pauseWorldName = document.getElementById("pauseWorldName");
 const pausePlayerCount = document.getElementById("pausePlayerCount");
@@ -262,7 +270,7 @@ const assetsLoader = createAssetsLoaderController({
   state,
   settings: {
     TILE_SIZE,
-    CRACK_ATLAS_SRC,
+    CRACK_ATLAS_SRCS,
     CRACK_ATLAS_COLUMNS,
     CRACK_ATLAS_ROWS,
     TEXTURE47_COLS,
@@ -372,7 +380,8 @@ const hud = createHudController({
     debugGridToggle,
     debugHitboxesToggle,
     debugCreativeToggle,
-    creativeHudControls: [],
+    creativeHud,
+    creativeSelectedLabel,
     chatDrawer,
     chatInputPanel,
     chatInput,
@@ -418,6 +427,11 @@ const chatDebug = createChatDebugController({
     debugSimJitterInput,
     debugSimLossInput,
     debugInventorySlotsInput,
+    creativeChooseItemBtn,
+    creativeItemModal,
+    creativeItemModalGrid,
+    creativeItemSearchInput,
+    creativeItemModalCloseBtn,
   },
   settings: {
     TILE_SIZE,
@@ -436,6 +450,8 @@ const chatDebug = createChatDebugController({
     getLoadingChatDrawerHiddenOffset,
     updateDebugUi,
     updateDebugInfo,
+    updateCreativeHud: hud.updateCreativeHud,
+    getItemDropSprite: assetsLoader.getItemDropSprite,
     renderInventory: inventory.renderInventoryDrawer,
   },
 });
@@ -766,12 +782,12 @@ const inputController = createInputController({
         return null;
       }
 
-      const itemId = Number(state.selectedItemId);
+      const itemId = Number(state.creativeSelectedItemId);
       if (!Number.isFinite(itemId) || itemId < 0) {
         return null;
       }
       return {
-        itemType: utils.normalizeItemType(state.selectedItemType || "seed", "seed"),
+        itemType: utils.normalizeItemType(state.creativeSelectedItemType || "block", "block"),
         itemId: Math.floor(itemId),
       };
     },
@@ -2250,7 +2266,7 @@ function drawGemDrops() {
     const bobOffset = Math.sin(now * (drop.bobSpeed || GEM_BOB_BASE_SPEED) + (drop.bobPhase || 0))
       * (drop.bobAmplitude || GEM_BOB_BASE_AMPLITUDE_PX)
       * state.camera.zoom;
-    const drawSize = getGemDrawSizeForValue(drop.value, state.camera.zoom);
+    const drawSize = getGemDrawSizeForValue(drop.value, state.camera.zoom, TILE_SIZE);
     const drawX = screenX - drawSize / 2;
     const drawY = screenY - drawSize / 2 + bobOffset;
 
@@ -2298,7 +2314,8 @@ function drawSeedDrops() {
       * (drop.bobAmplitude || GEM_BOB_BASE_AMPLITUDE_PX)
       * state.camera.zoom;
     const baseSize = Math.max(sprite.width, sprite.height, 1);
-    const drawSize = Math.max(8, 12 * state.camera.zoom);
+    // ratio preserves the original look tuned for a 32px tile
+    const drawSize = Math.max(8, TILE_SIZE * 0.375 * state.camera.zoom);
     const scale = drawSize / baseSize;
     const drawWidth = sprite.width * scale;
     const drawHeight = sprite.height * scale;

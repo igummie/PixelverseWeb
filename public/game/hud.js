@@ -1,4 +1,4 @@
-import { getMouseTile } from "./utils.js";
+import { getMouseTile, getItemDisplayName } from "./utils.js";
 
 export function createHudController({ state, screens, canvas, ctx, elements, settings }) {
   const {
@@ -8,6 +8,8 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     debugGridToggle,
     debugHitboxesToggle,
     debugCreativeToggle,
+    creativeHud,
+    creativeSelectedLabel,
     chatDrawer,
     chatInputPanel,
     chatInput,
@@ -46,6 +48,20 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
     }
     if (debugInventorySlotsInput) {
       debugInventorySlotsInput.value = String(Number(state.inventorySlotLimit) || 20);
+    }
+    updateCreativeHud();
+  }
+
+  function updateCreativeHud() {
+    creativeHud?.classList.toggle("hidden", !state.creativeEnabled);
+    if (!creativeSelectedLabel) {
+      return;
+    }
+    if (state.creativeSelectedItemId >= 0) {
+      const itemName = getItemDisplayName(state.creativeSelectedItemId, state.creativeSelectedItemType, state);
+      creativeSelectedLabel.textContent = `Item: ${itemName}`;
+    } else {
+      creativeSelectedLabel.textContent = "No item selected";
     }
   }
 
@@ -272,6 +288,7 @@ export function createHudController({ state, screens, canvas, ctx, elements, set
   return {
     updateGemUi,
     updateDebugUi,
+    updateCreativeHud,
     updateDebugInfo,
     getChatDrawerMaxHeight,
     getChatDrawerHiddenOffset,

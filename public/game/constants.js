@@ -1,4 +1,4 @@
-export const TILE_SIZE = 32;
+export const TILE_SIZE = 64;
 export const HORIZONTAL_SPEED = 7.5;
 export const GRAVITY = 28;
 export const JUMP_SPEED = 11;
@@ -26,7 +26,11 @@ export const INVENTORY_DRAWER_HEIGHT = 248;
 export const INVENTORY_DRAWER_HANDLE_PEEK = 16;
 export const INVENTORY_GRID_COLUMNS = 20; /* default columns used for some UI logic */
 export const INVENTORY_GRID_SLOTS = 20; /* initial slot limit before server override */
-export const CRACK_ATLAS_SRC = "/assets/atlases/cracks_atlas.svg";
+export const CRACK_ATLAS_SRCS = [
+  "/assets/atlases/cracks_atlas1.png",
+  "/assets/atlases/cracks_atlas2.png",
+  "/assets/atlases/cracks_atlas3.png",
+];
 export const CRACK_ATLAS_COLUMNS = 4;
 export const CRACK_ATLAS_ROWS = 1;
 export const GEM_ATLAS_ID = "gems";

@@ -12,6 +12,12 @@
       "NAME": "GEMS_ATLAS",
       "SRC": "/assets/atlases/gems_atlas.svg",
       "TILE_SIZE": 16
+    },
+    {
+      "ATLAS_ID": "blocks1",
+      "NAME": "BLOCKS1",
+      "SRC": "/assets/atlases/BLOCKS1.png",
+      "TILE_SIZE": 64
     }
   ],
   "blocks": [
@@ -126,12 +132,12 @@
       "ITEM_ID": 5,
       "ITEM_TYPE": "block",
       "ID": 5,
-      "NAME": "GREEN_BLOCK",
+      "NAME": "TEMP1",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": {
-        "x": 80,
-        "y": 0,
+        "x": 48,
+        "y": 16,
         "w": 16,
         "h": 16
       },
@@ -145,14 +151,14 @@
       "ITEM_ID": 6,
       "ITEM_TYPE": "block",
       "ID": 6,
-      "NAME": "BLUE_BLOCK",
+      "NAME": "TEMP2",
       "BLOCK_TYPE": "SOLID",
-      "ATLAS_ID": 0,
+      "ATLAS_ID": "blocks1",
       "ATLAS_TEXTURE": {
-        "x": 96,
+        "x": 384,
         "y": 0,
-        "w": 16,
-        "h": 16
+        "w": 64,
+        "h": 64
       },
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.12,
@@ -164,12 +170,12 @@
       "ITEM_ID": 7,
       "ITEM_TYPE": "block",
       "ID": 7,
-      "NAME": "YELLOW_BLOCK",
+      "NAME": "TEMP3",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": {
-        "x": 112,
-        "y": 0,
+        "x": 80,
+        "y": 16,
         "w": 16,
         "h": 16
       },
@@ -183,11 +189,11 @@
       "ITEM_ID": 8,
       "ITEM_TYPE": "block",
       "ID": 8,
-      "NAME": "PURPLE_BLOCK",
+      "NAME": "TEMP4",
       "BLOCK_TYPE": "SOLID",
       "ATLAS_ID": 0,
       "ATLAS_TEXTURE": {
-        "x": 0,
+        "x": 96,
         "y": 16,
         "w": 16,
         "h": 16
@@ -275,6 +281,248 @@
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
       "BREAKABLE": false
+    },
+    {
+      "ITEM_ID": 18,
+      "ITEM_TYPE": "block",
+      "ID": 18,
+      "NAME": "WHITE_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 19,
+      "ITEM_TYPE": "block",
+      "ID": 19,
+      "NAME": "RED_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 20,
+      "ITEM_TYPE": "block",
+      "ID": 20,
+      "NAME": "ORANGE_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 128,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 21,
+      "ITEM_TYPE": "block",
+      "ID": 21,
+      "NAME": "YELLOW_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 192,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 22,
+      "ITEM_TYPE": "block",
+      "ID": 22,
+      "NAME": "GREEN_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 256,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 23,
+      "ITEM_TYPE": "block",
+      "ID": 23,
+      "NAME": "TEAL_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 320,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 24,
+      "ITEM_TYPE": "block",
+      "ID": 24,
+      "NAME": "BLUE_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 384,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 25,
+      "ITEM_TYPE": "block",
+      "ID": 25,
+      "NAME": "PURPLE_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 448,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 26,
+      "ITEM_TYPE": "block",
+      "ID": 26,
+      "NAME": "GREY_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 0,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 27,
+      "ITEM_TYPE": "block",
+      "ID": 27,
+      "NAME": "BLACK_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 28,
+      "ITEM_TYPE": "block",
+      "ID": 28,
+      "NAME": "BROWN_BLOCK",
+      "BLOCK_TYPE": "SOLID",
+      "ATLAS_ID": "blocks1",
+      "ATLAS_TEXTURE": {
+        "x": 128,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
     }
   ]
 }

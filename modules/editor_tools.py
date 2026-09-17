@@ -305,7 +305,14 @@ def compact_block_for_storage(block: dict[str, Any]) -> dict[str, Any]:
 
     texture47_id = normalize_texture47_id(block.get("TEXTURE47_ID"))
 
-    uses_texture47 = bool(texture47_id) or (isinstance(atlas_id_value, str) and bool(str(atlas_id_value).strip()))
+    has_atlas_texture_rect = normalize_atlas_texture_rect(block.get("ATLAS_TEXTURE")) is not None
+
+    # A string ATLAS_ID alone doesn't mean texture47 -- regular atlases (like a
+    # user-uploaded PNG atlas) can also have string IDs. Only treat the block
+    # as texture47 when it has no explicit atlas texture rect to fall back on.
+    uses_texture47 = bool(texture47_id) or (
+        isinstance(atlas_id_value, str) and bool(str(atlas_id_value).strip()) and not has_atlas_texture_rect
+    )
 
     normalized_values: dict[str, Any] = {}
     for key, value in block.items():

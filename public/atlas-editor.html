@@ -1216,7 +1216,11 @@
           return;
         }
 
-        if (typeof assignment.atlasId === "string") {
+        // A string atlasId alone doesn't mean texture47 -- regular atlases
+        // (like a user-uploaded PNG atlas) can also have string IDs. Only
+        // treat it as texture47 if it isn't a known regular atlas.
+        const isRegularAtlas = state.atlasByKey.has(atlasKey(assignment.atlasId));
+        if (typeof assignment.atlasId === "string" && !isRegularAtlas) {
           drawPreviewPlaceholder(canvas, "47");
           const data = await getTexture47PreviewData(assignment.atlasId);
           if (!data) {
