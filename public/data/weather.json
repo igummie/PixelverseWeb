@@ -22,7 +22,8 @@
           "LOOP_X": true,
           "LOOP_Y": false,
           "TILE": false,
-          "WRAP_BUFFER": 500.0
+          "WRAP_BUFFER": 500.0,
+          "IN_FRONT": false
         },
         {
           "TYPE": "shape",
@@ -41,7 +42,8 @@
           "LOOP_X": true,
           "LOOP_Y": true,
           "TILE": false,
-          "WRAP_BUFFER": 500.0
+          "WRAP_BUFFER": 500.0,
+          "IN_FRONT": false
         },
         {
           "TYPE": "atlas",
@@ -60,6 +62,7 @@
           "LOOP_Y": true,
           "TILE": false,
           "WRAP_BUFFER": 20.0,
+          "IN_FRONT": true,
           "OPACITY": 0.25,
           "SCALE": 6.0,
           "ROTATION": 137.0,

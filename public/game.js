@@ -1935,7 +1935,9 @@ function update() {
       if (def && Array.isArray(def.LAYERS)) {
         state.weatherOffsets = state.weatherOffsets || [];
         def.LAYERS.forEach((layer, idx) => {
-          const offs = state.weatherOffsets[idx] || { x: 0, y: 0 };
+          // seed the runtime offset with the layer's authored starting position
+          // (atlas layers store this in offsetX/offsetY) so it doesn't always start at 0,0
+          const offs = state.weatherOffsets[idx] || { x: Number(layer.offsetX) || 0, y: Number(layer.offsetY) || 0 };
           const px = Number(layer.PARALLAX_X || 1);
           const py = Number(layer.PARALLAX_Y || 1);
           const sx = Number(layer.SCROLL_X || 0);
