@@ -179,7 +179,7 @@ button.secondary {
 
 .fruitDropColumns {
   display: grid;
-  grid-template-columns: minmax(120px, 1.35fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(72px, 0.8fr) minmax(72px, 0.8fr) auto;
+  grid-template-columns: minmax(120px, 1.35fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(72px, 0.8fr) auto;
   gap: 10px;
   margin-top: 8px;
   margin-bottom: 4px;
@@ -191,7 +191,7 @@ button.secondary {
 
 .fruitDropRow {
   display: grid;
-  grid-template-columns: minmax(120px, 1.35fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(72px, 0.8fr) minmax(72px, 0.8fr) auto;
+  grid-template-columns: minmax(120px, 1.35fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(72px, 0.8fr) auto;
   gap: 10px;
   align-items: center;
 }

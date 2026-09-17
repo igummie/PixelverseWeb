@@ -140,6 +140,15 @@ def get_item_definition(item_id: int, item_type: str = "seed") -> Dict[str, Any]
     return None
 
 
+def infer_item_type(item_id: int) -> str:
+    """Return the catalog type for an ID-only drop."""
+    if get_item_definition(item_id, "seed") is not None:
+        return "seed"
+    if get_item_definition(item_id, "block") is not None:
+        return "block"
+    return "seed"
+
+
 def is_breakable(tile_id: int) -> bool:
     if tile_id <= 0:
         return False
@@ -519,7 +528,12 @@ def get_tree_item_drops(tree: Dict[str, Any], now_ms: int) -> List[Dict[str, Any
         if not isinstance(rf, dict):
             continue
         try:
-            item_type = str(rf.get("ITEM_TYPE", "seed")).lower()
+            item_type_value = rf.get("ITEM_TYPE", rf.get("item_type", rf.get("TYPE", rf.get("type"))))
+            item_type = (
+                str(item_type_value).lower()
+                if item_type_value is not None
+                else infer_item_type(item_id)
+            )
         except Exception:
             item_type = "seed"
         if item_type not in {"seed", "block", "furniture", "clothes"}:

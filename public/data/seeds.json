@@ -15,7 +15,7 @@
           "MAX": 1
         },
         {
-          "ITEM_TYPE": "block",
+          "ITEM_TYPE": "seed",
           "ITEM_ID": 1,
           "CHANCE": 1.0,
           "MIN": 3,
@@ -31,7 +31,6 @@
       },
       "SEED_TINT": "#753a00",
       "TREE": {
-        "NAME": "TREE_0",
         "STAGES": [
           {
             "STAGE": 1,
@@ -91,7 +90,7 @@
       "GROWTIME": 120,
       "FRUIT_DROPS": [
         {
-          "ITEM_TYPE": "block",
+          "ITEM_TYPE": "seed",
           "ITEM_ID": 3,
           "CHANCE": 1.0,
           "MIN": 1,
@@ -114,7 +113,6 @@
       },
       "SEED_TINT": "#e5e5e5",
       "TREE": {
-        "NAME": "TREE_13",
         "TINT": "#8b696a",
         "STAGES": [
           {
@@ -175,7 +173,7 @@
       "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
-          "ITEM_TYPE": "block",
+          "ITEM_TYPE": "seed",
           "ITEM_ID": 9,
           "CHANCE": 1.0,
           "MIN": 2,
@@ -198,7 +196,6 @@
       },
       "SEED_TINT": "#cf1216",
       "TREE": {
-        "NAME": "TREE_14",
         "TINT": "#cf1216",
         "STAGES": [
           {
@@ -266,7 +263,7 @@
           "MAX": 1
         },
         {
-          "ITEM_TYPE": "block",
+          "ITEM_TYPE": "seed",
           "ITEM_ID": 4,
           "CHANCE": 1.0,
           "MIN": 2,
@@ -282,7 +279,6 @@
       },
       "SEED_TINT": "#ced72f",
       "TREE": {
-        "NAME": "SAND Tree",
         "TINT": "#ced72f",
         "STAGES": [
           {
@@ -350,7 +346,7 @@
           "MAX": 1
         },
         {
-          "ITEM_TYPE": "block",
+          "ITEM_TYPE": "seed",
           "ITEM_ID": 10,
           "CHANCE": 1.0,
           "MIN": 2,
@@ -366,7 +362,6 @@
       },
       "SEED_TINT": "#26272a",
       "TREE": {
-        "NAME": "METAL_PLATFORM Tree",
         "TINT": "#26272a",
         "STAGES": [
           {

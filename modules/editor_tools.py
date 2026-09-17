@@ -493,10 +493,7 @@ def sanitize_fruit_drop_entry(value: Any) -> dict[str, Any] | None:
     if item_id < 0:
         return None
 
-    item_type = normalize_item_type(
-        value.get("ITEM_TYPE", value.get("item_type", value.get("TYPE", value.get("type", "seed")))),
-        default="seed",
-    )
+    item_type_value = value.get("ITEM_TYPE", value.get("item_type", value.get("TYPE", value.get("type"))))
 
     try:
         chance = float(value.get("CHANCE", value.get("chance", 1.0)))
@@ -522,13 +519,15 @@ def sanitize_fruit_drop_entry(value: Any) -> dict[str, Any] | None:
     min_count = max(0, min_count)
     max_count = max(min_count, max_count)
 
-    return {
-        "ITEM_TYPE": item_type,
+    output = {
         "ITEM_ID": int(item_id),
         "CHANCE": round(chance, 4),
         "MIN": int(min_count),
         "MAX": int(max_count),
     }
+    if item_type_value is not None:
+        output["ITEM_TYPE"] = normalize_item_type(item_type_value, default="seed")
+    return output
 
 
 def normalize_tint_color(value: Any) -> str:
@@ -570,7 +569,6 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     tree_stages: list[dict[str, Any]] = []
     tree_drops: list[dict[str, Any]] = []
     fruit_drops: list[dict[str, Any]] = []
-    tree_name = ""
     tree_tint = ""
     # gem settings default to 0
     tree_gem_chance = 0.0
@@ -583,7 +581,6 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     raw_fruit_drops: Any = value.get("FRUIT_DROPS", [])
 
     if isinstance(raw_tree, dict):
-        tree_name = str(raw_tree.get("NAME", "")).strip()
         tree_tint = normalize_tint_color(raw_tree.get("TINT"))
         if isinstance(raw_tree.get("STAGES"), list):
             raw_stages = raw_tree.get("STAGES", [])
@@ -644,10 +641,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     if seed_tint:
         output["SEED_TINT"] = seed_tint
     # only create TREE object if there are any settings to persist
-    if tree_name or tree_tint or tree_stages or tree_drops or tree_gem_chance or tree_gem_amount or tree_gem_amount_var:
+    if tree_tint or tree_stages or tree_drops or tree_gem_chance or tree_gem_amount or tree_gem_amount_var:
         output["TREE"] = {}
-        if tree_name:
-            output["TREE"]["NAME"] = tree_name
         if tree_tint:
             output["TREE"]["TINT"] = tree_tint
         if tree_stages:

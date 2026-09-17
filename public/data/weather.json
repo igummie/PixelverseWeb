@@ -79,6 +79,38 @@
       "NAME": "Darkness",
       "LAYERS": [],
       "WEATHER_COLOR": "#000000"
+    },
+    {
+      "WEATHER_ID": 3,
+      "NAME": "WOOD",
+      "LAYERS": [
+        {
+          "TYPE": "atlas",
+          "ATLAS_ID": 0,
+          "ATLAS_TEXTURE": {
+            "x": 80,
+            "y": 16,
+            "w": 16,
+            "h": 16
+          },
+          "PARALLAX_X": -20.0,
+          "PARALLAX_Y": -20.0,
+          "SCROLL_X": 0,
+          "SCROLL_Y": 0,
+          "LOOP_X": true,
+          "LOOP_Y": false,
+          "TILE": true,
+          "WRAP_BUFFER": 0,
+          "IN_FRONT": false,
+          "OPACITY": 0.25,
+          "SCALE": 1.0,
+          "ROTATION": 0.0,
+          "FLIP_X": false,
+          "FLIP_Y": false,
+          "offsetX": 0.0,
+          "offsetY": 0.0
+        }
+      ]
     }
   ],
   "atlases": [
