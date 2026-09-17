@@ -34,6 +34,8 @@
           </div>
           <button id="loadBtn" class="loadAtlasBtn" type="button">Load Atlas</button>
           <button id="createAtlasBtn" class="loadAtlasBtn" type="button">Create Atlas</button>
+          <button id="replaceAtlasFileBtn" class="loadAtlasBtn" type="button">Replace Atlas File</button>
+          <input id="replaceAtlasFileInput" type="file" accept=".png,.svg,.jpg,.jpeg,.webp" hidden />
         </div>
 
         <div class="row">
@@ -306,6 +308,8 @@
       const cleanJsonBtn = document.getElementById("cleanJsonBtn");
       const reorderBlocksBtn = document.getElementById("reorderBlocksBtn");
       const createAtlasBtn = document.getElementById("createAtlasBtn");
+      const replaceAtlasFileBtn = document.getElementById("replaceAtlasFileBtn");
+      const replaceAtlasFileInput = document.getElementById("replaceAtlasFileInput");
       const reloadBtn = document.getElementById("reloadBtn");
       const enableDeleteBtn = document.getElementById("enableDeleteBtn");
       const removeBlockBtn = document.getElementById("removeBlockBtn");
@@ -794,6 +798,73 @@
         const saved = await saveFullDocument(buildCurrentDocumentPayload(false), `Created atlas ${formatAtlasId(normalizedId)}`);
         if (saved) {
           closeCreateAtlasModal();
+        }
+      }
+
+      async function replaceSelectedAtlasFile() {
+        const file = replaceAtlasFileInput?.files?.[0];
+        if (!file) {
+          return;
+        }
+
+        const atlas = state.atlasByKey.get(state.selectedAtlasKey);
+        if (!atlas) {
+          setStatus("Select an atlas to replace first", true);
+          replaceAtlasFileInput.value = "";
+          return;
+        }
+
+        const body = new FormData();
+        body.append("file", file);
+
+        try {
+          const response = await fetch("/api/tools/atlases/upload", {
+            method: "POST",
+            body,
+          });
+
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch {
+          }
+
+          if (!response.ok) {
+            setStatus(payload?.detail || "Atlas file upload failed", true);
+            return;
+          }
+
+          const src = String(payload?.src || "");
+          if (!src) {
+            setStatus("Upload succeeded but no file path was returned", true);
+            return;
+          }
+
+          const currentTileSize = parsePositiveInt(atlas.TILE_SIZE, 16);
+          const tileSizeAnswer = window.prompt(
+            `Replacing atlas file for ${formatAtlasId(atlas.ATLAS_ID)}. Tile size (px)?`,
+            String(currentTileSize),
+          );
+          if (tileSizeAnswer !== null) {
+            const nextTileSize = parsePositiveInt(tileSizeAnswer, currentTileSize);
+            atlas.TILE_SIZE = nextTileSize;
+          }
+
+          atlas.SRC = src;
+          state.regularAtlasImageCache.delete(state.selectedAtlasKey);
+          renderAtlasOptions();
+          atlasSelect.value = state.selectedAtlasKey;
+          renderCreateRegularAtlasOptions();
+          syncJsonOutput();
+
+          const saved = await saveFullDocument(buildCurrentDocumentPayload(false), `Replaced atlas file for ${formatAtlasId(atlas.ATLAS_ID)}`);
+          if (saved) {
+            await loadAtlasImage();
+          }
+        } catch {
+          setStatus("Could not reach server for atlas file replace", true);
+        } finally {
+          replaceAtlasFileInput.value = "";
         }
       }
 
@@ -3832,6 +3903,19 @@
 
       createAtlasBtn.addEventListener("click", () => {
         openCreateAtlasModal();
+      });
+
+      replaceAtlasFileBtn.addEventListener("click", () => {
+        const atlas = state.atlasByKey.get(state.selectedAtlasKey);
+        if (!atlas) {
+          setStatus("Select an atlas to replace first", true);
+          return;
+        }
+        replaceAtlasFileInput.click();
+      });
+
+      replaceAtlasFileInput.addEventListener("change", async () => {
+        await replaceSelectedAtlasFile();
       });
 
       uploadAtlasBtn.addEventListener("click", () => {
