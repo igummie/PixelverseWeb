@@ -68,6 +68,7 @@ from modules.world_utils import (
     get_block_seed_drop_ids,
     get_block_self_drop_seed_ids,
     get_tree_item_drops,
+    is_tree_fully_grown,
     spawn_gem_drops,
     spawn_item_drop,
     spawn_item_drop_center,
@@ -790,13 +791,35 @@ async def _run_server_update(countdown: int) -> None:
         except Exception:
             pass
 
-    creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen(
-        [sys.executable, str(BASE_DIR / "app.py")],
-        cwd=BASE_DIR,
-        env=os.environ.copy(),
-        creationflags=creationflags,
-    )
+    # Rebuild the client bundle so /update actually deploys code changes, matching start.bat's flow.
+    build_script = BASE_DIR / "scripts" / "build_bundle.py"
+    if build_script.is_file():
+        try:
+            await asyncio.to_thread(
+                subprocess.run,
+                [sys.executable, str(build_script)],
+                cwd=BASE_DIR,
+                env=os.environ.copy(),
+                check=True,
+            )
+        except Exception as exc:
+            print(f"[update] bundle build failed, restarting with existing bundle: {exc}", flush=True)
+
+    # Detach the child from this process's console so it doesn't compete for stdio/input
+    # with the launcher window, and keep logging to the same log file the launcher redirects to.
+    creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    log_path = BASE_DIR / "server.log"
+    with log_path.open("a", encoding="utf-8") as log_file:
+        subprocess.Popen(
+            [sys.executable, str(BASE_DIR / "app.py")],
+            cwd=BASE_DIR,
+            env=os.environ.copy(),
+            creationflags=creationflags,
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=log_file,
+            close_fds=True,
+        )
     os._exit(0)
 
 
@@ -808,7 +831,7 @@ async def schedule_server_update(countdown: int) -> None:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket) -> None:
+async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[reportGeneralTypeIssues]
     global random  # ensure module-level random is used throughout handler
     await websocket.accept()
 
@@ -1066,12 +1089,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         },
                     )
 
-                    for drop_id in collected_ids:
+                    if collected_ids:
                         await broadcast_to_world(
                             world,
                             {
-                                "type": "gem_drop_remove",
-                                "id": drop_id,
+                                "type": "gem_drop_remove_batch",
+                                "ids": collected_ids,
                                 "collectorId": client_id,
                             },
                         )
@@ -1122,12 +1145,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     elif isinstance(client.get("guest_profile_id"), int) and int(client.get("guest_profile_id", 0)) > 0:
                         await asyncio.to_thread(set_guest_profile_inventory, int(client["guest_profile_id"]), inventory)
 
-                    for drop_id in collected_item_drop_ids:
+                    if collected_item_drop_ids:
                         await broadcast_to_world(
                             world,
                             {
-                                "type": "seed_drop_remove",
-                                "id": drop_id,
+                                "type": "seed_drop_remove_batch",
+                                "ids": collected_item_drop_ids,
                                 "collectorId": client_id,
                             },
                         )
@@ -1392,6 +1415,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 default="seed",
                             )
                             if tree_item_id < 0:
+                                continue
+
+                            try:
+                                tree_drop_chance = float(tree_drop.get("CHANCE", 1.0))
+                            except Exception:
+                                tree_drop_chance = 1.0
+                            tree_drop_chance = max(0.0, min(1.0, tree_drop_chance))
+                            if random.random() > tree_drop_chance:
                                 continue
 
                             minc = int(tree_drop.get("MIN", tree_drop.get("COUNT", tree_drop.get("count", 1))))
@@ -1734,6 +1765,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                 existing_tree = get_planted_tree_at(world, x, y)
                 if existing_tree is not None:
+                    first_seed_id = int(existing_tree.get("seed_id", -1))
+                    if is_tree_fully_grown(existing_tree, int(time.time() * 1000)):
+                        await ws_send(
+                            websocket,
+                            {
+                                "type": "splice_result",
+                                "playerId": client_id,
+                                "success": False,
+                                "message": "I can't splice a fully grown tree",
+                            },
+                        )
+                        continue
+
                     if bool(existing_tree.get("spliced", False)):
                         await ws_send(
                             websocket,
@@ -1746,7 +1790,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         )
                         continue
 
-                    first_seed_id = int(existing_tree.get("seed_id", -1))
                     result_seed_id = find_splice_result_seed_id(first_seed_id, seed_id)
                     if result_seed_id is None:
                         await ws_send(

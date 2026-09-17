@@ -456,19 +456,7 @@ def get_tree_item_drops(tree: Dict[str, Any], now_ms: int) -> List[Dict[str, Any
     if not isinstance(seed, dict):
         return []
 
-    try:
-        planted_at_ms = int(tree.get("planted_at_ms", 0))
-    except Exception:
-        planted_at_ms = 0
-
-    try:
-        grow_seconds = max(1, int(seed.get("GROWTIME", 1)))
-    except Exception:
-        grow_seconds = 1
-
-    elapsed_ms = max(0, int(now_ms) - max(0, planted_at_ms))
-    is_fully_grown = elapsed_ms >= (grow_seconds * 1000)
-    if not is_fully_grown:
+    if not is_tree_fully_grown(tree, now_ms, seed=seed):
         return []
 
     # Preferred format for harvest drops:
@@ -566,6 +554,35 @@ def get_tree_item_drops(tree: Dict[str, Any], now_ms: int) -> List[Dict[str, Any
         })
 
     return drops
+
+
+def is_tree_fully_grown(
+    tree: Dict[str, Any], now_ms: int, seed: Dict[str, Any] | None = None
+) -> bool:
+    if not isinstance(tree, dict):
+        return False
+
+    if seed is None:
+        try:
+            seed_id = int(tree.get("seed_id", -1))
+        except Exception:
+            seed_id = -1
+        seed = get_item_definition(seed_id, "seed") if seed_id >= 0 else None
+    if not isinstance(seed, dict):
+        return False
+
+    try:
+        planted_at_ms = int(tree.get("planted_at_ms", 0))
+    except Exception:
+        planted_at_ms = 0
+
+    try:
+        grow_seconds = max(1, int(seed.get("GROWTIME", 1)))
+    except Exception:
+        grow_seconds = 1
+
+    elapsed_ms = max(0, int(now_ms) - max(0, planted_at_ms))
+    return elapsed_ms >= (grow_seconds * 1000)
 def ensure_world_gem_state(world: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     gem_drops = world.setdefault("gem_drops", {})
     if not isinstance(gem_drops, dict):

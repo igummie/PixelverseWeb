@@ -1692,6 +1692,14 @@ function handleSocketMessage(msg) {
     return;
   }
 
+  if (msg.type === "gem_drop_remove_batch") {
+    const ids = Array.isArray(msg.ids) ? msg.ids : [];
+    for (const id of ids) {
+      removeGemDropById(id);
+    }
+    return;
+  }
+
   if (msg.type === "gem_count") {
     state.gems = Number(msg.gems || 0);
     updateGemUi();
@@ -1709,6 +1717,14 @@ function handleSocketMessage(msg) {
 
   if (msg.type === "seed_drop_remove") {
     removeSeedDropById(msg.id);
+    return;
+  }
+
+  if (msg.type === "seed_drop_remove_batch") {
+    const ids = Array.isArray(msg.ids) ? msg.ids : [];
+    for (const id of ids) {
+      removeSeedDropById(id);
+    }
     return;
   }
 
