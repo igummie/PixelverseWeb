@@ -417,12 +417,6 @@
   ],
   "atlases": [
     {
-      "ATLAS_ID": "seeds",
-      "NAME": "SEEDS_ATLAS",
-      "SRC": "/assets/atlases/seeds_atlas.svg",
-      "TILE_SIZE": 16
-    },
-    {
       "ATLAS_ID": "trees",
       "NAME": "TREES_ATLAS",
       "SRC": "/assets/atlases/trees_atlas.svg",
