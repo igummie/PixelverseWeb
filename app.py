@@ -237,6 +237,14 @@ def get_tree_gem_drop_total(tree: dict[str, Any]) -> int:
     return world_utils.get_tree_gem_drop_total(tree)
 
 
+def get_tree_toughness(seed: dict[str, Any] | None) -> int:
+    return world_utils.get_tree_toughness(seed)
+
+
+def get_tree_seed_drop_chance(seed: dict[str, Any] | None) -> float:
+    return world_utils.get_tree_seed_drop_chance(seed)
+
+
 def get_block_seed_drop_ids(tile_id: int) -> list[int]:
     return world_utils.get_block_seed_drop_ids(tile_id)
 
@@ -1415,6 +1423,63 @@ async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[r
                 updated = False
                 target_layer = "foreground"
                 if action == "break":
+                    existing_tree = get_planted_tree_at(world, x, y)
+                    if existing_tree is not None and not is_tree_fully_grown(existing_tree, int(time.time() * 1000)):
+                        seed_def = get_item_definition(int(existing_tree.get("seed_id", -1)), "seed")
+                        toughness = get_tree_toughness(seed_def)
+                        current_hits = int(existing_tree.get("hits", 0)) + 1
+
+                        if current_hits >= toughness:
+                            remove_planted_tree_at(world, x, y)
+                            reclaim_seed_id = int(existing_tree.get("seed_id", -1))
+                            if reclaim_seed_id >= 0 and random.random() < get_tree_seed_drop_chance(seed_def):
+                                reclaim_drop = spawn_item_drop_center(
+                                    world,
+                                    x,
+                                    y,
+                                    reclaim_seed_id,
+                                    item_type="seed",
+                                    allow_tile_stack=True,
+                                )
+                                if reclaim_drop is not None:
+                                    await broadcast_to_world(
+                                        world,
+                                        {
+                                            "type": "seed_drop_spawn",
+                                            "drop": {
+                                                "id": str(reclaim_drop["id"]),
+                                                "x": float(reclaim_drop["x"]),
+                                                "y": float(reclaim_drop["y"]),
+                                                "itemId": int(reclaim_drop.get("item_id", reclaim_seed_id)),
+                                                "itemType": str(reclaim_drop.get("item_type", "seed")),
+                                            },
+                                        },
+                                    )
+                            await schedule_world_save(world["name"])
+                            await broadcast_to_world(
+                                world,
+                                {
+                                    "type": "tree_removed",
+                                    "id": str(existing_tree.get("id", "")),
+                                    "x": int(existing_tree.get("x", x)),
+                                    "y": int(existing_tree.get("y", y)),
+                                },
+                            )
+                        else:
+                            existing_tree["hits"] = current_hits
+                            await broadcast_to_world(
+                                world,
+                                {
+                                    "type": "tree_damage_update",
+                                    "id": str(existing_tree.get("id", "")),
+                                    "x": int(existing_tree.get("x", x)),
+                                    "y": int(existing_tree.get("y", y)),
+                                    "hits": current_hits,
+                                    "maxHits": toughness,
+                                },
+                            )
+                        continue
+
                     removed_tree = remove_planted_tree_at(world, x, y)
                     if removed_tree is not None:
                         tree_drops = get_tree_item_drops(removed_tree, int(time.time() * 1000)) or []

@@ -1698,6 +1698,11 @@ function handleSocketMessage(msg) {
     return;
   }
 
+  if (msg.type === "tree_damage_update") {
+    setTileDamage({ x: msg.x, y: msg.y, hits: msg.hits, maxHits: msg.maxHits, layer: "tree" });
+    return;
+  }
+
   if (msg.type === "tile_damage_clear") {
     clearTileDamageAt(Number(msg.x), Number(msg.y), msg.layer ? String(msg.layer) : null);
     return;
@@ -1809,11 +1814,13 @@ function handleSocketMessage(msg) {
 
   if (msg.type === "tree_planted") {
     state.serverTimeOffsetMs = Number(msg.serverTimeMs || Date.now()) - Date.now();
+    clearTileDamageAt(Number(msg.tree?.x), Number(msg.tree?.y), "tree");
     upsertPlantedTree(msg.tree);
     return;
   }
 
   if (msg.type === "tree_removed") {
+    clearTileDamageAt(Number(msg.x), Number(msg.y), "tree");
     removePlantedTree(msg);
   }
 }

@@ -204,6 +204,38 @@ def get_block_gem_drop_total(tile_id: int) -> int:
     return max(0, base_amount)
 
 
+def get_tree_toughness(seed: Dict[str, Any] | None) -> int:
+    """Return hits required to break a tree while it is still growing.
+
+    Fully grown trees always harvest in a single hit regardless of this
+    value; toughness only guards immature trees from being destroyed early.
+    """
+    if not isinstance(seed, dict):
+        return 5
+
+    raw_tree = seed.get("TREE") if isinstance(seed.get("TREE"), dict) else {}
+    try:
+        toughness = int(raw_tree.get("TOUGHNESS", 5))
+    except Exception:
+        toughness = 5
+
+    return max(1, toughness)
+
+
+def get_tree_seed_drop_chance(seed: Dict[str, Any] | None) -> float:
+    """Return the chance (0.0-1.0) that a destroyed immature tree drops its own seed."""
+    if not isinstance(seed, dict):
+        return 0.4
+
+    raw_tree = seed.get("TREE") if isinstance(seed.get("TREE"), dict) else {}
+    try:
+        chance = float(raw_tree.get("SEED_DROP_CHANCE", 0.4))
+    except Exception:
+        chance = 0.4
+
+    return max(0.0, min(1.0, chance))
+
+
 def get_tree_gem_drop_total(tree: Dict[str, Any]) -> int:
     """Return total gem amount to spawn when a planted tree is harvested.
 

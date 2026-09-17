@@ -581,6 +581,10 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     tree_gem_chance = 0.0
     tree_gem_amount = 0
     tree_gem_amount_var = 0
+    # hits required to break a tree while it is still growing
+    tree_toughness = 5
+    # chance a destroyed immature tree drops its own seed for replanting
+    tree_seed_drop_chance = 0.4
 
     raw_tree = value.get("TREE")
     raw_stages: Any = value.get("TREE_STAGES", [])
@@ -609,6 +613,14 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
             tree_gem_amount_var = int(raw_tree.get("GEM_AMOUNT_VAR", raw_tree.get("TREE_GEM_AMOUNT_VAR", 0)))
         except Exception:
             tree_gem_amount_var = 0
+        try:
+            tree_toughness = max(1, int(raw_tree.get("TOUGHNESS", 5)))
+        except Exception:
+            tree_toughness = 5
+        try:
+            tree_seed_drop_chance = max(0.0, min(1.0, float(raw_tree.get("SEED_DROP_CHANCE", 0.4))))
+        except Exception:
+            tree_seed_drop_chance = 0.4
 
     if isinstance(raw_stages, list):
         for raw_stage in raw_stages:
@@ -648,7 +660,16 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     if seed_tint:
         output["SEED_TINT"] = seed_tint
     # only create TREE object if there are any settings to persist
-    if tree_tint or tree_stages or tree_drops or tree_gem_chance or tree_gem_amount or tree_gem_amount_var:
+    if (
+        tree_tint
+        or tree_stages
+        or tree_drops
+        or tree_gem_chance
+        or tree_gem_amount
+        or tree_gem_amount_var
+        or tree_toughness != 5
+        or tree_seed_drop_chance != 0.4
+    ):
         output["TREE"] = {}
         if tree_tint:
             output["TREE"]["TINT"] = tree_tint
@@ -658,6 +679,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
             output["TREE"]["DROPS"] = tree_drops
         # include gem settings even if zero so they are explicit when edited
         output["TREE"]["GEM_CHANCE"] = float(tree_gem_chance)
+        output["TREE"]["TOUGHNESS"] = int(tree_toughness)
+        output["TREE"]["SEED_DROP_CHANCE"] = float(tree_seed_drop_chance)
         output["TREE"]["GEM_AMOUNT"] = int(tree_gem_amount)
         output["TREE"]["GEM_AMOUNT_VAR"] = int(tree_gem_amount_var)
 

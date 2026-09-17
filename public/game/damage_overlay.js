@@ -6,7 +6,10 @@ export function createDamageOverlayController({ state, ctx, canvas, settings }) 
   }
 
   function normalizeDamageLayer(layer) {
-    return layer === "background" ? "background" : "foreground";
+    if (layer === "background" || layer === "tree") {
+      return layer;
+    }
+    return "foreground";
   }
 
   function setTileDamage(entry) {
