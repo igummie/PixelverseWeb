@@ -91,6 +91,7 @@ async def apply_command_result(
     sanitize_door: Callable[..., dict[str, int]],
     enforce_bedrock_under_door: Callable[..., bool],
     get_spawn_from_door: Callable[..., tuple[float, float]],
+    get_current_news: Callable[[], dict[str, Any] | None],
 ) -> None:
     global random  # ensure we always use module-level random rather than any accidental local binding
     sender_message = str(command_result.get("sender_message", "")).strip()
@@ -113,6 +114,25 @@ async def apply_command_result(
                 "noclipEnabled": bool(state_update.get("noclipEnabled", False)),
             },
         )
+
+    if command_result.get("show_news"):
+        news = get_current_news()
+        if news:
+            await ws_send(
+                websocket,
+                {
+                    "type": "news",
+                    "news": news,
+                },
+            )
+        else:
+            await ws_send(
+                websocket,
+                {
+                    "type": "system_message",
+                    "message": "There is no current news.",
+                },
+            )
 
     direct_messages = command_result.get("direct_messages") or []
     for direct_message in direct_messages:

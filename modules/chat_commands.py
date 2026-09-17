@@ -5,7 +5,7 @@ from modules import world_utils
 from modules.events import trigger_event
 
 
-COMMAND_HELP = "Commands: /noclip, /fly, /pull <user>, /to <user>, /door <x> <y>, /weather <id>, /event <id>, /update <countdown>"
+COMMAND_HELP = "Commands: /noclip, /fly, /news, /pull <user>, /to <user>, /door <x> <y>, /weather <id>, /event <id>, /update <countdown>"
 
 
 def _normalize_name(value: Any) -> str:
@@ -132,6 +132,23 @@ def process_chat_command(
                 "flyEnabled": fly_enabled,
                 "noclipEnabled": noclip_enabled,
             },
+        }
+
+    if command == "news":
+        if args:
+            return {
+                "sender_message": "Usage: /news",
+                "direct_messages": [],
+                "teleports": [],
+                "state_update": None,
+            }
+
+        return {
+            "sender_message": "",
+            "direct_messages": [],
+            "teleports": [],
+            "state_update": None,
+            "show_news": True,
         }
 
     if command == "update":

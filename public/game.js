@@ -1483,6 +1483,11 @@ function handleSocketMessage(msg) {
     return;
   }
 
+  if (msg.type === "news") {
+    showNewsWidget(msg.news);
+    return;
+  }
+
   if (!state.world) {
     return;
   }

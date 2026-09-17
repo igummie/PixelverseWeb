@@ -755,6 +755,24 @@ def get_unseen_news_for_client(client: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
 
+def get_current_news() -> dict[str, Any] | None:
+    try:
+        with NEWS_PATH.open("r", encoding="utf-8") as handle:
+            news_document = json.load(handle)
+        active_id = str(news_document.get("activeId", ""))
+        active_page = next(
+            (
+                page
+                for page in news_document.get("pages", [])
+                if isinstance(page, dict) and str(page.get("id")) == active_id
+            ),
+            None,
+        )
+        return dict(active_page) if active_page else None
+    except Exception:
+        return None
+
+
 async def _broadcast_to_all_clients(payload: dict[str, Any]) -> None:
     for client in list(clients.values()):
         try:
@@ -1949,6 +1967,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[r
                         sanitize_door=sanitize_door,
                         enforce_bedrock_under_door=enforce_bedrock_under_door,
                         get_spawn_from_door=get_spawn_from_door,
+                        get_current_news=get_current_news,
                     )
 
                     update_countdown = command_result.get("update_countdown")
