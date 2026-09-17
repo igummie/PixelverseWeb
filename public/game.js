@@ -24,6 +24,8 @@ import {
   GEM_VALUE_TO_FRAME,
   GRAVITY,
   HORIZONTAL_SPEED,
+  ITEM_DROP_MIN_SIZE_PX,
+  ITEM_DROP_SCALE,
   JUMP_SPEED,
   MAX_CAMERA_ZOOM,
   MAX_CHAT_LOG_LINES,
@@ -2321,8 +2323,7 @@ function drawSeedDrops() {
       * (drop.bobAmplitude || GEM_BOB_BASE_AMPLITUDE_PX)
       * state.camera.zoom;
     const baseSize = Math.max(sprite.width, sprite.height, 1);
-    // ratio preserves the original look tuned for a 32px tile
-    const drawSize = Math.max(8, TILE_SIZE * 0.375 * state.camera.zoom);
+    const drawSize = Math.max(ITEM_DROP_MIN_SIZE_PX, TILE_SIZE * 0.375 * ITEM_DROP_SCALE * state.camera.zoom);
     const scale = drawSize / baseSize;
     const drawWidth = sprite.width * scale;
     const drawHeight = sprite.height * scale;

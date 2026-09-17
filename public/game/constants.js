@@ -34,11 +34,19 @@ export const CRACK_ATLAS_SRCS = [
 export const CRACK_ATLAS_COLUMNS = 4;
 export const CRACK_ATLAS_ROWS = 1;
 export const GEM_ATLAS_ID = "gems";
-export const GEM_TILE_SIZE = 16;
+export const GEM_TILE_SIZE = 64;
 export const GEM_BOB_BASE_AMPLITUDE_PX = 1.4;
 export const GEM_BOB_AMPLITUDE_VARIANCE_PX = 1.1;
 export const GEM_BOB_BASE_SPEED = 0.0015;
 export const GEM_BOB_SPEED_VARIANCE = 0.002;
+
+/* World drop sizes scale with TILE_SIZE/zoom by default; these are simple
+   multipliers on top of that — 1 = normal size, <1 = smaller, >1 = bigger. */
+export const ITEM_DROP_SCALE = 1;
+export const GEM_DROP_SCALE = 0.5;
+export const ITEM_DROP_MIN_SIZE_PX = 8;
+export const GEM_DROP_MIN_SIZE_PX = 8;
+
 export const DEBUG_PING_INTERVAL_MS = 2000;
 export const DEBUG_INFO_REFRESH_MS = 120;
 export const GEM_VALUE_TO_FRAME = {
