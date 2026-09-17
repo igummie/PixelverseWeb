@@ -39,9 +39,7 @@ export const GEM_BOB_BASE_AMPLITUDE_PX = 1.4;
 export const GEM_BOB_AMPLITUDE_VARIANCE_PX = 1.1;
 export const GEM_BOB_BASE_SPEED = 0.0015;
 export const GEM_BOB_SPEED_VARIANCE = 0.002;
-
-/* World drop sizes scale with TILE_SIZE/zoom by default; these are simple
-   multipliers on top of that — 1 = normal size, <1 = smaller, >1 = bigger. */
+/* World drop scales */
 export const ITEM_DROP_SCALE = 1;
 export const GEM_DROP_SCALE = 0.5;
 export const ITEM_DROP_MIN_SIZE_PX = 8;
