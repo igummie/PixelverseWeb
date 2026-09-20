@@ -22,12 +22,45 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data" / "db"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "game.db"
+BACKUP_DIR = DATA_DIR / "backups"
+BACKUP_KEEP_COUNT = 10
 
 
 def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def backup_database() -> Path | None:
+    """Copy the entire sqlite database to BACKUP_DIR, pruning old backups.
+
+    Uses sqlite3's online backup API so it is safe even while the live
+    connection is being written to. Keeps only the most recent
+    BACKUP_KEEP_COUNT backups, deleting older ones.
+    """
+    if not DB_PATH.exists():
+        return None
+
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    backup_path = BACKUP_DIR / f"game_{stamp}.db"
+
+    src = sqlite3.connect(DB_PATH)
+    try:
+        dest = sqlite3.connect(backup_path)
+        try:
+            src.backup(dest)
+        finally:
+            dest.close()
+    finally:
+        src.close()
+
+    existing = sorted(BACKUP_DIR.glob("game_*.db"), key=lambda p: p.stat().st_mtime)
+    for stale in existing[:-BACKUP_KEEP_COUNT]:
+        stale.unlink(missing_ok=True)
+
+    return backup_path
 
 
 def initialize_db() -> None:

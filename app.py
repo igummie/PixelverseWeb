@@ -23,6 +23,7 @@ from modules.chat_commands import process_chat_command
 from modules.command_runtime import apply_command_result, _choose_event_location
 from modules.editor_tools import load_texture47_configs, register_editor_routes, resolve_item_id as _resolve_item_id
 from modules.player_data import (
+    backup_database,
     create_token,
     get_db,
     get_guest_profile_gems,
@@ -470,6 +471,12 @@ async def lifespan(_app: FastAPI):
             for world in list(world_cache.values()):
                 await asyncio.to_thread(save_world, world)
 
+    async def periodic_db_backup() -> None:
+        await asyncio.to_thread(backup_database)
+        while True:
+            await asyncio.sleep(30 * 60)
+            await asyncio.to_thread(backup_database)
+
     async def periodic_damage_regen() -> None:
         while True:
             await asyncio.sleep(0.5)
@@ -489,11 +496,13 @@ async def lifespan(_app: FastAPI):
 
     flush_task = asyncio.create_task(periodic_flush())
     regen_task = asyncio.create_task(periodic_damage_regen())
+    backup_task = asyncio.create_task(periodic_db_backup())
     try:
         yield
     finally:
         flush_task.cancel()
         regen_task.cancel()
+        backup_task.cancel()
         for world in list(world_cache.values()):
             await asyncio.to_thread(save_world, world)
 
