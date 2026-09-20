@@ -22,6 +22,7 @@ Thumbs.db
 .DS_Store
 
 # Local runtime data
+data/db/backups
 data/db/*.db
 data/db/*.sqlite
 data/db/*.sqlite3
