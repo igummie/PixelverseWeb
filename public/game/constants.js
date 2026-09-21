@@ -8,6 +8,8 @@ export const MIN_CAMERA_ZOOM = 0.5;
 export const MAX_CAMERA_ZOOM = 8;
 export const CAMERA_ZOOM_STEP = 0.1;
 export const CAMERA_EDGE_INSET = 5;
+/* how often (ms) a held-down build/break click repeats the place/break action */
+export const BUILD_BREAK_ACTION_INTERVAL_MS = 180;
 export const REMOTE_PLAYER_INTERP_SPEED = 14;
 export const REMOTE_PLAYER_SNAP_DISTANCE = 2.5;
 export const REMOTE_PLAYER_EXTRAPOLATE_BASE_MS = 65;

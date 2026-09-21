@@ -318,8 +318,8 @@ def get_tree_item_drops(tree: dict[str, Any], now_ms: int) -> list[dict[str, Any
     return world_utils.get_tree_item_drops(tree, now_ms)
 
 
-def get_or_roll_tree_harvest_drops(tree: dict[str, Any]) -> list[dict[str, Any]]:
-    return world_utils.get_or_roll_tree_harvest_drops(tree)
+def get_or_roll_tree_harvest_drops(tree: dict[str, Any], seed: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    return world_utils.get_or_roll_tree_harvest_drops(tree, seed)
 
 
 def split_gem_amount(total: int) -> list[int]:
@@ -1994,6 +1994,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[r
                     existing_tree["seed_id"] = int(result_seed_id)
                     existing_tree["planted_at_ms"] = int(time.time() * 1000)
                     existing_tree["spliced"] = True
+                    # the fruit yield is tied to the seed - re-roll it for the new
+                    # spliced result instead of keeping the pre-splice seed's roll.
+                    existing_tree.pop("harvest_drops", None)
+                    spliced_ready_drops = get_or_roll_tree_harvest_drops(existing_tree, result_seed)
                     if not creative_planting and inventory is not None and seed_inventory_key:
                         next_seed_count = current_seed_count - 1
                         if next_seed_count <= 0:
@@ -2026,6 +2030,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[r
                                 "itemId": int(result_seed_id),
                                 "seedId": int(result_seed_id),
                                 "plantedAtMs": int(existing_tree.get("planted_at_ms", 0)),
+                                "readyDrops": [
+                                    {
+                                        "itemId": int(rolled.get("ITEM_ID", -1)),
+                                        "itemType": str(rolled.get("ITEM_TYPE", "seed")),
+                                        "count": int(rolled.get("COUNT", 1)),
+                                    }
+                                    for rolled in spliced_ready_drops
+                                ],
                             },
                             "serverTimeMs": int(time.time() * 1000),
                         },
@@ -2047,8 +2059,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[r
                 if support_tile == door_block_id:
                     continue
 
-                # Background-type blocks are not valid support for planted trees.
-                if support_tile in BACKGROUND_BLOCK_IDS:
+                # Only SOLID/PLATFORM blocks are valid support for planted trees -
+                # BACKGROUND and DECO blocks (e.g. grass tufts) don't count, matching
+                # Growtopia's rule that trees need solid ground/platforms beneath them.
+                support_block_def = BLOCKS_BY_ID.get(support_tile) or {}
+                support_block_type = str(support_block_def.get("BLOCK_TYPE", "")).upper()
+                if support_block_type not in ("SOLID", "PLATFORM"):
                     continue
 
                 planted_tree = place_planted_tree(world, x, y, seed_id, int(time.time() * 1000))

@@ -391,6 +391,12 @@
         background: #0f172a;
         position: relative;
         z-index: 1;
+        /* stop click-and-drag from being interpreted as a native page/image
+           drag or text selection (looked like dragging a screenshot). */
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-user-drag: none;
+        touch-action: none;
       }
 
       .chatOverlayRegion {

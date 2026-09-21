@@ -1,7 +1,7 @@
 import { getMouseTile } from "./utils.js";
 
 export function createInputController({ state, screens, canvas, constants, actions }) {
-  const { CAMERA_ZOOM_STEP } = constants;
+  const { CAMERA_ZOOM_STEP, BUILD_BREAK_ACTION_INTERVAL_MS } = constants;
   const {
     setChatInputOpen,
     setChatLogOpen,
@@ -118,13 +118,15 @@ export function createInputController({ state, screens, canvas, constants, actio
       event.preventDefault();
     });
 
-    canvas.addEventListener("mousedown", (event) => {
+    // native drag/select of the canvas (looks like dragging a page snapshot)
+    // otherwise fires whenever a mousedown is followed by pointer movement.
+    canvas.addEventListener("dragstart", (event) => {
+      event.preventDefault();
+    });
+
+    function performPointerAction(button) {
       if (!state.world) {
         return;
-      }
-
-      if (event.button === 1) {
-        event.preventDefault();
       }
 
       const mouseTile = getMouseTile(state);
@@ -135,11 +137,7 @@ export function createInputController({ state, screens, canvas, constants, actio
         return;
       }
 
-      const isRightClick = event.button === 2;
-      const isMiddleClick = event.button === 1;
-      if (isMiddleClick) {
-        return;
-      }
+      const isRightClick = button === 2;
 
       if (isRightClick) {
         const creativeEnabled = !!isCreativeEnabled?.();
@@ -220,7 +218,51 @@ export function createInputController({ state, screens, canvas, constants, actio
           y: tileY,
         });
       }
+    }
+
+    let heldActionButton = null;
+    let heldActionIntervalId = null;
+
+    function stopHeldAction() {
+      if (heldActionIntervalId !== null) {
+        window.clearInterval(heldActionIntervalId);
+        heldActionIntervalId = null;
+      }
+      heldActionButton = null;
+    }
+
+    canvas.addEventListener("mousedown", (event) => {
+      if (!state.world) {
+        return;
+      }
+
+      if (event.button === 1) {
+        event.preventDefault();
+        return;
+      }
+
+      if (event.button !== 0 && event.button !== 2) {
+        return;
+      }
+
+      // prevent the browser's native image/page drag-select from starting.
+      event.preventDefault();
+
+      stopHeldAction();
+      heldActionButton = event.button;
+      performPointerAction(heldActionButton);
+      heldActionIntervalId = window.setInterval(() => {
+        performPointerAction(heldActionButton);
+      }, BUILD_BREAK_ACTION_INTERVAL_MS);
     });
+
+    document.addEventListener("mouseup", (event) => {
+      if (heldActionButton !== null && event.button === heldActionButton) {
+        stopHeldAction();
+      }
+    });
+
+    window.addEventListener("blur", stopHeldAction);
 
     canvas.addEventListener(
       "wheel",

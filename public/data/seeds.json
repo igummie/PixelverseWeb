@@ -279,7 +279,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 43,
       "NAME": "WHITE_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 43,
@@ -334,7 +334,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 44,
       "NAME": "RED_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 44,
@@ -389,7 +389,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 45,
       "NAME": "ORANGE_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 45,
@@ -444,7 +444,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 46,
       "NAME": "YELLOW_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 46,
@@ -499,7 +499,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 47,
       "NAME": "GREEN_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 47,
@@ -554,7 +554,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 48,
       "NAME": "TEAL_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 48,
@@ -609,7 +609,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 49,
       "NAME": "BLUE_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 49,
@@ -664,7 +664,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 50,
       "NAME": "PURPLE_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 50,
@@ -719,7 +719,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 51,
       "NAME": "GREY_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 51,
@@ -774,7 +774,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 52,
       "NAME": "BLACK_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 52,
@@ -829,7 +829,7 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 53,
       "NAME": "BROWN_BLOCK Seed",
-      "GROWTIME": 3600,
+      "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
           "ITEM_ID": 54,

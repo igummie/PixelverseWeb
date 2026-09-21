@@ -1,4 +1,5 @@
 import {
+  BUILD_BREAK_ACTION_INTERVAL_MS,
   CAMERA_EDGE_INSET,
   CAMERA_ZOOM_STEP,
   CHAT_BUBBLE_FADE_MS,
@@ -759,6 +760,7 @@ const inputController = createInputController({
   constants: {
     CAMERA_ZOOM_STEP,
     TILE_SIZE,
+    BUILD_BREAK_ACTION_INTERVAL_MS,
   },
   actions: {
     setChatInputOpen,
