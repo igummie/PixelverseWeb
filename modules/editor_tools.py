@@ -384,33 +384,17 @@ def compact_blocks_payload_for_storage(payload: dict[str, Any]) -> None:
     payload["blocks"] = compacted_blocks
 
 
-def normalize_growth_percent(value: Any, fallback: float = 0.0) -> float:
-    try:
-        numeric = float(value)
-    except Exception:
-        numeric = fallback
-    numeric = max(0.0, min(100.0, numeric))
-    return round(numeric, 4)
-
-
-def sanitize_tree_stage_entry(value: Any) -> dict[str, Any] | None:
+def sanitize_tree_part_entry(value: Any) -> dict[str, Any] | None:
+    """Sanitize a single tree visual part (LEAVES or STALK): ATLAS_ID + ATLAS_TEXTURE."""
     if not isinstance(value, dict):
-        return None
-
-    try:
-        stage = int(value.get("STAGE", 0))
-    except Exception:
-        stage = 0
-    if stage <= 0:
         return None
 
     atlas_id = normalize_atlas_id_value(value.get("ATLAS_ID"))
     texture = normalize_atlas_texture_rect(value.get("ATLAS_TEXTURE"))
+    if atlas_id is None and texture is None:
+        return None
 
-    output: dict[str, Any] = {
-        "STAGE": stage,
-        "GROWTH_PERCENT": normalize_growth_percent(value.get("GROWTH_PERCENT", 0.0)),
-    }
+    output: dict[str, Any] = {}
     if atlas_id is not None:
         output["ATLAS_ID"] = atlas_id
     if texture is not None:
@@ -573,7 +557,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     seed_tint = normalize_tint_color(value.get("SEED_TINT"))
 
     # tree-related fields
-    tree_stages: list[dict[str, Any]] = []
+    tree_leaves: dict[str, Any] | None = None
+    tree_stalk: dict[str, Any] | None = None
     tree_drops: list[dict[str, Any]] = []
     fruit_drops: list[dict[str, Any]] = []
     tree_tint = ""
@@ -587,14 +572,13 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     tree_seed_drop_chance = 0.4
 
     raw_tree = value.get("TREE")
-    raw_stages: Any = value.get("TREE_STAGES", [])
     raw_tree_drops: Any = value.get("TREE_DROPS", [])
     raw_fruit_drops: Any = value.get("FRUIT_DROPS", [])
 
     if isinstance(raw_tree, dict):
         tree_tint = normalize_tint_color(raw_tree.get("TINT"))
-        if isinstance(raw_tree.get("STAGES"), list):
-            raw_stages = raw_tree.get("STAGES", [])
+        tree_leaves = sanitize_tree_part_entry(raw_tree.get("LEAVES"))
+        tree_stalk = sanitize_tree_part_entry(raw_tree.get("STALK"))
         if isinstance(raw_tree.get("DROPS"), list):
             raw_tree_drops = raw_tree.get("DROPS", [])
         if isinstance(raw_tree.get("FRUIT_DROPS"), list):
@@ -622,12 +606,6 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
         except Exception:
             tree_seed_drop_chance = 0.4
 
-    if isinstance(raw_stages, list):
-        for raw_stage in raw_stages:
-            stage = sanitize_tree_stage_entry(raw_stage)
-            if stage is not None:
-                tree_stages.append(stage)
-
     if isinstance(raw_tree_drops, list):
         for raw_drop in raw_tree_drops:
             drop = sanitize_seed_drop_entry(raw_drop)
@@ -639,8 +617,6 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
             fruit_drop = sanitize_fruit_drop_entry(raw_fruit_drop)
             if fruit_drop is not None:
                 fruit_drops.append(fruit_drop)
-
-    tree_stages.sort(key=lambda entry: int(entry.get("STAGE", 0)))
 
     output: dict[str, Any] = {
         "ITEM_ID": seed_id,
@@ -662,7 +638,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     # only create TREE object if there are any settings to persist
     if (
         tree_tint
-        or tree_stages
+        or tree_leaves
+        or tree_stalk
         or tree_drops
         or tree_gem_chance
         or tree_gem_amount
@@ -673,8 +650,10 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
         output["TREE"] = {}
         if tree_tint:
             output["TREE"]["TINT"] = tree_tint
-        if tree_stages:
-            output["TREE"]["STAGES"] = tree_stages
+        if tree_leaves:
+            output["TREE"]["LEAVES"] = tree_leaves
+        if tree_stalk:
+            output["TREE"]["STALK"] = tree_stalk
         if tree_drops:
             output["TREE"]["DROPS"] = tree_drops
         # include gem settings even if zero so they are explicit when edited
@@ -1391,6 +1370,19 @@ def register_editor_routes(
         existing = load_seeds_payload()
         output: dict[str, Any] = {}
 
+        # ITEM_ID is a single shared namespace across all item types, so a
+        # seed must not reuse an ID already claimed by a block.
+        blocks_payload = load_blocks_payload()
+        blocks = blocks_payload.get("blocks", []) if isinstance(blocks_payload, dict) else []
+        used_block_ids: set[int] = set()
+        for block in blocks if isinstance(blocks, list) else []:
+            if not isinstance(block, dict):
+                continue
+            try:
+                used_block_ids.add(int(block.get("ITEM_ID", block.get("ID", -1))))
+            except Exception:
+                continue
+
         sanitized_seeds: list[dict[str, Any]] = []
         seen_ids: set[int] = set()
         for raw_seed in payload.seeds:
@@ -1404,6 +1396,8 @@ def register_editor_routes(
             seed_id = int(seed.get("ITEM_ID", seed.get("SEED_ID", -1)))
             if seed_id in seen_ids:
                 raise HTTPException(status_code=400, detail=f"Duplicate seed id: {seed_id}")
+            if seed_id in used_block_ids:
+                raise HTTPException(status_code=400, detail=f"ITEM_ID {seed_id} is already used by a block")
             seen_ids.add(seed_id)
             sanitized_seeds.append(seed)
 

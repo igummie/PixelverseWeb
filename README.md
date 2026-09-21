@@ -50,6 +50,11 @@ multiplayer 2D build/break game using a custom canvas engine and a Python backen
 
 4. Open the URL in multiple tabs/devices and join the same world name.
 
+Developer tools are protected by the PIN `2468` by default. To change it, add
+`PIXELVERSE_DEV_PIN=your-pin` to a local `.env` file in the project root, or set
+the `PIXELVERSE_DEV_PIN` environment variable before starting the server. A
+successful unlock is remembered by that browser for one hour.
+
 ## Database
 
 - World and account data are saved in `data/db/game.db`.

@@ -3512,56 +3512,29 @@
         }
         const seeds = Array.isArray(payload?.seeds) ? payload.seeds : [];
 
-        // collect default tree stage entries from existing seeds
-        // use the explicit STAGE field rather than array index, since some
-        // seeds may omit or reorder stages.  STAGE values are 1-based.
-        const defaultStages = [];
+        // collect a default stalk/leaves pair from an existing seed's tree
+        // visuals to use as a starting point, falling back to blank tiles.
+        let defaultStalk = null;
+        let defaultLeaves = null;
         for (const s of seeds) {
             if (s && typeof s === "object") {
-                const stages = s?.TREE?.STAGES;
-                if (Array.isArray(stages)) {
-                    stages.forEach((st) => {
-                        if (!st || typeof st !== "object") return;
-                        const stageNum = Math.max(1, Number(st.STAGE) || 0);
-                        if (stageNum <= 0) return;
-                        const idx = stageNum - 1;
-                        if (
-                            !defaultStages[idx] &&
-                            (st.ATLAS_ID || st.ATLAS_TEXTURE)
-                        ) {
-                            // copy whole object so we keep STAGE and GROWTH_PERCENT
-                            defaultStages[idx] = { ...st };
-                        }
-                    });
+                const stalk = s?.TREE?.STALK;
+                const leaves = s?.TREE?.LEAVES;
+                if (!defaultStalk && stalk && typeof stalk === "object" && (stalk.ATLAS_ID || stalk.ATLAS_TEXTURE)) {
+                    defaultStalk = { ...stalk };
+                }
+                if (!defaultLeaves && leaves && typeof leaves === "object" && (leaves.ATLAS_ID || leaves.ATLAS_TEXTURE)) {
+                    defaultLeaves = { ...leaves };
                 }
             }
         }
-        // ensure four stages present (fill blanks with defaults)
-        for (let i = 0; i < 4; i += 1) {
-            if (!defaultStages[i]) {
-                defaultStages[i] = {
-                    STAGE: i + 1,
-                    GROWTH_PERCENT: i === 3 ? 100 : (i + 1) * 25,
-                    ATLAS_ID: "",
-                    ATLAS_TEXTURE: { x: 0, y: 0, w: 16, h: 16 },
-                };
-            }
+        if (!defaultStalk) {
+            defaultStalk = { ATLAS_ID: "", ATLAS_TEXTURE: { x: 0, y: 16, w: 16, h: 16 } };
         }
-        // enforce y=16 for each stage and default x based on index if missing
-        for (let i = 0; i < defaultStages.length; i += 1) {
-            const st = defaultStages[i];
-            if (!st.ATLAS_TEXTURE || typeof st.ATLAS_TEXTURE !== "object") {
-                st.ATLAS_TEXTURE = { x: i * 16, y: 16, w: 16, h: 16 };
-            }
-            st.ATLAS_TEXTURE.y = 16;
-            if (!Number.isFinite(Number(st.ATLAS_TEXTURE.x))) {
-                st.ATLAS_TEXTURE.x = i * 16;
-            }
+        if (!defaultLeaves) {
+            defaultLeaves = { ATLAS_ID: "", ATLAS_TEXTURE: { x: 16, y: 16, w: 16, h: 16 } };
         }
-        // ensure stage 2 explicitly uses tile index 5 (rect 16,16,16,16)
-        if (defaultStages[1]) {
-            defaultStages[1].ATLAS_TEXTURE = { x: 16, y: 16, w: 16, h: 16 };
-        }
+
 
         // pick random seed atlas from payload
         let seedAtlasId = "";
@@ -3575,15 +3548,21 @@
             seedAtlasId = choice?.ATLAS_ID ?? "";
         }
 
-        // compute next available seed id, must not match block ITEM_ID
-        let nextSeedId = 1;
-        if (Array.isArray(seeds) && seeds.length) {
-            nextSeedId = Math.max(
-                ...seeds.map((s) => Number(s?.ITEM_ID ?? s?.SEED_ID ?? 0) || 0),
-            ) + 1;
+        // compute next available seed id from the single shared ITEM_ID pool
+        // (all blocks + all seeds), matching getNextAvailableBlockId's logic.
+        const usedItemIds = new Set(
+            state.blocks
+                .map((b) => Number(b?.ITEM_ID))
+                .filter((value) => Number.isInteger(value) && value >= 0),
+        );
+        for (const s of seeds) {
+            const id = Number(s?.ITEM_ID ?? s?.SEED_ID);
+            if (Number.isInteger(id) && id >= 0) {
+                usedItemIds.add(id);
+            }
         }
-        // Ensure seed ID does not match block ID
-        if (nextSeedId === blockId) {
+        let nextSeedId = 0;
+        while (usedItemIds.has(nextSeedId)) {
             nextSeedId += 1;
         }
 
@@ -3604,7 +3583,8 @@
             TREE: {
                 NAME: `${block?.NAME || "BLOCK"} Tree`,
                 TINT: tint,
-                STAGES: defaultStages,
+                STALK: defaultStalk,
+                LEAVES: defaultLeaves,
             },
         };
         console.log("[Seed Generation] Generated seed:", newSeed);

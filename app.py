@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+import hashlib
+import hmac
 import json
 import os
 import random
@@ -13,8 +15,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from modules.block_registry import (
     BlockCatalog,
     DEFAULT_RUNTIME_BLOCK_ROLES,
@@ -96,7 +98,6 @@ from modules.world_utils import (
 )
 from pydantic import BaseModel, Field
 
-PORT = int(os.getenv("PORT", "3000"))
 WORLD_WIDTH = 120
 WORLD_HEIGHT = 70
 DAMAGE_REGEN_MIN_SECONDS = 5.0
@@ -108,6 +109,31 @@ GEM_DROP_MIN_IN_TILE = 0.08
 GEM_DROP_MAX_IN_TILE = 0.92
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def load_local_env() -> None:
+    env_path = BASE_DIR / ".env"
+    if not env_path.is_file():
+        return
+
+    try:
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+
+    for line in lines:
+        entry = line.strip()
+        if not entry or entry.startswith("#") or "=" not in entry:
+            continue
+        key, value = entry.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+load_local_env()
+PORT = int(os.getenv("PORT", "3000"))
 PUBLIC_DIR = BASE_DIR / "public"
 BLOCKS_PATH = PUBLIC_DIR / "data" / "blocks.json"
 SEEDS_PATH = PUBLIC_DIR / "data" / "seeds.json"
@@ -115,6 +141,20 @@ WEATHER_PATH = PUBLIC_DIR / "data" / "weather.json"
 EVENTS_PATH = PUBLIC_DIR / "data" / "events.json"
 NEWS_PATH = PUBLIC_DIR / "data" / "news.json"
 SPLICES_PATH = PUBLIC_DIR / "data" / "splices.json"
+DEV_TOOLS_PIN = os.getenv("PIXELVERSE_DEV_PIN", "2468").strip()
+DEV_TOOLS_SESSION_SECRET = os.getenv("PIXELVERSE_DEV_SESSION_SECRET", secrets.token_hex(32)).encode("utf-8")
+DEV_TOOLS_SESSION_COOKIE = "pixelverse_dev_tools"
+DEV_TOOLS_SESSION_SECONDS = 60 * 60
+EDITOR_PAGE_NAMES = {
+    "atlas-editor.html",
+    "event-editor.html",
+    "item-manager.html",
+    "news-editor.html",
+    "seed-editor.html",
+    "splice-editor.html",
+    "texture47-editor.html",
+    "weather-editor.html",
+}
 
 # configure world_utils shared constants and paths
 world_utils.PUBLIC_DIR = PUBLIC_DIR
@@ -276,6 +316,10 @@ def get_block_self_drop_seed_ids(tile_id: int) -> list[int]:
 
 def get_tree_item_drops(tree: dict[str, Any], now_ms: int) -> list[dict[str, Any]]:
     return world_utils.get_tree_item_drops(tree, now_ms)
+
+
+def get_or_roll_tree_harvest_drops(tree: dict[str, Any]) -> list[dict[str, Any]]:
+    return world_utils.get_or_roll_tree_harvest_drops(tree)
 
 
 def split_gem_amount(total: int) -> list[int]:
@@ -451,6 +495,30 @@ class GuestLoginBody(BaseModel):
     deviceId: str = Field(min_length=12, max_length=128)
 
 
+class DevToolsPinBody(BaseModel):
+    pin: str = Field(min_length=1, max_length=32)
+
+
+def make_dev_tools_session(expires_at: int) -> str:
+    payload = str(expires_at)
+    signature = hmac.new(DEV_TOOLS_SESSION_SECRET, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}.{signature}"
+
+
+def has_dev_tools_access(request: Request) -> bool:
+    raw_session = request.cookies.get(DEV_TOOLS_SESSION_COOKIE, "")
+    expires_raw, separator, signature = raw_session.partition(".")
+    if not separator or not expires_raw.isdigit() or not signature:
+        return False
+
+    expires_at = int(expires_raw)
+    if expires_at <= int(time.time()):
+        return False
+
+    expected = make_dev_tools_session(expires_at)
+    return hmac.compare_digest(raw_session, expected)
+
+
 
 
 @asynccontextmanager
@@ -510,6 +578,36 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 initialize_db()
 refresh_block_definitions_if_changed(force=True)
+
+
+@app.middleware("http")
+async def protect_dev_tools(request: Request, call_next):
+    path = request.url.path.strip("/")
+    is_editor_page = path in EDITOR_PAGE_NAMES
+    is_editor_api = path.startswith("api/tools/") and path != "api/tools/dev-access"
+    if (is_editor_page or is_editor_api) and not has_dev_tools_access(request):
+        if is_editor_page:
+            return RedirectResponse(f"/?devTools=1&returnTo=/{path}", status_code=303)
+        return JSONResponse({"detail": "Developer tools PIN required"}, status_code=401)
+    return await call_next(request)
+
+
+@app.post("/api/tools/dev-access")
+def unlock_dev_tools(payload: DevToolsPinBody, response: Response) -> dict[str, Any]:
+    if not hmac.compare_digest(payload.pin.strip(), DEV_TOOLS_PIN):
+        raise HTTPException(status_code=403, detail="Incorrect developer tools PIN")
+
+    expires_at = int(time.time()) + DEV_TOOLS_SESSION_SECONDS
+    response.set_cookie(
+        DEV_TOOLS_SESSION_COOKIE,
+        make_dev_tools_session(expires_at),
+        max_age=DEV_TOOLS_SESSION_SECONDS,
+        httponly=True,
+        samesite="lax",
+    )
+    return {"ok": True, "expiresAt": expires_at}
+
+
 register_editor_routes(
     app,
     public_dir=PUBLIC_DIR,
@@ -1491,8 +1589,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[r
 
                     removed_tree = remove_planted_tree_at(world, x, y)
                     if removed_tree is not None:
-                        tree_drops = get_tree_item_drops(removed_tree, int(time.time() * 1000)) or []
-                        print(f"[tree] computed tree_drops={tree_drops} for tree at {x},{y}")
+                        # use the roll decided at plant time (or cached lazily) so the
+                        # fruit-on-leaves display the player saw matches the actual harvest.
+                        tree_drops = get_or_roll_tree_harvest_drops(removed_tree) or []
+                        print(f"[tree] harvest_drops={tree_drops} for tree at {x},{y}")
                         if not tree_drops:
                             print(f"[tree] no drops defined for seed_id={removed_tree.get('seed_id')}\n")
                         for tree_drop in tree_drops or []:
@@ -1510,18 +1610,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[r
                                 continue
 
                             try:
-                                tree_drop_chance = float(tree_drop.get("CHANCE", 1.0))
+                                drop_count = int(tree_drop.get("count", tree_drop.get("COUNT", 1)))
                             except Exception:
-                                tree_drop_chance = 1.0
-                            tree_drop_chance = max(0.0, min(1.0, tree_drop_chance))
-                            if random.random() > tree_drop_chance:
-                                continue
-
-                            minc = int(tree_drop.get("MIN", tree_drop.get("COUNT", tree_drop.get("count", 1))))
-                            maxc = int(tree_drop.get("MAX", minc))
-                            if maxc < minc:
-                                maxc = minc
-                            drop_count = minc if maxc == minc else random.randint(minc, maxc)
+                                drop_count = 1
+                            drop_count = max(0, drop_count)
 
                             for _ in range(drop_count):
                                 tree_seed_drop = spawn_item_drop_center(
@@ -1996,6 +2088,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:  # pyright: ignore[r
                             "itemId": int(planted_tree.get("seed_id", seed_id)),
                             "seedId": int(planted_tree.get("seed_id", seed_id)),
                             "plantedAtMs": int(planted_tree.get("planted_at_ms", 0)),
+                            "readyDrops": [
+                                {
+                                    "itemId": int(rolled.get("ITEM_ID", -1)),
+                                    "itemType": str(rolled.get("ITEM_TYPE", "seed")),
+                                    "count": int(rolled.get("COUNT", 1)),
+                                }
+                                for rolled in get_or_roll_tree_harvest_drops(planted_tree)
+                            ],
                         },
                         "serverTimeMs": int(time.time() * 1000),
                     },

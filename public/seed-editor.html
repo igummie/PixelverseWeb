@@ -21,7 +21,7 @@
     <div class="layout">
       <div class="panel">
         <div class="title">Pixelverse Seed Editor</div>
-        <div class="subtitle">Create seeds from scratch. Pick textures from atlas canvas, then assign to seed or tree growth stage.</div>
+        <div class="subtitle">Create seeds from scratch. Pick textures from atlas canvas, then assign to seed, tree leaves, or tree stalk.</div>
 
         <div class="seedOptionsSection">
           <div class="title small">Seed Options</div>
@@ -120,8 +120,7 @@
           <table class="stageTable">
             <thead>
               <tr>
-                <th>Stage</th>
-                <th>Growth %</th>
+                <th>Part</th>
                 <th>Atlas</th>
                 <th>Rect</th>
               </tr>
@@ -129,7 +128,7 @@
             <tbody id="stageTableBody"></tbody>
           </table>
         </div>
-        <div id="treeEmptyHint" class="tiny" hidden>Create or select a seed to edit tree stages.</div>
+        <div id="treeEmptyHint" class="tiny" hidden>Create or select a seed to edit tree visuals.</div>
 
         <div class="pickerGrid">
           <div class="pickerSection">
@@ -153,7 +152,7 @@
           </div>
 
           <div class="pickerSection">
-            <div class="title small">Tree Texture Picker</div>
+            <div class="title small">Tree Stalk / Leaves Picker</div>
             <div class="row">
               <div class="fieldStack" style="min-width: 200px">
                 <label for="treeAtlasSelect">Tree Atlas</label>
@@ -161,24 +160,16 @@
               </div>
               <div class="fieldStack">
                 <label for="treeTileSizeInput">Tile Size</label>
-                <input id="treeTileSizeInput" type="number" min="1" step="1" value="16" />
-              </div>
-              <div class="fieldStack" style="min-width: 180px">
-                <label for="treeStageTargetSelect">Stage Target</label>
-                <select id="treeStageTargetSelect">
-                  <option value="1">Tree Stage 1</option>
-                  <option value="2">Tree Stage 2</option>
-                  <option value="3">Tree Stage 3</option>
-                  <option value="4">Tree Stage 4</option>
-                </select>
+                <input id="treeTileSizeInput" type="number" min="1" step="1" value="64" />
               </div>
               <button id="loadTreeAtlasBtn" type="button">Load Tree Atlas</button>
-              <button id="assignTreeTextureBtn" type="button">Assign Tree Texture</button>
+              <button id="assignStalkTextureBtn" type="button">Assign to Stalk</button>
+              <button id="assignLeavesTextureBtn" type="button">Assign to Leaves</button>
             </div>
             <div id="treeAtlasWrap" class="atlasWrap">
               <canvas id="treeAtlasCanvas" width="256" height="256"></canvas>
             </div>
-            <div class="tiny" id="treeSelectionInfo">Tile: 0 | Rect: 0,0,16,16</div>
+            <div class="tiny" id="treeSelectionInfo">Tile: 0 | Rect: 0,0,64,64</div>
           </div>
         </div>
 
@@ -230,9 +221,9 @@
       const seedSelectionInfo = document.getElementById("seedSelectionInfo");
       const treeAtlasSelect = document.getElementById("treeAtlasSelect");
       const treeTileSizeInput = document.getElementById("treeTileSizeInput");
-      const treeStageTargetSelect = document.getElementById("treeStageTargetSelect");
       const loadTreeAtlasBtn = document.getElementById("loadTreeAtlasBtn");
-      const assignTreeTextureBtn = document.getElementById("assignTreeTextureBtn");
+      const assignStalkTextureBtn = document.getElementById("assignStalkTextureBtn");
+      const assignLeavesTextureBtn = document.getElementById("assignLeavesTextureBtn");
       const treeAtlasCanvas = document.getElementById("treeAtlasCanvas");
       const treeSelectionInfo = document.getElementById("treeSelectionInfo");
       const saveBtn = document.getElementById("saveBtn");
@@ -243,7 +234,7 @@
       const copyJsonBtn = document.getElementById("copyJsonBtn");
 
       const seedInputs = [seedIdInput, seedNameInput, growtimeInput, seedTintInput, seedTintColorInput, treeTintInput, treeTintColorInput, treeGemChanceInput, treeGemAmountInput, treeGemAmountVarInput, treeToughnessInput, treeSeedDropChanceInput];
-      const seedActionButtons = [deleteSeedBtn, saveBtn, assignSeedTextureBtn, assignTreeTextureBtn, loadSeedAtlasBtn, loadTreeAtlasBtn, addFruitDropBtn];
+      const seedActionButtons = [deleteSeedBtn, saveBtn, assignSeedTextureBtn, assignStalkTextureBtn, assignLeavesTextureBtn, loadSeedAtlasBtn, loadTreeAtlasBtn, addFruitDropBtn];
 
       const state = {
         pickerAtlases: [],
@@ -258,7 +249,7 @@
         },
         treePicker: {
           atlasImage: null,
-          selectedRect: { x: 0, y: 0, w: 16, h: 16 },
+          selectedRect: { x: 0, y: 0, w: 64, h: 64 },
         },
       };
 
@@ -394,33 +385,35 @@
         status.style.color = isError ? "#fca5a5" : "#93c5fd";
       }
 
-      function makeDefaultStages() {
-        return [1, 2, 3, 4].map((stage) => ({
-          STAGE: stage,
-          GROWTH_PERCENT: stage === 4 ? 100 : stage * 25,
-          ATLAS_ID: "",
-          ATLAS_TEXTURE: { x: (stage - 1) * 16, y: 0, w: 16, h: 16 },
-        }));
+      // matches the Dirt Seed's stalk/leaves so new seeds have a visible tree by default
+      const DEFAULT_TREE_PARTS = {
+        STALK: { ATLAS_ID: "trees", ATLAS_TEXTURE: { x: 0, y: 64, w: 64, h: 64 } },
+        LEAVES: { ATLAS_ID: "trees", ATLAS_TEXTURE: { x: 128, y: 0, w: 64, h: 64 } },
+      };
+
+      function makeDefaultTreePart(partKey) {
+        const preset = DEFAULT_TREE_PARTS[partKey];
+        return {
+          ATLAS_ID: preset.ATLAS_ID,
+          ATLAS_TEXTURE: { ...preset.ATLAS_TEXTURE },
+        };
+      }
+
+      function normalizeTreePart(part, fallback) {
+        return {
+          ATLAS_ID: normalizeAtlasId(part?.ATLAS_ID ?? fallback.ATLAS_ID),
+          ATLAS_TEXTURE: {
+            x: Math.max(0, Number.parseInt(part?.ATLAS_TEXTURE?.x ?? fallback.ATLAS_TEXTURE.x, 10) || 0),
+            y: Math.max(0, Number.parseInt(part?.ATLAS_TEXTURE?.y ?? fallback.ATLAS_TEXTURE.y, 10) || 0),
+            w: Math.max(1, Number.parseInt(part?.ATLAS_TEXTURE?.w ?? fallback.ATLAS_TEXTURE.w, 10) || 16),
+            h: Math.max(1, Number.parseInt(part?.ATLAS_TEXTURE?.h ?? fallback.ATLAS_TEXTURE.h, 10) || 16),
+          },
+        };
       }
 
       function ensureSeed(seed) {
-        const stagesRaw = Array.isArray(seed?.TREE?.STAGES) ? seed.TREE.STAGES : [];
-        const stages = makeDefaultStages();
-        for (const stage of stagesRaw) {
-          const idx = Math.max(1, Number.parseInt(stage?.STAGE ?? 0, 10) || 0) - 1;
-          if (idx < 0 || idx >= stages.length) continue;
-          stages[idx] = {
-            STAGE: idx + 1,
-            GROWTH_PERCENT: Math.max(0, Math.min(100, Number(stage?.GROWTH_PERCENT ?? stages[idx].GROWTH_PERCENT) || 0)),
-            ATLAS_ID: normalizeAtlasId(stage?.ATLAS_ID ?? ""),
-            ATLAS_TEXTURE: {
-              x: Math.max(0, Number.parseInt(stage?.ATLAS_TEXTURE?.x ?? stages[idx].ATLAS_TEXTURE.x, 10) || 0),
-              y: Math.max(0, Number.parseInt(stage?.ATLAS_TEXTURE?.y ?? stages[idx].ATLAS_TEXTURE.y, 10) || 0),
-              w: Math.max(1, Number.parseInt(stage?.ATLAS_TEXTURE?.w ?? stages[idx].ATLAS_TEXTURE.w, 10) || 16),
-              h: Math.max(1, Number.parseInt(stage?.ATLAS_TEXTURE?.h ?? stages[idx].ATLAS_TEXTURE.h, 10) || 16),
-            },
-          };
-        }
+        const stalk = normalizeTreePart(seed?.TREE?.STALK, makeDefaultTreePart("STALK"));
+        const leaves = normalizeTreePart(seed?.TREE?.LEAVES, makeDefaultTreePart("LEAVES"));
 
         const itemId = Math.max(0, Number.parseInt(seed?.ITEM_ID ?? seed?.SEED_ID ?? 0, 10) || 0);
         const seedAtlasTexture = {
@@ -441,7 +434,8 @@
           SEED_ATLAS_TEXTURE: seedAtlasTexture,
           TREE: {
             TINT: normalizeTint(seed?.TREE?.TINT ?? ""),
-            STAGES: stages,
+            STALK: stalk,
+            LEAVES: leaves,
             GEM_CHANCE: Math.max(0, Math.min(1, Number(seed?.TREE?.GEM_CHANCE) || 0)),
             GEM_AMOUNT: Math.max(0, Number(seed?.TREE?.GEM_AMOUNT) || 0),
             GEM_AMOUNT_VAR: Math.max(0, Number(seed?.TREE?.GEM_AMOUNT_VAR) || 0),
@@ -525,34 +519,19 @@
 
       function renderStageRows(seed) {
         stageTableBody.innerHTML = "";
-        for (const stage of seed.TREE.STAGES) {
+        for (const [label, part] of [["Stalk", seed.TREE.STALK], ["Leaves", seed.TREE.LEAVES]]) {
           const tr = document.createElement("tr");
 
           const s = document.createElement("td");
-          s.textContent = String(stage.STAGE);
+          s.textContent = label;
           tr.append(s);
 
-          const g = document.createElement("td");
-          const input = document.createElement("input");
-          input.type = "number";
-          input.min = "0";
-          input.max = "100";
-          input.step = "0.1";
-          input.value = String(stage.GROWTH_PERCENT);
-          input.addEventListener("input", () => {
-            stage.GROWTH_PERCENT = Math.max(0, Math.min(100, Number(input.value) || 0));
-            updateJsonOutput();
-            renderSeedCards();
-          });
-          g.append(input);
-          tr.append(g);
-
           const a = document.createElement("td");
-          a.textContent = String(stage.ATLAS_ID || "(none)");
+          a.textContent = String(part.ATLAS_ID || "(none)");
           tr.append(a);
 
           const r = document.createElement("td");
-          const rect = stage.ATLAS_TEXTURE || { x: 0, y: 0, w: 16, h: 16 };
+          const rect = part.ATLAS_TEXTURE || { x: 0, y: 0, w: 16, h: 16 };
           r.textContent = `${rect.x},${rect.y},${rect.w},${rect.h}`;
           tr.append(r);
 
@@ -626,13 +605,15 @@
         updateJsonOutput();
       }
 
-      function drawTexturePreview(canvas, atlasId, rect, tint = "") {
+      function drawTexturePreview(canvas, atlasId, rect, tint = "", clearBg = true) {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#020617";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (clearBg) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#020617";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
 
         const innerX = 2;
         const innerY = 2;
@@ -684,6 +665,81 @@
         });
       }
 
+      // draws the stalk then overlays the leaves on top, in that fixed order,
+      // regardless of which atlas image promise resolves first.
+      async function drawTreePreview(canvas, seed) {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#020617";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        await drawTexturePreviewAwaited(canvas, seed.TREE.STALK.ATLAS_ID, seed.TREE.STALK.ATLAS_TEXTURE, seed.TREE.TINT, false);
+        await drawTexturePreviewAwaited(canvas, seed.TREE.LEAVES.ATLAS_ID, seed.TREE.LEAVES.ATLAS_TEXTURE, seed.TREE.TINT, false);
+      }
+
+      function drawTexturePreviewAwaited(canvas, atlasId, rect, tint, clearBg) {
+        return new Promise((resolve) => {
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve();
+
+          if (clearBg) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#020617";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+
+          const innerX = 2;
+          const innerY = 2;
+          const innerW = Math.max(1, canvas.width - 4);
+          const innerH = Math.max(1, canvas.height - 4);
+
+          const normalizedRect = {
+            x: Math.max(0, Number.parseInt(rect?.x ?? 0, 10) || 0),
+            y: Math.max(0, Number.parseInt(rect?.y ?? 0, 10) || 0),
+            w: Math.max(1, Number.parseInt(rect?.w ?? 16, 10) || 16),
+            h: Math.max(1, Number.parseInt(rect?.h ?? 16, 10) || 16),
+          };
+
+          getAtlasImage(atlasId).then((image) => {
+            if (!image) return resolve();
+            const spriteLayer = document.createElement("canvas");
+            spriteLayer.width = innerW;
+            spriteLayer.height = innerH;
+            const spriteCtx = spriteLayer.getContext("2d");
+            if (!spriteCtx) return resolve();
+
+            spriteCtx.imageSmoothingEnabled = false;
+            spriteCtx.clearRect(0, 0, innerW, innerH);
+            spriteCtx.drawImage(
+              image,
+              normalizedRect.x,
+              normalizedRect.y,
+              normalizedRect.w,
+              normalizedRect.h,
+              0,
+              0,
+              innerW,
+              innerH
+            );
+
+            const tintColor = normalizeTint(tint);
+            if (tintColor) {
+              spriteCtx.globalCompositeOperation = "source-atop";
+              spriteCtx.globalAlpha = 0.35;
+              spriteCtx.fillStyle = tintColor;
+              spriteCtx.fillRect(0, 0, innerW, innerH);
+              spriteCtx.globalAlpha = 1;
+              spriteCtx.globalCompositeOperation = "source-over";
+            }
+
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(spriteLayer, innerX, innerY);
+            resolve();
+          });
+        });
+      }
+
       function renderSeedCards() {
         seedCardList.innerHTML = "";
 
@@ -717,14 +773,12 @@
           previews.append(seedCanvas);
           drawTexturePreview(seedCanvas, seed.SEED_ATLAS_ID, seed.SEED_ATLAS_TEXTURE, seed.SEED_TINT);
 
-          for (const stage of seed.TREE.STAGES) {
-            const stageCanvas = document.createElement("canvas");
-            stageCanvas.width = 26;
-            stageCanvas.height = 26;
-            stageCanvas.className = "stagePreview";
-            previews.append(stageCanvas);
-            drawTexturePreview(stageCanvas, stage.ATLAS_ID, stage.ATLAS_TEXTURE, seed.TREE.TINT);
-          }
+          const treeCanvas = document.createElement("canvas");
+          treeCanvas.width = 40;
+          treeCanvas.height = 40;
+          treeCanvas.className = "stagePreview";
+          previews.append(treeCanvas);
+          drawTreePreview(treeCanvas, seed);
 
           card.append(previews);
 
@@ -758,14 +812,19 @@
         }
       }
 
-      function createSeedEntry() {
-        applyCurrentSeedFields();
+      function getNextAvailableSeedId() {
         const used = new Set([
           ...state.usedBlockItemIds,
           ...state.seeds.map((seed) => Math.max(0, Number.parseInt(seed.ITEM_ID || 0, 10) || 0)),
         ]);
-        let nextId = 1;
-        while (used.has(nextId)) nextId += 1;
+        let candidate = 0;
+        while (used.has(candidate)) candidate += 1;
+        return candidate;
+      }
+
+      function createSeedEntry() {
+        applyCurrentSeedFields();
+        const nextId = getNextAvailableSeedId();
 
         state.seeds.push(
           ensureSeed({
@@ -1017,7 +1076,7 @@
         setStatus("Assigned seed texture tile.");
       });
 
-      assignTreeTextureBtn.addEventListener("click", () => {
+      function assignTreeTexture(partKey) {
         applyCurrentSeedFields();
         const seed = state.seeds[state.selectedIndex];
         if (!seed) {
@@ -1025,19 +1084,21 @@
           return;
         }
 
-        const stageNum = Number.parseInt(treeStageTargetSelect.value, 10) || 1;
-        const stage = seed.TREE.STAGES.find((entry) => entry.STAGE === stageNum);
-        if (!stage) {
-          setStatus("Invalid stage target.", true);
+        const part = seed.TREE[partKey];
+        if (!part) {
+          setStatus("Invalid part target.", true);
           return;
         }
 
-        stage.ATLAS_ID = normalizeAtlasId(treeAtlasSelect.value);
-        stage.ATLAS_TEXTURE = { ...state.treePicker.selectedRect };
+        part.ATLAS_ID = normalizeAtlasId(treeAtlasSelect.value);
+        part.ATLAS_TEXTURE = { ...state.treePicker.selectedRect };
 
         renderFromSelected();
-        setStatus(`Assigned tree texture to stage ${stageNum}.`);
-      });
+        setStatus(`Assigned tree texture to ${partKey.toLowerCase()}.`);
+      }
+
+      assignStalkTextureBtn.addEventListener("click", () => assignTreeTexture("STALK"));
+      assignLeavesTextureBtn.addEventListener("click", () => assignTreeTexture("LEAVES"));
 
       createSeedBtn.addEventListener("click", () => {
         createSeedEntry();

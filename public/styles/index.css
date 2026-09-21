@@ -146,6 +146,45 @@
         font-size: 13px;
       }
 
+      .devToolsPinModal {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: rgba(5, 12, 16, 0.78);
+      }
+
+      .devToolsPinModal.hidden {
+        display: none;
+      }
+
+      .devToolsPinCard {
+        width: min(360px, 100%);
+        padding: 24px;
+        border: 2px solid #e6b35a;
+        border-radius: 4px;
+        background: #26353b;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+      }
+
+      .devToolsPinTitle {
+        font-size: 1.25rem;
+        font-weight: 700;
+      }
+
+      .devToolsPinSubtitle {
+        margin: 8px 0 18px;
+        color: #cbd5d8;
+      }
+
+      #devToolsPinInput {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 8px;
+      }
+
       /* make the game screen a full‑viewport flex container; the canvas
          inside will flex to fill whatever space isn’t taken by the HUD/topbar.
          this is more robust than doing `calc()` on the canvas height, which can

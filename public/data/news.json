@@ -1,6 +1,6 @@
 {
-  "activeId": "news-2",
-  "activeRevision": 11,
+  "activeId": "",
+  "activeRevision": 12,
   "pages": [
     {
       "id": "welcome",
@@ -14,7 +14,7 @@
       "buttonAction": "close",
       "buttonUrl": "",
       "revision": 2,
-      "updatedAt": 1789611511
+      "updatedAt": 1789625597
     },
     {
       "id": "news-2",
@@ -28,7 +28,7 @@
       "buttonAction": "close",
       "buttonUrl": "",
       "revision": 8,
-      "updatedAt": 1789611511
+      "updatedAt": 1789625597
     }
   ]
 }

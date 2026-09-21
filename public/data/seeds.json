@@ -8,14 +8,12 @@
       "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 12,
           "CHANCE": 0.2,
           "MIN": 1,
           "MAX": 1
         },
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 1,
           "CHANCE": 1.0,
           "MIN": 3,
@@ -31,53 +29,27 @@
       },
       "SEED_TINT": "#753a00",
       "TREE": {
-        "STAGES": [
-          {
-            "STAGE": 1,
-            "GROWTH_PERCENT": 25.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 0,
-              "y": 0,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 2,
-            "GROWTH_PERCENT": 50.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 0,
-              "y": 0,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 3,
-            "GROWTH_PERCENT": 75.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 32,
-              "y": 0,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 4,
-            "GROWTH_PERCENT": 100.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 48,
-              "y": 0,
-              "w": 16,
-              "h": 16
-            }
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 128,
+            "y": 0,
+            "w": 64,
+            "h": 64
           }
-        ],
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 0,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
         "GEM_CHANCE": 1.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
         "GEM_AMOUNT": 3,
         "GEM_AMOUNT_VAR": 2
       }
@@ -90,14 +62,12 @@
       "GROWTIME": 120,
       "FRUIT_DROPS": [
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 3,
           "CHANCE": 1.0,
           "MIN": 1,
           "MAX": 3
         },
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 13,
           "CHANCE": 0.2,
           "MIN": 1,
@@ -114,53 +84,27 @@
       "SEED_TINT": "#e5e5e5",
       "TREE": {
         "TINT": "#8b696a",
-        "STAGES": [
-          {
-            "STAGE": 1,
-            "GROWTH_PERCENT": 25.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 0,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 2,
-            "GROWTH_PERCENT": 50.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 16,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 3,
-            "GROWTH_PERCENT": 75.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 32,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 4,
-            "GROWTH_PERCENT": 100.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 48,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 64,
+            "h": 64
           }
-        ],
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 0,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
         "GEM_CHANCE": 1.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
         "GEM_AMOUNT": 3,
         "GEM_AMOUNT_VAR": 2
       }
@@ -173,14 +117,12 @@
       "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 9,
           "CHANCE": 1.0,
           "MIN": 2,
           "MAX": 5
         },
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 14,
           "CHANCE": 0.2,
           "MIN": 1,
@@ -197,53 +139,27 @@
       "SEED_TINT": "#cf1216",
       "TREE": {
         "TINT": "#cf1216",
-        "STAGES": [
-          {
-            "STAGE": 1,
-            "GROWTH_PERCENT": 25.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 0,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 2,
-            "GROWTH_PERCENT": 50.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 16,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 3,
-            "GROWTH_PERCENT": 75.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 32,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 4,
-            "GROWTH_PERCENT": 100.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 48,
-              "y": 0,
-              "w": 16,
-              "h": 16
-            }
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64
           }
-        ],
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 256,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
         "GEM_CHANCE": 1.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
         "GEM_AMOUNT": 3,
         "GEM_AMOUNT_VAR": 2
       }
@@ -256,14 +172,12 @@
       "GROWTIME": 60,
       "FRUIT_DROPS": [
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 15,
           "CHANCE": 0.2,
           "MIN": 1,
           "MAX": 1
         },
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 4,
           "CHANCE": 1.0,
           "MIN": 2,
@@ -280,53 +194,27 @@
       "SEED_TINT": "#ced72f",
       "TREE": {
         "TINT": "#ced72f",
-        "STAGES": [
-          {
-            "STAGE": 1,
-            "GROWTH_PERCENT": 25.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 0,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 2,
-            "GROWTH_PERCENT": 50.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 16,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 3,
-            "GROWTH_PERCENT": 75.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 32,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 4,
-            "GROWTH_PERCENT": 100.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 48,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 128,
+            "y": 0,
+            "w": 64,
+            "h": 64
           }
-        ],
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 0,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
         "GEM_CHANCE": 1.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
         "GEM_AMOUNT": 3,
         "GEM_AMOUNT_VAR": 2
       }
@@ -336,17 +224,15 @@
       "ITEM_TYPE": "seed",
       "SEED_ID": 16,
       "NAME": "Metal Platform Seed",
-      "GROWTIME": 120,
+      "GROWTIME": 5,
       "FRUIT_DROPS": [
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 16,
           "CHANCE": 0.2,
           "MIN": 1,
           "MAX": 1
         },
         {
-          "ITEM_TYPE": "seed",
           "ITEM_ID": 10,
           "CHANCE": 1.0,
           "MIN": 2,
@@ -363,55 +249,634 @@
       "SEED_TINT": "#26272a",
       "TREE": {
         "TINT": "#26272a",
-        "STAGES": [
-          {
-            "STAGE": 1,
-            "GROWTH_PERCENT": 25.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 0,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 2,
-            "GROWTH_PERCENT": 50.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 16,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 3,
-            "GROWTH_PERCENT": 75.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 32,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
-          },
-          {
-            "STAGE": 4,
-            "GROWTH_PERCENT": 100.0,
-            "ATLAS_ID": "trees",
-            "ATLAS_TEXTURE": {
-              "x": 48,
-              "y": 16,
-              "w": 16,
-              "h": 16
-            }
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 384,
+            "y": 0,
+            "w": 64,
+            "h": 64
           }
-        ],
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 0,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
         "GEM_CHANCE": 1.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
         "GEM_AMOUNT": 7,
         "GEM_AMOUNT_VAR": 2
+      }
+    },
+    {
+      "ITEM_ID": 43,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 43,
+      "NAME": "WHITE_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 43,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 18,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#fcfcfc",
+      "TREE": {
+        "TINT": "#fcfcfc",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 44,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 44,
+      "NAME": "RED_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 44,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 19,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#d60000",
+      "TREE": {
+        "TINT": "#d60000",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 45,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 45,
+      "NAME": "ORANGE_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 45,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 20,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#d66a00",
+      "TREE": {
+        "TINT": "#d66a00",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 46,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 46,
+      "NAME": "YELLOW_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 46,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 21,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#d6d600",
+      "TREE": {
+        "TINT": "#d6d600",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 47,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 47,
+      "NAME": "GREEN_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 47,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 22,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#6ad600",
+      "TREE": {
+        "TINT": "#6ad600",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 48,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 48,
+      "NAME": "TEAL_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 48,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 23,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#00d6d6",
+      "TREE": {
+        "TINT": "#00d6d6",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 49,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 49,
+      "NAME": "BLUE_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 49,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 24,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#0047d6",
+      "TREE": {
+        "TINT": "#0047d6",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 50,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 50,
+      "NAME": "PURPLE_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 50,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 25,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#ab00ab",
+      "TREE": {
+        "TINT": "#ab00ab",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 51,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 51,
+      "NAME": "GREY_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 51,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 26,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#b0b0b0",
+      "TREE": {
+        "TINT": "#b0b0b0",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 52,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 52,
+      "NAME": "BLACK_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 52,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 27,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#171717",
+      "TREE": {
+        "TINT": "#171717",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
+      }
+    },
+    {
+      "ITEM_ID": 53,
+      "ITEM_TYPE": "seed",
+      "SEED_ID": 53,
+      "NAME": "BROWN_BLOCK Seed",
+      "GROWTIME": 3600,
+      "FRUIT_DROPS": [
+        {
+          "ITEM_ID": 54,
+          "CHANCE": 0.2,
+          "MIN": 1,
+          "MAX": 1
+        },
+        {
+          "ITEM_ID": 28,
+          "CHANCE": 1.0,
+          "MIN": 2,
+          "MAX": 5
+        }
+      ],
+      "SEED_ATLAS_ID": "seed",
+      "SEED_ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "SEED_TINT": "#605129",
+      "TREE": {
+        "TINT": "#605129",
+        "LEAVES": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 0,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "STALK": {
+          "ATLAS_ID": "trees",
+          "ATLAS_TEXTURE": {
+            "x": 448,
+            "y": 64,
+            "w": 64,
+            "h": 64
+          }
+        },
+        "GEM_CHANCE": 0.0,
+        "TOUGHNESS": 5,
+        "SEED_DROP_CHANCE": 0.4,
+        "GEM_AMOUNT": 0,
+        "GEM_AMOUNT_VAR": 0
       }
     }
   ],
@@ -419,7 +884,7 @@
     {
       "ATLAS_ID": "trees",
       "NAME": "TREES_ATLAS",
-      "SRC": "/assets/atlases/trees_atlas.svg",
+      "SRC": "/assets/atlases/TREES.png",
       "TILE_SIZE": 16
     },
     {

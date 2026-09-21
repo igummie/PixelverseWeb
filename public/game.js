@@ -1184,33 +1184,19 @@ function getItemDropSprite(itemId, itemType = "") {
 // `setSelectedItem`, `renderInventoryDrawer`, etc.
 
 
-function getSeedTreeStage(seed, serverNowMs, plantedAtMs) {
+// smallest scale a freshly planted tree is drawn at (grows to 1.0 when mature)
+const TREE_MIN_SCALE = 0.35;
+
+function getTreeGrowthScale(seed, serverNowMs, plantedAtMs) {
   if (!seed || typeof seed !== "object") {
     return null;
   }
 
-  const stages = Array.isArray(seed.TREE?.STAGES)
-    ? seed.TREE.STAGES.filter((stage) => stage && typeof stage === "object").slice()
-    : [];
-  if (stages.length === 0) {
-    return null;
-  }
-
-  stages.sort((a, b) => Number(a?.GROWTH_PERCENT ?? 0) - Number(b?.GROWTH_PERCENT ?? 0));
-
   const growSeconds = Math.max(1, Number(seed.GROWTIME) || 1);
   const elapsedMs = Math.max(0, Number(serverNowMs) - Number(plantedAtMs || 0));
-  const progressPct = Math.max(0, Math.min(100, (elapsedMs / (growSeconds * 1000)) * 100));
+  const progress = Math.max(0, Math.min(1, elapsedMs / (growSeconds * 1000)));
 
-  let active = stages[0];
-  for (const stage of stages) {
-    const threshold = Number(stage?.GROWTH_PERCENT ?? stage?.growth_percent ?? 0);
-    if (progressPct >= threshold) {
-      active = stage;
-    }
-  }
-
-  return active;
+  return TREE_MIN_SCALE + (1 - TREE_MIN_SCALE) * progress;
 }
 
 function formatGrowthTimeRemaining(msRemaining) {
@@ -1344,8 +1330,157 @@ function maybeShowTreeGrowthHint(nowMs) {
   state.treeHintTreeId = nextTreeId;
 }
 
-function getTreeSprite(seed, stage) {
-  return assetsLoader.getTreeSprite(seed, stage);
+function getTreeSprite(seed, part) {
+  return assetsLoader.getTreeSprite(seed, part);
+}
+
+function isTreeReadyToHarvest(seed, serverNowMs, plantedAtMs) {
+  if (!seed || typeof seed !== "object") {
+    return false;
+  }
+  const growSeconds = Math.max(1, Number(seed.GROWTIME) || 1);
+  const elapsedMs = Math.max(0, Number(serverNowMs) - Number(plantedAtMs || 0));
+  return elapsedMs >= growSeconds * 1000;
+}
+
+// how many fruits can be shown perched on a tree's leaves at once, Growtopia-style
+const MAX_TREE_FRUITS = 4;
+
+// fixed spots (fractions of the leaves' drawn box) where fruit sprites sit
+const TREE_FRUIT_OFFSETS = [
+  { x: 0.30, y: 0.32 },
+  { x: 0.70, y: 0.26 },
+  { x: 0.24, y: 0.64 },
+  { x: 0.74, y: 0.58 },
+];
+
+// most FRUIT_DROPS entries in seeds.json have no ITEM_TYPE saved, so infer it
+// from the actual catalogs (mirrors backend world_utils.infer_item_type)
+// instead of defaulting to "seed", which would hide every untyped drop.
+function inferFruitDropItemType(drop) {
+  const explicitType = String(drop?.ITEM_TYPE ?? drop?.TYPE ?? "").trim().toLowerCase();
+  if (explicitType) {
+    return explicitType;
+  }
+  const itemId = Math.floor(Number(drop?.ITEM_ID ?? drop?.ID ?? -1));
+  if (state.seedDefs.has(itemId)) {
+    return "seed";
+  }
+  if (state.blockDefs.has(itemId)) {
+    return "block";
+  }
+  return "seed";
+}
+
+function getSeedFruitDropDefs(seed) {
+  if (!seed || typeof seed !== "object") {
+    return [];
+  }
+  if (Array.isArray(seed.FRUIT_DROPS) && seed.FRUIT_DROPS.length > 0) {
+    return seed.FRUIT_DROPS;
+  }
+  if (seed.TREE && Array.isArray(seed.TREE.FRUIT_DROPS) && seed.TREE.FRUIT_DROPS.length > 0) {
+    return seed.TREE.FRUIT_DROPS;
+  }
+  return [];
+}
+
+// picks which/how many fruit icons to show on a fully grown tree's leaves.
+// prefers the tree's server-rolled readyDrops (decided once at plant time)
+// so the display always matches exactly what harvesting will actually spawn,
+// instead of an average/max estimate that could differ from the real roll.
+// count is the total rolled item quantity, clamped to [1, MAX_TREE_FRUITS].
+function getTreeFruitDisplayEntries(tree, seed) {
+  const readyDrops = Array.isArray(tree?.readyDrops) ? tree.readyDrops : [];
+  const tangibleDrops = readyDrops.filter((drop) => drop && drop.itemType !== "seed" && drop.count > 0);
+
+  if (tangibleDrops.length > 0) {
+    const weightedEntries = [];
+    let totalCount = 0;
+    for (const drop of tangibleDrops) {
+      totalCount += drop.count;
+      for (let i = 0; i < drop.count; i += 1) {
+        weightedEntries.push({ ITEM_ID: drop.itemId, ITEM_TYPE: drop.itemType });
+      }
+    }
+    const count = Math.max(1, Math.min(MAX_TREE_FRUITS, totalCount));
+    const entries = [];
+    for (let i = 0; i < count; i += 1) {
+      entries.push(weightedEntries[i % weightedEntries.length]);
+    }
+    return entries;
+  }
+
+  // fallback for legacy trees created before readyDrops existed: approximate
+  // from the seed's configured drop definitions.
+  const fruitDrops = getSeedFruitDropDefs(seed);
+  if (!fruitDrops.length) {
+    return [];
+  }
+
+  const weightedEntries = [];
+  let totalExpected = 0;
+  for (const drop of fruitDrops) {
+    if (!drop || typeof drop !== "object") {
+      continue;
+    }
+    // seeds themselves aren't shown as fruit on the leaves, only tangible drops
+    const dropItemType = inferFruitDropItemType(drop);
+    if (dropItemType === "seed") {
+      continue;
+    }
+    const chance = Math.max(0, Math.min(1, Number(drop.CHANCE ?? 1)));
+    if (chance <= 0) {
+      continue;
+    }
+    const min = Math.max(0, Number(drop.MIN ?? drop.COUNT ?? 1));
+    const max = Math.max(min, Number(drop.MAX ?? min));
+    const expected = chance * ((min + max) / 2);
+    if (expected <= 0) {
+      continue;
+    }
+    totalExpected += expected;
+    const weight = Math.max(1, Math.round(expected));
+    for (let i = 0; i < weight; i += 1) {
+      weightedEntries.push(drop);
+    }
+  }
+
+  if (!weightedEntries.length) {
+    return [];
+  }
+
+  const count = Math.max(1, Math.min(MAX_TREE_FRUITS, Math.round(totalExpected) || 1));
+  const entries = [];
+  for (let i = 0; i < count; i += 1) {
+    entries.push(weightedEntries[i % weightedEntries.length]);
+  }
+  return entries;
+}
+
+function drawTreeFruits(tree, seed, screenX, screenY, drawSize) {
+  const entries = getTreeFruitDisplayEntries(tree, seed);
+  if (!entries.length) {
+    return;
+  }
+
+  const fruitSize = drawSize * 0.3;
+  for (let i = 0; i < entries.length; i += 1) {
+    const drop = entries[i];
+    const itemId = Number(drop.ITEM_ID ?? drop.ID ?? -1);
+    if (!Number.isFinite(itemId) || itemId < 0) {
+      continue;
+    }
+    const itemType = inferFruitDropItemType(drop);
+    const sprite = getItemDropSprite(itemId, itemType);
+    if (!sprite) {
+      continue;
+    }
+    const offset = TREE_FRUIT_OFFSETS[i % TREE_FRUIT_OFFSETS.length];
+    const fruitX = screenX + drawSize * offset.x - fruitSize / 2;
+    const fruitY = screenY + drawSize * offset.y - fruitSize / 2;
+    ctx.drawImage(sprite, fruitX, fruitY, fruitSize, fruitSize);
+  }
 }
 
 function drawPlantedTrees() {
@@ -1365,31 +1500,43 @@ function drawPlantedTrees() {
       continue;
     }
 
-    const stage = getSeedTreeStage(seed, serverNowMs, tree.plantedAtMs);
-    if (!stage) {
+    const scale = getTreeGrowthScale(seed, serverNowMs, tree.plantedAtMs);
+    if (!scale) {
       continue;
     }
 
-    const sprite = getTreeSprite(seed, stage);
-    if (!sprite) {
+    const stalkSprite = getTreeSprite(seed, seed.TREE?.STALK);
+    const leavesSprite = getTreeSprite(seed, seed.TREE?.LEAVES);
+    if (!stalkSprite && !leavesSprite) {
       continue;
     }
 
-    const screenX = (tree.x * TILE_SIZE - state.camera.x) * state.camera.zoom;
-    const screenY = (tree.y * TILE_SIZE - state.camera.y) * state.camera.zoom;
-    const drawWidth = TILE_SIZE * state.camera.zoom;
-    const drawHeight = TILE_SIZE * state.camera.zoom;
+    // trees grow from the ground up, so scale around the tile's bottom
+    // center instead of stretching from the top-left corner.
+    const drawSize = TILE_SIZE * scale * state.camera.zoom;
+    const centerX = (tree.x * TILE_SIZE + TILE_SIZE / 2 - state.camera.x) * state.camera.zoom;
+    const bottomY = (tree.y * TILE_SIZE + TILE_SIZE - state.camera.y) * state.camera.zoom;
+    const screenX = centerX - drawSize / 2;
+    const screenY = bottomY - drawSize;
 
     if (
-      screenX + drawWidth < -8 ||
-      screenY + drawHeight < -8 ||
+      screenX + drawSize < -8 ||
+      screenY + drawSize < -8 ||
       screenX > cssW + 8 ||
       screenY > cssH + 8
     ) {
       continue;
     }
 
-    ctx.drawImage(sprite, screenX, screenY, drawWidth, drawHeight);
+    if (stalkSprite) {
+      ctx.drawImage(stalkSprite, screenX, screenY, drawSize, drawSize);
+    }
+    if (leavesSprite) {
+      ctx.drawImage(leavesSprite, screenX, screenY, drawSize, drawSize);
+    }
+    if (isTreeReadyToHarvest(seed, serverNowMs, tree.plantedAtMs)) {
+      drawTreeFruits(tree, seed, screenX, screenY, drawSize);
+    }
   }
 }
 

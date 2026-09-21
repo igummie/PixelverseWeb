@@ -500,6 +500,11 @@ def get_tree_item_drops(tree: Dict[str, Any], now_ms: int) -> List[Dict[str, Any
     if not is_tree_fully_grown(tree, now_ms, seed=seed):
         return []
 
+    return get_tree_drop_definitions(seed)
+
+
+def get_tree_drop_definitions(seed: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Return the configured (unrolled) drop definitions for a tree seed."""
     # Preferred format for harvest drops:
     # TREE.DROPS: [{ID/SEED_ID, CHANCE, COUNT|MIN/MAX}, ...]
     # Legacy/alt format supported: TREE_DROPS: [...]
@@ -560,6 +565,12 @@ def get_tree_item_drops(tree: Dict[str, Any], now_ms: int) -> List[Dict[str, Any
         if not isinstance(rf, dict):
             continue
         try:
+            item_id = int(rf.get("ITEM_ID", -1))
+        except Exception:
+            item_id = -1
+        if item_id < 0:
+            continue
+        try:
             item_type_value = rf.get("ITEM_TYPE", rf.get("item_type", rf.get("TYPE", rf.get("type"))))
             item_type = (
                 str(item_type_value).lower()
@@ -570,12 +581,6 @@ def get_tree_item_drops(tree: Dict[str, Any], now_ms: int) -> List[Dict[str, Any
             item_type = "seed"
         if item_type not in {"seed", "block", "furniture", "clothes"}:
             item_type = "seed"
-        try:
-            item_id = int(rf.get("ITEM_ID", -1))
-        except Exception:
-            item_id = -1
-        if item_id < 0:
-            continue
         try:
             chance = float(rf.get("CHANCE", 1.0))
         except Exception:
@@ -600,6 +605,58 @@ def get_tree_item_drops(tree: Dict[str, Any], now_ms: int) -> List[Dict[str, Any
         })
 
     return drops
+
+
+def roll_tree_harvest_drops(seed: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Roll each drop definition's CHANCE/MIN/MAX once and return the final
+    (already-decided) list of items a harvest will actually spawn. Rolling
+    this once and caching it (see get_or_roll_tree_harvest_drops) lets the
+    fruit-on-leaves display and the real harvest use identical numbers,
+    instead of the display showing an average/max estimate that can differ
+    from what the randomized harvest actually produces."""
+    if not isinstance(seed, dict):
+        return []
+
+    rolled: List[Dict[str, Any]] = []
+    for definition in get_tree_drop_definitions(seed):
+        chance = float(definition.get("CHANCE", 1.0))
+        if random.random() > chance:
+            continue
+        minc = int(definition.get("MIN", 1))
+        maxc = int(definition.get("MAX", minc))
+        count = minc if maxc <= minc else random.randint(minc, maxc)
+        if count <= 0:
+            continue
+        rolled.append({
+            "ITEM_TYPE": definition.get("ITEM_TYPE", "seed"),
+            "ITEM_ID": int(definition.get("ITEM_ID", -1)),
+            "COUNT": count,
+        })
+
+    return rolled
+
+
+def get_or_roll_tree_harvest_drops(tree: Dict[str, Any], seed: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
+    """Return the tree's cached harvest roll, computing and caching it once
+    if it hasn't been rolled yet (e.g. trees planted before this feature, or
+    restored from a save that doesn't persist the roll)."""
+    if not isinstance(tree, dict):
+        return []
+
+    cached = tree.get("harvest_drops")
+    if isinstance(cached, list):
+        return cached
+
+    if seed is None:
+        try:
+            seed_id = int(tree.get("seed_id", -1))
+        except Exception:
+            seed_id = -1
+        seed = get_item_definition(seed_id, "seed") if seed_id >= 0 else None
+
+    rolled = roll_tree_harvest_drops(seed) if isinstance(seed, dict) else []
+    tree["harvest_drops"] = rolled
+    return rolled
 
 
 def is_tree_fully_grown(
@@ -685,7 +742,8 @@ def place_planted_tree(
     if seed_id < 0:
         return None
 
-    if get_item_definition(seed_id, "seed") is None:
+    seed = get_item_definition(seed_id, "seed")
+    if not isinstance(seed, dict):
         return None
 
     tree = {
@@ -694,6 +752,9 @@ def place_planted_tree(
         "y": int(y),
         "seed_id": int(seed_id),
         "planted_at_ms": int(planted_at_ms),
+        # decided once at plant time so the fruit display and the actual
+        # harvest always agree on exactly what (and how much) will drop.
+        "harvest_drops": roll_tree_harvest_drops(seed),
     }
     ensure_world_tree_state(world)[get_tree_key(int(x), int(y))] = tree
     return tree
@@ -754,6 +815,18 @@ def serialize_planted_trees(world: Dict[str, Any]) -> List[Dict[str, Any]]:
             continue
 
         try:
+            # the harvest roll is decided once (at plant time, or lazily here for
+            # legacy trees) so it's safe to always include - the client only
+            # renders fruit icons once it locally determines the tree is grown.
+            ready_drops: List[Dict[str, Any]] = [
+                {
+                    "itemId": int(rolled.get("ITEM_ID", -1)),
+                    "itemType": str(rolled.get("ITEM_TYPE", "seed")),
+                    "count": int(rolled.get("COUNT", 1)),
+                }
+                for rolled in get_or_roll_tree_harvest_drops(tree)
+            ]
+
             payload.append(
                 {
                     "id": str(tree.get("id", "")),
@@ -763,6 +836,7 @@ def serialize_planted_trees(world: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "seedId": int(tree.get("seed_id", -1)),
                     "plantedAtMs": int(tree.get("planted_at_ms", 0)),
                     "spliced": bool(tree.get("spliced", False)),
+                    "readyDrops": ready_drops,
                 }
             )
         except Exception:

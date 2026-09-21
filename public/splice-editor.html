@@ -149,14 +149,16 @@
         return promise;
       }
 
-      function drawSprite(canvas, atlasId, texture, tint = "") {
+      function drawSprite(canvas, atlasId, texture, tint = "", clearBg = true) {
         const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#091119";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (!ctx) return Promise.resolve();
+        if (clearBg) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#091119";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
         const rect = texture || { x: 0, y: 0, w: 16, h: 16 };
-        getAtlasImage(atlasId).then((image) => {
+        return getAtlasImage(atlasId).then((image) => {
           if (!image) return;
           ctx.imageSmoothingEnabled = false;
           ctx.drawImage(image, Number(rect.x) || 0, Number(rect.y) || 0, Math.max(1, Number(rect.w) || 16), Math.max(1, Number(rect.h) || 16), 1, 1, canvas.width - 2, canvas.height - 2);
@@ -169,6 +171,12 @@
             ctx.globalCompositeOperation = "source-over";
           }
         });
+      }
+
+      // draws the tree's stalk then overlays the leaves, in that fixed order.
+      async function drawTreeSprite(canvas, seed) {
+        await drawSprite(canvas, seed?.TREE?.STALK?.ATLAS_ID, seed?.TREE?.STALK?.ATLAS_TEXTURE, seed?.TREE?.TINT, true);
+        await drawSprite(canvas, seed?.TREE?.LEAVES?.ATLAS_ID, seed?.TREE?.LEAVES?.ATLAS_TEXTURE, seed?.TREE?.TINT, false);
       }
 
       function collectAncestorSeeds(node, visited = new Set()) {
@@ -224,14 +232,12 @@
 
           const treeRow = document.createElement("div");
           treeRow.className = "nodeDropList";
-          for (const stage of (seed.TREE?.STAGES || []).slice(0, 4)) {
-            const treeCanvas = document.createElement("canvas");
-            treeCanvas.width = 42;
-            treeCanvas.height = 42;
-            treeCanvas.className = "nodeSprite tree";
-            drawSprite(treeCanvas, stage.ATLAS_ID, stage.ATLAS_TEXTURE, seed.TREE?.TINT);
-            treeRow.append(treeCanvas);
-          }
+          const treeCanvas = document.createElement("canvas");
+          treeCanvas.width = 42;
+          treeCanvas.height = 42;
+          treeCanvas.className = "nodeSprite tree";
+          drawTreeSprite(treeCanvas, seed);
+          treeRow.append(treeCanvas);
           visuals.append(treeRow);
 
           const drops = (Array.isArray(seed.FRUIT_DROPS) ? seed.FRUIT_DROPS : []).slice(0, 6);

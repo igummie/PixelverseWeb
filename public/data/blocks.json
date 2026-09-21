@@ -10,13 +10,19 @@
     {
       "ATLAS_ID": "gems",
       "NAME": "GEMS_ATLAS",
-      "SRC": "/assets/atlases/gems_atlas.svg",
-      "TILE_SIZE": 16
+      "SRC": "/assets/atlases/gem_atlas.png",
+      "TILE_SIZE": 64
     },
     {
       "ATLAS_ID": "blocks1",
       "NAME": "BLOCKS1",
       "SRC": "/assets/atlases/BLOCKS1.png",
+      "TILE_SIZE": 64
+    },
+    {
+      "ATLAS_ID": "backgrounds1",
+      "NAME": "BACKGROUNDS1",
+      "SRC": "/assets/atlases/BACKGROUNDS1.png",
       "TILE_SIZE": 64
     }
   ],
@@ -170,14 +176,14 @@
       "ITEM_ID": 7,
       "ITEM_TYPE": "block",
       "ID": 7,
-      "NAME": "TEMP3",
+      "NAME": "WOODEN BLOCK",
       "BLOCK_TYPE": "SOLID",
-      "ATLAS_ID": 0,
+      "ATLAS_ID": "blocks1",
       "ATLAS_TEXTURE": {
-        "x": 80,
-        "y": 16,
-        "w": 16,
-        "h": 16
+        "x": 384,
+        "y": 64,
+        "w": 64,
+        "h": 64
       },
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.12,
@@ -189,15 +195,35 @@
       "ITEM_ID": 8,
       "ITEM_TYPE": "block",
       "ID": 8,
-      "NAME": "TEMP4",
-      "BLOCK_TYPE": "SOLID",
-      "ATLAS_ID": 0,
+      "NAME": "GRASS",
+      "BLOCK_TYPE": "DECO",
+      "ATLAS_ID": "blocks1",
       "ATLAS_TEXTURE": {
-        "x": 96,
-        "y": 16,
-        "w": 16,
-        "h": 16
+        "x": 192,
+        "y": 64,
+        "w": 64,
+        "h": 64
       },
+      "ATLAS_TEXTURE_VARIANTS": [
+        {
+          "x": 256,
+          "y": 64,
+          "w": 64,
+          "h": 64
+        },
+        {
+          "x": 320,
+          "y": 64,
+          "w": 64,
+          "h": 64
+        },
+        {
+          "x": 192,
+          "y": 64,
+          "w": 64,
+          "h": 64
+        }
+      ],
       "TOUGHNESS": 3,
       "GEM_CHANCE": 0.12,
       "GEM_AMOUNT": 1,
@@ -299,6 +325,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 43,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -321,6 +353,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 44,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -343,6 +381,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 45,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -365,6 +409,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 46,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -387,6 +437,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 47,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -409,6 +465,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 48,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -431,6 +493,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 49,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -453,6 +521,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 50,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -475,6 +549,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 51,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -497,6 +577,12 @@
       "GEM_CHANCE": 0,
       "GEM_AMOUNT": 0,
       "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 52,
+          "CHANCE": 0.2
+        }
+      ],
       "PLACEABLE": true,
       "BREAKABLE": true,
       "DROP_SELF": true,
@@ -511,6 +597,320 @@
       "ATLAS_ID": "blocks1",
       "ATLAS_TEXTURE": {
         "x": 128,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "SEED_IDS": [
+        {
+          "ID": 53,
+          "CHANCE": 0.2
+        }
+      ],
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 29,
+      "ITEM_TYPE": "block",
+      "ID": 29,
+      "NAME": "White Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 0,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 30,
+      "ITEM_TYPE": "block",
+      "ID": 30,
+      "NAME": "Red Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 31,
+      "ITEM_TYPE": "block",
+      "ID": 31,
+      "NAME": "Orange Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 128,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 32,
+      "ITEM_TYPE": "block",
+      "ID": 32,
+      "NAME": "Yellow Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 192,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 33,
+      "ITEM_TYPE": "block",
+      "ID": 33,
+      "NAME": "Green Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 256,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 34,
+      "ITEM_TYPE": "block",
+      "ID": 34,
+      "NAME": "Teal Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 320,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 35,
+      "ITEM_TYPE": "block",
+      "ID": 35,
+      "NAME": "Blue Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 384,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 36,
+      "ITEM_TYPE": "block",
+      "ID": 36,
+      "NAME": "Purple Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 448,
+        "y": 0,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 37,
+      "ITEM_TYPE": "block",
+      "ID": 37,
+      "NAME": "Grey Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 0,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 38,
+      "ITEM_TYPE": "block",
+      "ID": 38,
+      "NAME": "Black Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 64,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 39,
+      "ITEM_TYPE": "block",
+      "ID": 39,
+      "NAME": "Brown Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 128,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 40,
+      "ITEM_TYPE": "block",
+      "ID": 40,
+      "NAME": "Cow Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 192,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 41,
+      "ITEM_TYPE": "block",
+      "ID": 41,
+      "NAME": "Star Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 256,
+        "y": 64,
+        "w": 64,
+        "h": 64
+      },
+      "TOUGHNESS": 1,
+      "GEM_CHANCE": 0,
+      "GEM_AMOUNT": 0,
+      "GEM_AMOUNT_VAR": 0,
+      "PLACEABLE": true,
+      "BREAKABLE": true,
+      "DROP_SELF": true,
+      "DROP_SELF_CHANCE": 1
+    },
+    {
+      "ITEM_ID": 42,
+      "ITEM_TYPE": "block",
+      "ID": 42,
+      "NAME": "Checkered Background",
+      "BLOCK_TYPE": "BACKGROUND",
+      "ATLAS_ID": "backgrounds1",
+      "ATLAS_TEXTURE": {
+        "x": 320,
         "y": 64,
         "w": 64,
         "h": 64

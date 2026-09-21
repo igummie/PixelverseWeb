@@ -183,12 +183,31 @@ export function createWorldDropsController({ state, settings }) {
       return null;
     }
 
+    const readyDrops = Array.isArray(entry.readyDrops)
+      ? entry.readyDrops
+        .map((drop) => {
+          if (!drop || typeof drop !== "object") return null;
+          const itemId = Math.floor(Number(drop.itemId));
+          const count = Math.floor(Number(drop.count));
+          if (!Number.isFinite(itemId) || itemId < 0 || !Number.isFinite(count) || count <= 0) {
+            return null;
+          }
+          return {
+            itemId,
+            itemType: String(drop.itemType || "seed").trim().toLowerCase(),
+            count,
+          };
+        })
+        .filter(Boolean)
+      : [];
+
     return {
       id,
       x: Math.floor(x),
       y: Math.floor(y),
       seedId: Math.floor(seedId),
       plantedAtMs: Math.max(0, Math.floor(plantedAtMs)),
+      readyDrops,
     };
   }
 

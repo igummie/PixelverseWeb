@@ -580,9 +580,9 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     return getBlockDropSprite(normalizedItemId);
   }
 
-  function getTreeSprite(seed, stage) {
-    const atlasId = stage?.ATLAS_ID;
-    const texture = stage?.ATLAS_TEXTURE;
+  function getTreeSprite(seed, part) {
+    const atlasId = part?.ATLAS_ID;
+    const texture = part?.ATLAS_TEXTURE;
     const atlas = state.atlases.get(atlasId);
     const image = atlas?.image;
     if (!image || !texture || typeof texture !== "object") {

@@ -49,10 +49,10 @@
           "TYPE": "atlas",
           "ATLAS_ID": "gems",
           "ATLAS_TEXTURE": {
-            "x": 48,
+            "x": 192,
             "y": 0,
-            "w": 16,
-            "h": 16
+            "w": 64,
+            "h": 64
           },
           "PARALLAX_X": 0,
           "PARALLAX_Y": 0,
@@ -64,7 +64,7 @@
           "WRAP_BUFFER": 20.0,
           "IN_FRONT": true,
           "OPACITY": 0.25,
-          "SCALE": 6.0,
+          "SCALE": 2.0,
           "ROTATION": 137.0,
           "FLIP_X": false,
           "FLIP_Y": false,
@@ -123,8 +123,14 @@
     {
       "ATLAS_ID": "gems",
       "NAME": "GEMS_ATLAS",
-      "SRC": "/assets/atlases/gems_atlas.svg",
-      "TILE_SIZE": 16
+      "SRC": "/assets/atlases/gem_atlas.png",
+      "TILE_SIZE": 64
+    },
+    {
+      "ATLAS_ID": "blocks1",
+      "NAME": "BLOCKS1",
+      "SRC": "/assets/atlases/BLOCKS1.png",
+      "TILE_SIZE": 64
     }
   ],
   "backgrounds": []

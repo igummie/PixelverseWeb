@@ -65,7 +65,7 @@
           <button id="joinWorldBtn">Enter World</button>
           <button id="refreshWorldsBtn">Refresh</button>
         </div>
-        <a class="buttonLink" href="/news-editor.html" target="_blank" rel="noopener">Pixelverse Dev Tools</a>
+        <button id="devToolsBtn" class="buttonLink" type="button">Pixelverse Dev Tools</button>
         <button id="logoutBtn">Logout</button>
         <div id="worldError" class="error"></div>
       </div>
@@ -185,7 +185,71 @@
       </div>
     </div>
 
+    <div id="devToolsPinModal" class="devToolsPinModal hidden" role="dialog" aria-modal="true" aria-labelledby="devToolsPinTitle">
+      <div class="devToolsPinCard">
+        <div class="devToolsPinTitle" id="devToolsPinTitle">Developer Tools PIN</div>
+        <div class="devToolsPinSubtitle">Enter the PIN to open the editor tools.</div>
+        <input id="devToolsPinInput" type="password" inputmode="numeric" maxlength="32" autocomplete="off" placeholder="PIN" />
+        <div id="devToolsPinError" class="error"></div>
+        <div class="row">
+          <button id="devToolsPinSubmit" type="button">Unlock</button>
+          <button id="devToolsPinCancel" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/build/game.bundle.js"></script>
+    <script>
+      (() => {
+        const modal = document.getElementById("devToolsPinModal");
+        const input = document.getElementById("devToolsPinInput");
+        const error = document.getElementById("devToolsPinError");
+        const submit = document.getElementById("devToolsPinSubmit");
+        const cancel = document.getElementById("devToolsPinCancel");
+        const query = new URLSearchParams(window.location.search);
+        const requestedPath = query.get("returnTo") || "/news-editor.html";
+        let pendingPath = "/news-editor.html";
+
+        function showPin(path) {
+          pendingPath = path;
+          error.textContent = "";
+          input.value = "";
+          modal.classList.remove("hidden");
+          input.focus();
+        }
+
+        function closePin() {
+          modal.classList.add("hidden");
+        }
+
+        async function unlock() {
+          error.textContent = "";
+          submit.disabled = true;
+          try {
+            const response = await fetch("/api/tools/dev-access", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pin: input.value }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || "Unable to unlock developer tools.");
+            window.location.href = pendingPath;
+          } catch (unlockError) {
+            error.textContent = unlockError.message;
+          } finally {
+            submit.disabled = false;
+          }
+        }
+
+        document.getElementById("devToolsBtn").addEventListener("click", () => {
+          showPin("/news-editor.html");
+        });
+        submit.addEventListener("click", unlock);
+        input.addEventListener("keydown", (event) => { if (event.key === "Enter") unlock(); });
+        cancel.addEventListener("click", closePin);
+        if (query.get("devTools") === "1") showPin(requestedPath);
+      })();
+    </script>
   </body>
 </html>
 
