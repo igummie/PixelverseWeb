@@ -33,7 +33,7 @@ export function createAssetsLoaderController({ state, settings, elements, callba
 
   // color normalization moved to utils; use utils.normalizeTint
 
-  function buildTintedSeedSprite(image, texture, tintHex) {
+  function buildTintedSeedSprite(image, texture, tintHex, tintAlpha = 0.35) {
     const width = Math.max(1, Math.floor(Number(texture?.w) || TILE_SIZE));
     const height = Math.max(1, Math.floor(Number(texture?.h) || TILE_SIZE));
     const sourceX = Math.floor(Number(texture?.x) || 0);
@@ -53,12 +53,45 @@ export function createAssetsLoaderController({ state, settings, elements, callba
     }
 
     spriteCtx.globalCompositeOperation = "source-atop";
-    spriteCtx.globalAlpha = 0.35;
+    const alpha = Number(tintAlpha);
+    spriteCtx.globalAlpha = Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 0.35;
     spriteCtx.fillStyle = tintColor;
     spriteCtx.fillRect(0, 0, width, height);
     spriteCtx.globalAlpha = 1;
     spriteCtx.globalCompositeOperation = "source-over";
 
+    return spriteCanvas;
+  }
+
+  function buildLayeredSeedSprite(layers) {
+    const preparedLayers = [];
+    for (const layer of layers) {
+      const atlasId = String(layer?.ATLAS_ID ?? "").trim().toLowerCase();
+      const texture = layer?.ATLAS_TEXTURE;
+      const image = state.atlases.get(atlasId)?.image;
+      if (!image || !texture || typeof texture !== "object") {
+        continue;
+      }
+      preparedLayers.push({ image, texture, tint: layer?.TINT || "", tintAlpha: layer?.TINT_ALPHA });
+    }
+    if (!preparedLayers.length) {
+      return null;
+    }
+
+    const width = Math.max(...preparedLayers.map(({ texture }) => Math.max(1, Math.floor(Number(texture.w) || TILE_SIZE))));
+    const height = Math.max(...preparedLayers.map(({ texture }) => Math.max(1, Math.floor(Number(texture.h) || TILE_SIZE))));
+    const spriteCanvas = document.createElement("canvas");
+    spriteCanvas.width = width;
+    spriteCanvas.height = height;
+    const spriteCtx = spriteCanvas.getContext("2d");
+    if (!spriteCtx) {
+      return null;
+    }
+    spriteCtx.imageSmoothingEnabled = false;
+    for (const layer of preparedLayers) {
+      const layerSprite = buildTintedSeedSprite(layer.image, layer.texture, layer.tint, layer.tintAlpha);
+      spriteCtx.drawImage(layerSprite, 0, 0, width, height);
+    }
     return spriteCanvas;
   }
 
@@ -213,6 +246,15 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       seed.ITEM_TYPE = "seed";
       // normalize seed atlas id to string key
       seed.SEED_ATLAS_ID = String(seed.SEED_ATLAS_ID ?? seed.ATLAS_ID ?? "").trim().toLowerCase();
+      if (Array.isArray(seed.SEED_LAYERS)) {
+        seed.SEED_LAYERS = seed.SEED_LAYERS
+          .filter((layer) => layer && typeof layer === "object")
+          .map((layer) => ({
+            ...layer,
+            ATLAS_ID: String(layer.ATLAS_ID ?? seed.SEED_ATLAS_ID).trim().toLowerCase(),
+            TINT_ALPHA: Math.max(0, Math.min(1, Number(layer.TINT_ALPHA ?? 0.35) || 0)),
+          }));
+      }
       state.seedDefs.set(normalizedSeedId, seed);
     }
 
@@ -433,26 +475,30 @@ export function createAssetsLoaderController({ state, settings, elements, callba
       return null;
     }
 
-    const atlasId = seed.SEED_ATLAS_ID;
-    const texture = seed.SEED_ATLAS_TEXTURE;
-    const atlas = state.atlases.get(atlasId);
-    const image = atlas?.image;
-    if (!image || !texture || typeof texture !== "object") {
+    const layers = Array.isArray(seed.SEED_LAYERS) && seed.SEED_LAYERS.length
+      ? seed.SEED_LAYERS
+      : [{
+        ATLAS_ID: seed.SEED_ATLAS_ID,
+        ATLAS_TEXTURE: seed.SEED_ATLAS_TEXTURE,
+        TINT: seed.SEED_TINT || "",
+      }];
+    if (!layers.length) {
       return null;
     }
 
     const cacheKey = JSON.stringify({
       seedId: Math.floor(normalizedSeedId),
-      atlasId,
-      texture,
-      tint: seed.SEED_TINT || "",
+      layers,
     });
     const cached = state.seedDropSpriteCache.get(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const sprite = buildTintedSeedSprite(image, texture, seed.SEED_TINT);
+    const sprite = buildLayeredSeedSprite(layers);
+    if (!sprite) {
+      return null;
+    }
     state.seedDropSpriteCache.set(cacheKey, sprite);
     return sprite;
   }

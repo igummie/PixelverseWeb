@@ -48,14 +48,25 @@
               <label for="growtimeInput">GROWTIME (in seconds)</label>
               <input id="growtimeInput" type="number" min="0" step="1" value="3600" />
             </div>
-            <div class="fieldStack">
-              <label for="seedTintInput">SEED_TINT</label>
-              <input id="seedTintInput" type="text" placeholder="#ffffff" />
+          </div>
+
+          <div class="fruitDropsSection">
+            <div class="row" style="margin-bottom: 6px">
+              <div class="title small" style="margin: 0">Seed Layers</div>
             </div>
-            <div class="fieldStack">
-              <label for="seedTintColorInput">Seed Tint Picker</label>
-              <input id="seedTintColorInput" type="color" value="#ffffff" />
-            </div>
+            <div class="tiny" style="margin-top: 0">Layers are drawn in order. Add matching split sprites to combine them, then tint each layer independently.</div>
+            <table class="stageTable">
+              <thead>
+                <tr>
+                  <th>Layer</th>
+                  <th>Rect</th>
+                  <th>Tint</th>
+                  <th>Strength</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="seedLayersBody"></tbody>
+            </table>
           </div>
 
           <div class="fruitDropsSection">
@@ -134,16 +145,12 @@
           <div class="pickerSection">
             <div class="title small">Seed Texture Picker</div>
             <div class="row">
-              <div class="fieldStack" style="min-width: 200px">
-                <label for="seedAtlasSelect">Seed Atlas</label>
-                <select id="seedAtlasSelect"></select>
-              </div>
               <div class="fieldStack">
                 <label for="seedTileSizeInput">Tile Size</label>
                 <input id="seedTileSizeInput" type="number" min="1" step="1" value="16" />
               </div>
-              <button id="loadSeedAtlasBtn" type="button">Load Seed Atlas</button>
-              <button id="assignSeedTextureBtn" type="button">Assign Seed Texture</button>
+              <button id="addSeedLayerBtn" type="button">Add Selected Layer</button>
+              <button id="replaceSeedLayerBtn" type="button">Replace Selected Layer</button>
             </div>
             <div id="seedAtlasWrap" class="atlasWrap">
               <canvas id="seedAtlasCanvas" width="256" height="256"></canvas>
@@ -154,15 +161,10 @@
           <div class="pickerSection">
             <div class="title small">Tree Stalk / Leaves Picker</div>
             <div class="row">
-              <div class="fieldStack" style="min-width: 200px">
-                <label for="treeAtlasSelect">Tree Atlas</label>
-                <select id="treeAtlasSelect"></select>
-              </div>
               <div class="fieldStack">
                 <label for="treeTileSizeInput">Tile Size</label>
                 <input id="treeTileSizeInput" type="number" min="1" step="1" value="64" />
               </div>
-              <button id="loadTreeAtlasBtn" type="button">Load Tree Atlas</button>
               <button id="assignStalkTextureBtn" type="button">Assign to Stalk</button>
               <button id="assignLeavesTextureBtn" type="button">Assign to Leaves</button>
             </div>
@@ -201,8 +203,6 @@
       const growtimeInput = document.getElementById("growtimeInput");
       const fruitDropsEditor = document.getElementById("fruitDropsEditor");
       const addFruitDropBtn = document.getElementById("addFruitDropBtn");
-      const seedTintInput = document.getElementById("seedTintInput");
-      const seedTintColorInput = document.getElementById("seedTintColorInput");
       const treeTintInput = document.getElementById("treeTintInput");
       const treeTintColorInput = document.getElementById("treeTintColorInput");
       const treeGemChanceInput = document.getElementById("treeGemChanceInput");
@@ -211,17 +211,15 @@
       const treeToughnessInput = document.getElementById("treeToughnessInput");
       const treeSeedDropChanceInput = document.getElementById("treeSeedDropChanceInput");
       const stageTableBody = document.getElementById("stageTableBody");
+      const seedLayersBody = document.getElementById("seedLayersBody");
       const treeSection = document.getElementById("treeSection");
       const treeEmptyHint = document.getElementById("treeEmptyHint");
-      const seedAtlasSelect = document.getElementById("seedAtlasSelect");
       const seedTileSizeInput = document.getElementById("seedTileSizeInput");
-      const loadSeedAtlasBtn = document.getElementById("loadSeedAtlasBtn");
-      const assignSeedTextureBtn = document.getElementById("assignSeedTextureBtn");
+      const addSeedLayerBtn = document.getElementById("addSeedLayerBtn");
+      const replaceSeedLayerBtn = document.getElementById("replaceSeedLayerBtn");
       const seedAtlasCanvas = document.getElementById("seedAtlasCanvas");
       const seedSelectionInfo = document.getElementById("seedSelectionInfo");
-      const treeAtlasSelect = document.getElementById("treeAtlasSelect");
       const treeTileSizeInput = document.getElementById("treeTileSizeInput");
-      const loadTreeAtlasBtn = document.getElementById("loadTreeAtlasBtn");
       const assignStalkTextureBtn = document.getElementById("assignStalkTextureBtn");
       const assignLeavesTextureBtn = document.getElementById("assignLeavesTextureBtn");
       const treeAtlasCanvas = document.getElementById("treeAtlasCanvas");
@@ -233,8 +231,10 @@
       const resetJsonBtn = document.getElementById("resetJsonBtn");
       const copyJsonBtn = document.getElementById("copyJsonBtn");
 
-      const seedInputs = [seedIdInput, seedNameInput, growtimeInput, seedTintInput, seedTintColorInput, treeTintInput, treeTintColorInput, treeGemChanceInput, treeGemAmountInput, treeGemAmountVarInput, treeToughnessInput, treeSeedDropChanceInput];
-      const seedActionButtons = [deleteSeedBtn, saveBtn, assignSeedTextureBtn, assignStalkTextureBtn, assignLeavesTextureBtn, loadSeedAtlasBtn, loadTreeAtlasBtn, addFruitDropBtn];
+      const seedInputs = [seedIdInput, seedNameInput, growtimeInput, treeTintInput, treeTintColorInput, treeGemChanceInput, treeGemAmountInput, treeGemAmountVarInput, treeToughnessInput, treeSeedDropChanceInput];
+      const seedActionButtons = [deleteSeedBtn, saveBtn, addSeedLayerBtn, replaceSeedLayerBtn, assignStalkTextureBtn, assignLeavesTextureBtn, addFruitDropBtn];
+      const SEED_PICKER_ATLAS_ID = "seed";
+      const TREE_PICKER_ATLAS_ID = "trees";
 
       const state = {
         pickerAtlases: [],
@@ -242,6 +242,7 @@
         seeds: [],
         usedBlockItemIds: new Set(),
         selectedIndex: -1,
+        selectedSeedLayerIndex: -1,
         atlasImageCache: {},
         seedPicker: {
           atlasImage: null,
@@ -267,6 +268,22 @@
           return text.toLowerCase();
         }
         return "";
+      }
+
+      function normalizeSeedLayer(layer, fallback = {}) {
+        const rect = layer?.ATLAS_TEXTURE ?? fallback.ATLAS_TEXTURE ?? { x: 0, y: 0, w: 16, h: 16 };
+        const tintAlpha = Number(layer?.TINT_ALPHA ?? fallback.TINT_ALPHA ?? 0.35);
+        return {
+          ATLAS_ID: normalizeAtlasId(layer?.ATLAS_ID ?? fallback.ATLAS_ID ?? SEED_PICKER_ATLAS_ID),
+          ATLAS_TEXTURE: {
+            x: Math.max(0, Number.parseInt(rect?.x ?? 0, 10) || 0),
+            y: Math.max(0, Number.parseInt(rect?.y ?? 0, 10) || 0),
+            w: Math.max(1, Number.parseInt(rect?.w ?? 16, 10) || 16),
+            h: Math.max(1, Number.parseInt(rect?.h ?? 16, 10) || 16),
+          },
+          TINT: normalizeTint(layer?.TINT ?? fallback.TINT ?? ""),
+          TINT_ALPHA: Number.isFinite(tintAlpha) ? Math.max(0, Math.min(1, tintAlpha)) : 0.35,
+        };
       }
 
       function normalizeFruitDrops(rawDrops, fallbackSeedId = 0) {
@@ -422,6 +439,15 @@
           w: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.w ?? 16, 10) || 16),
           h: Math.max(1, Number.parseInt(seed?.SEED_ATLAS_TEXTURE?.h ?? 16, 10) || 16),
         };
+        const legacySeedLayer = {
+          ATLAS_ID: normalizeAtlasId(seed?.SEED_ATLAS_ID ?? SEED_PICKER_ATLAS_ID),
+          ATLAS_TEXTURE: seedAtlasTexture,
+          TINT: normalizeTint(seed?.SEED_TINT ?? ""),
+          TINT_ALPHA: 0.35,
+        };
+        const seedLayers = Array.isArray(seed?.SEED_LAYERS) && seed.SEED_LAYERS.length
+          ? seed.SEED_LAYERS.map((layer) => normalizeSeedLayer(layer, legacySeedLayer)).slice(0, 8)
+          : [legacySeedLayer];
 
         return {
           ITEM_ID: itemId,
@@ -429,9 +455,10 @@
           NAME: String(seed?.NAME ?? "").trim() || `SEED_${itemId}`,
           GROWTIME: Math.max(0, Number.parseInt(seed?.GROWTIME ?? 3600, 10) || 3600),
           FRUIT_DROPS: normalizeFruitDrops(seed?.FRUIT_DROPS, itemId),
-          SEED_TINT: normalizeTint(seed?.SEED_TINT ?? ""),
-          SEED_ATLAS_ID: normalizeAtlasId(seed?.SEED_ATLAS_ID ?? ""),
-          SEED_ATLAS_TEXTURE: seedAtlasTexture,
+          SEED_TINT: seedLayers[0].TINT,
+          SEED_ATLAS_ID: seedLayers[0].ATLAS_ID,
+          SEED_ATLAS_TEXTURE: { ...seedLayers[0].ATLAS_TEXTURE },
+          SEED_LAYERS: seedLayers,
           TREE: {
             TINT: normalizeTint(seed?.TREE?.TINT ?? ""),
             STALK: stalk,
@@ -469,24 +496,6 @@
           state.selectedIndex = 0;
         }
         seedSelect.value = String(state.selectedIndex);
-      }
-
-      function renderAtlasSelect(selectEl) {
-        const current = String(normalizeAtlasId(selectEl.value));
-        selectEl.innerHTML = "";
-        const atlasChoices = Array.isArray(state.seedAtlases) ? state.seedAtlases : [];
-        for (const atlas of atlasChoices) {
-          const atlasId = normalizeAtlasId(atlas?.ATLAS_ID);
-          const option = document.createElement("option");
-          option.value = String(atlasId);
-          option.textContent = `${String(atlas?.NAME ?? "ATLAS")} (${String(atlasId)})`;
-          selectEl.append(option);
-        }
-        if (selectEl.options.length) {
-          selectEl.value = Array.from(selectEl.options).some((opt) => opt.value === current)
-            ? current
-            : selectEl.options[0].value;
-        }
       }
 
       function getAtlasById(atlasId) {
@@ -539,10 +548,103 @@
         }
       }
 
+      function renderSeedLayers(seed) {
+        seedLayersBody.innerHTML = "";
+        const layers = Array.isArray(seed?.SEED_LAYERS) ? seed.SEED_LAYERS : [];
+        state.selectedSeedLayerIndex = Math.max(0, Math.min(state.selectedSeedLayerIndex, layers.length - 1));
+        for (let index = 0; index < layers.length; index += 1) {
+          const layer = layers[index];
+          const row = document.createElement("tr");
+          row.classList.toggle("selectedSeedLayer", index === state.selectedSeedLayerIndex);
+
+          const layerCell = document.createElement("td");
+          layerCell.textContent = String(index + 1);
+          row.append(layerCell);
+          const rectCell = document.createElement("td");
+          const rect = layer.ATLAS_TEXTURE;
+          rectCell.textContent = `${rect.x},${rect.y},${rect.w},${rect.h}`;
+          row.append(rectCell);
+
+          const tintCell = document.createElement("td");
+          const tintInput = document.createElement("input");
+          tintInput.type = "color";
+          tintInput.value = /^#[0-9a-f]{6}$/i.test(layer.TINT) ? layer.TINT : "#ffffff";
+          tintInput.title = `Tint layer ${index + 1}`;
+          tintInput.addEventListener("input", () => {
+            layer.TINT = tintInput.value;
+            syncLegacySeedFields(seed);
+            updateJsonOutput();
+            renderSeedCards();
+          });
+          tintCell.append(tintInput);
+          row.append(tintCell);
+
+          const strengthCell = document.createElement("td");
+          const strengthInput = document.createElement("input");
+          strengthInput.type = "number";
+          strengthInput.min = "0";
+          strengthInput.max = "1";
+          strengthInput.step = "0.05";
+          strengthInput.value = String(layer.TINT_ALPHA);
+          strengthInput.title = `Tint strength for layer ${index + 1}; 1 is fully solid`;
+          strengthInput.addEventListener("input", () => {
+            layer.TINT_ALPHA = Math.max(0, Math.min(1, Number(strengthInput.value) || 0));
+            strengthInput.value = String(layer.TINT_ALPHA);
+            syncLegacySeedFields(seed);
+            updateJsonOutput();
+            renderSeedCards();
+          });
+          strengthCell.append(strengthInput);
+          row.append(strengthCell);
+
+          const actionsCell = document.createElement("td");
+          for (const [label, change] of [["Up", -1], ["Down", 1]]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "secondary";
+            button.textContent = label;
+            button.disabled = index + change < 0 || index + change >= layers.length;
+            button.addEventListener("click", () => {
+              const nextIndex = index + change;
+              [layers[index], layers[nextIndex]] = [layers[nextIndex], layers[index]];
+              state.selectedSeedLayerIndex = nextIndex;
+              syncLegacySeedFields(seed);
+              renderFromSelected();
+            });
+            actionsCell.append(button);
+          }
+          const removeButton = document.createElement("button");
+          removeButton.type = "button";
+          removeButton.className = "secondary";
+          removeButton.textContent = "Remove";
+          removeButton.disabled = layers.length <= 1;
+          removeButton.addEventListener("click", () => {
+            layers.splice(index, 1);
+            state.selectedSeedLayerIndex = Math.max(0, Math.min(index, layers.length - 1));
+            syncLegacySeedFields(seed);
+            renderFromSelected();
+          });
+          actionsCell.append(removeButton);
+          row.append(actionsCell);
+
+          row.addEventListener("click", () => {
+            state.selectedSeedLayerIndex = index;
+            renderSeedLayers(seed);
+          });
+          seedLayersBody.append(row);
+        }
+      }
+
+      function syncLegacySeedFields(seed) {
+        const firstLayer = seed.SEED_LAYERS?.[0];
+        if (!firstLayer) return;
+        seed.SEED_ATLAS_ID = firstLayer.ATLAS_ID;
+        seed.SEED_ATLAS_TEXTURE = { ...firstLayer.ATLAS_TEXTURE };
+        seed.SEED_TINT = firstLayer.TINT;
+      }
+
       function renderFromSelected() {
         renderSeedOptions();
-        renderAtlasSelect(seedAtlasSelect);
-        renderAtlasSelect(treeAtlasSelect);
         renderSeedCards();
 
         const seed = state.seeds[state.selectedIndex];
@@ -550,8 +652,6 @@
           seedIdInput.value = "";
           seedNameInput.value = "";
           growtimeInput.value = "";
-          seedTintInput.value = "";
-          seedTintColorInput.value = "#ffffff";
           treeTintInput.value = "";
           treeTintColorInput.value = "#ffffff";
           treeGemChanceInput.value = "0";
@@ -586,10 +686,6 @@
         seedNameInput.value = seed.NAME;
         growtimeInput.value = String(seed.GROWTIME);
         buildFruitDropsEditor(seed);
-        seedTintInput.value = seed.SEED_TINT || "";
-        if (/^#[0-9a-f]{6}$/i.test(seed.SEED_TINT || "")) {
-          seedTintColorInput.value = seed.SEED_TINT;
-        }
         treeTintInput.value = seed.TREE.TINT || "";
         if (/^#[0-9a-f]{6}$/i.test(seed.TREE.TINT || "")) {
           treeTintColorInput.value = seed.TREE.TINT;
@@ -602,10 +698,11 @@
         treeSeedDropChanceInput.value = String(Math.max(0, Math.min(1, Number(seed.TREE.SEED_DROP_CHANCE) || 0)));
 
         renderStageRows(seed);
+        renderSeedLayers(seed);
         updateJsonOutput();
       }
 
-      function drawTexturePreview(canvas, atlasId, rect, tint = "", clearBg = true) {
+      function drawTexturePreview(canvas, atlasId, rect, tint = "", clearBg = true, tintAlpha = 0.35) {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
@@ -653,7 +750,8 @@
           if (tintColor) {
             // Tint only non-transparent pixels of the sprite layer.
             spriteCtx.globalCompositeOperation = "source-atop";
-            spriteCtx.globalAlpha = 0.35;
+            const alpha = Number(tintAlpha);
+            spriteCtx.globalAlpha = Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 0.35;
             spriteCtx.fillStyle = tintColor;
             spriteCtx.fillRect(0, 0, innerW, innerH);
             spriteCtx.globalAlpha = 1;
@@ -678,7 +776,18 @@
         await drawTexturePreviewAwaited(canvas, seed.TREE.LEAVES.ATLAS_ID, seed.TREE.LEAVES.ATLAS_TEXTURE, seed.TREE.TINT, false);
       }
 
-      function drawTexturePreviewAwaited(canvas, atlasId, rect, tint, clearBg) {
+      async function drawSeedPreview(canvas, seed) {
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#020617";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (const layer of seed.SEED_LAYERS || []) {
+          await drawTexturePreviewAwaited(canvas, layer.ATLAS_ID, layer.ATLAS_TEXTURE, layer.TINT, false, layer.TINT_ALPHA);
+        }
+      }
+
+      function drawTexturePreviewAwaited(canvas, atlasId, rect, tint, clearBg, tintAlpha = 0.35) {
         return new Promise((resolve) => {
           const ctx = canvas.getContext("2d");
           if (!ctx) return resolve();
@@ -726,7 +835,8 @@
             const tintColor = normalizeTint(tint);
             if (tintColor) {
               spriteCtx.globalCompositeOperation = "source-atop";
-              spriteCtx.globalAlpha = 0.35;
+              const alpha = Number(tintAlpha);
+              spriteCtx.globalAlpha = Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 0.35;
               spriteCtx.fillStyle = tintColor;
               spriteCtx.fillRect(0, 0, innerW, innerH);
               spriteCtx.globalAlpha = 1;
@@ -771,7 +881,7 @@
           seedCanvas.height = 40;
           seedCanvas.className = "cardPreview";
           previews.append(seedCanvas);
-          drawTexturePreview(seedCanvas, seed.SEED_ATLAS_ID, seed.SEED_ATLAS_TEXTURE, seed.SEED_TINT);
+          drawSeedPreview(seedCanvas, seed);
 
           const treeCanvas = document.createElement("canvas");
           treeCanvas.width = 40;
@@ -856,7 +966,7 @@
         seed.NAME = String(seedNameInput.value || "").trim() || `SEED_${seed.ITEM_ID}`;
         seed.GROWTIME = Math.max(0, Number.parseInt(growtimeInput.value, 10) || 0);
         seed.FRUIT_DROPS = readFruitDropsFromEditor();
-        seed.SEED_TINT = normalizeTint(seedTintInput.value);
+        syncLegacySeedFields(seed);
         seed.TREE.TINT = normalizeTint(treeTintInput.value);
         seed.TREE.GEM_CHANCE = Math.max(0, Math.min(1, Number(treeGemChanceInput.value) || 0));
         seed.TREE.GEM_AMOUNT = Math.max(0, Number(treeGemAmountInput.value) || 0);
@@ -912,12 +1022,11 @@
 
       async function loadPickerImage(kind) {
         const isSeed = kind === "seed";
-        const selectEl = isSeed ? seedAtlasSelect : treeAtlasSelect;
         const canvasEl = isSeed ? seedAtlasCanvas : treeAtlasCanvas;
         const tileInputEl = isSeed ? seedTileSizeInput : treeTileSizeInput;
         const picker = isSeed ? state.seedPicker : state.treePicker;
 
-        const atlasId = String(selectEl.value || "");
+        const atlasId = isSeed ? SEED_PICKER_ATLAS_ID : TREE_PICKER_ATLAS_ID;
         const atlas = getAtlasById(atlasId);
         if (!atlas || !atlas.SRC) {
           picker.atlasImage = null;
@@ -1061,7 +1170,7 @@
         handlePickerClick("tree", treeAtlasCanvas, treeTileSizeInput, treeSelectionInfo, event);
       });
 
-      assignSeedTextureBtn.addEventListener("click", () => {
+      function assignSeedLayer(replaceSelected) {
         applyCurrentSeedFields();
         const seed = state.seeds[state.selectedIndex];
         if (!seed) {
@@ -1069,12 +1178,25 @@
           return;
         }
 
-        seed.SEED_ATLAS_ID = normalizeAtlasId(seedAtlasSelect.value);
-        seed.SEED_ATLAS_TEXTURE = { ...state.seedPicker.selectedRect };
+        const layer = normalizeSeedLayer({
+          ATLAS_ID: SEED_PICKER_ATLAS_ID,
+          ATLAS_TEXTURE: state.seedPicker.selectedRect,
+        });
+        if (replaceSelected && state.selectedSeedLayerIndex >= 0 && seed.SEED_LAYERS[state.selectedSeedLayerIndex]) {
+          layer.TINT = seed.SEED_LAYERS[state.selectedSeedLayerIndex].TINT;
+          seed.SEED_LAYERS[state.selectedSeedLayerIndex] = layer;
+        } else {
+          seed.SEED_LAYERS.push(layer);
+          state.selectedSeedLayerIndex = seed.SEED_LAYERS.length - 1;
+        }
+        syncLegacySeedFields(seed);
 
         renderFromSelected();
-        setStatus("Assigned seed texture tile.");
-      });
+        setStatus(replaceSelected ? "Replaced selected seed layer." : "Added seed layer.");
+      }
+
+      addSeedLayerBtn.addEventListener("click", () => assignSeedLayer(false));
+      replaceSeedLayerBtn.addEventListener("click", () => assignSeedLayer(true));
 
       function assignTreeTexture(partKey) {
         applyCurrentSeedFields();
@@ -1090,7 +1212,7 @@
           return;
         }
 
-        part.ATLAS_ID = normalizeAtlasId(treeAtlasSelect.value);
+        part.ATLAS_ID = TREE_PICKER_ATLAS_ID;
         part.ATLAS_TEXTURE = { ...state.treePicker.selectedRect };
 
         renderFromSelected();
@@ -1117,7 +1239,7 @@
         renderFromSelected();
       });
 
-      [seedIdInput, seedNameInput, growtimeInput, seedTintInput, treeTintInput].forEach((input) => {
+      [seedIdInput, seedNameInput, growtimeInput, treeTintInput].forEach((input) => {
         input.addEventListener("input", () => {
           applyCurrentSeedFields();
           updateJsonOutput();
@@ -1138,50 +1260,11 @@
         renderSeedCards();
       });
 
-      seedTintColorInput.addEventListener("input", () => {
-        seedTintInput.value = seedTintColorInput.value;
-        applyCurrentSeedFields();
-        updateJsonOutput();
-        renderSeedCards();
-      });
-
       treeTintColorInput.addEventListener("input", () => {
         treeTintInput.value = treeTintColorInput.value;
         applyCurrentSeedFields();
         updateJsonOutput();
         renderSeedCards();
-      });
-
-      loadSeedAtlasBtn.addEventListener("click", async () => {
-        try {
-          await loadPickerImage("seed");
-        } catch (error) {
-          setStatus(String(error?.message || error), true);
-        }
-      });
-
-      loadTreeAtlasBtn.addEventListener("click", async () => {
-        try {
-          await loadPickerImage("tree");
-        } catch (error) {
-          setStatus(String(error?.message || error), true);
-        }
-      });
-
-      seedAtlasSelect.addEventListener("change", async () => {
-        try {
-          await loadPickerImage("seed");
-        } catch (error) {
-          setStatus(String(error?.message || error), true);
-        }
-      });
-
-      treeAtlasSelect.addEventListener("change", async () => {
-        try {
-          await loadPickerImage("tree");
-        } catch (error) {
-          setStatus(String(error?.message || error), true);
-        }
       });
 
       seedTileSizeInput.addEventListener("input", () => {

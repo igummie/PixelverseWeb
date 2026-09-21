@@ -28,6 +28,28 @@
         "h": 16
       },
       "SEED_TINT": "#753a00",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 16,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#753a00"
+        },
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 16,
+            "y": 16,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#fb0b11"
+        }
+      ],
       "TREE": {
         "LEAVES": {
           "ATLAS_ID": "trees",
@@ -82,6 +104,18 @@
         "h": 16
       },
       "SEED_TINT": "#e5e5e5",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 0,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#e5e5e5"
+        }
+      ],
       "TREE": {
         "TINT": "#8b696a",
         "LEAVES": {
@@ -137,6 +171,18 @@
         "h": 16
       },
       "SEED_TINT": "#cf1216",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 16,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#cf1216"
+        }
+      ],
       "TREE": {
         "TINT": "#cf1216",
         "LEAVES": {
@@ -192,6 +238,18 @@
         "h": 16
       },
       "SEED_TINT": "#ced72f",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 16,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#ced72f"
+        }
+      ],
       "TREE": {
         "TINT": "#ced72f",
         "LEAVES": {
@@ -247,6 +305,18 @@
         "h": 16
       },
       "SEED_TINT": "#26272a",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 0,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#26272a"
+        }
+      ],
       "TREE": {
         "TINT": "#26272a",
         "LEAVES": {
@@ -302,6 +372,18 @@
         "h": 16
       },
       "SEED_TINT": "#fcfcfc",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#fcfcfc"
+        }
+      ],
       "TREE": {
         "TINT": "#fcfcfc",
         "LEAVES": {
@@ -357,6 +439,18 @@
         "h": 16
       },
       "SEED_TINT": "#d60000",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#d60000"
+        }
+      ],
       "TREE": {
         "TINT": "#d60000",
         "LEAVES": {
@@ -412,6 +506,18 @@
         "h": 16
       },
       "SEED_TINT": "#d66a00",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#d66a00"
+        }
+      ],
       "TREE": {
         "TINT": "#d66a00",
         "LEAVES": {
@@ -467,6 +573,18 @@
         "h": 16
       },
       "SEED_TINT": "#d6d600",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#d6d600"
+        }
+      ],
       "TREE": {
         "TINT": "#d6d600",
         "LEAVES": {
@@ -522,6 +640,18 @@
         "h": 16
       },
       "SEED_TINT": "#6ad600",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#6ad600"
+        }
+      ],
       "TREE": {
         "TINT": "#6ad600",
         "LEAVES": {
@@ -577,6 +707,18 @@
         "h": 16
       },
       "SEED_TINT": "#00d6d6",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#00d6d6"
+        }
+      ],
       "TREE": {
         "TINT": "#00d6d6",
         "LEAVES": {
@@ -632,6 +774,18 @@
         "h": 16
       },
       "SEED_TINT": "#0047d6",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#0047d6"
+        }
+      ],
       "TREE": {
         "TINT": "#0047d6",
         "LEAVES": {
@@ -687,6 +841,18 @@
         "h": 16
       },
       "SEED_TINT": "#ab00ab",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#ab00ab"
+        }
+      ],
       "TREE": {
         "TINT": "#ab00ab",
         "LEAVES": {
@@ -742,6 +908,18 @@
         "h": 16
       },
       "SEED_TINT": "#b0b0b0",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#b0b0b0"
+        }
+      ],
       "TREE": {
         "TINT": "#b0b0b0",
         "LEAVES": {
@@ -797,6 +975,18 @@
         "h": 16
       },
       "SEED_TINT": "#171717",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#171717"
+        }
+      ],
       "TREE": {
         "TINT": "#171717",
         "LEAVES": {
@@ -852,6 +1042,18 @@
         "h": 16
       },
       "SEED_TINT": "#605129",
+      "SEED_LAYERS": [
+        {
+          "ATLAS_ID": "seed",
+          "ATLAS_TEXTURE": {
+            "x": 64,
+            "y": 0,
+            "w": 16,
+            "h": 16
+          },
+          "TINT": "#605129"
+        }
+      ],
       "TREE": {
         "TINT": "#605129",
         "LEAVES": {

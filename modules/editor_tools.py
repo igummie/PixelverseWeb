@@ -535,6 +535,31 @@ def normalize_tint_color(value: Any) -> str:
     return ""
 
 
+def sanitize_seed_layer_entry(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    atlas_id = normalize_atlas_id_value(value.get("ATLAS_ID"))
+    texture = normalize_atlas_texture_rect(value.get("ATLAS_TEXTURE"))
+    if atlas_id is None or texture is None:
+        return None
+
+    output: dict[str, Any] = {
+        "ATLAS_ID": atlas_id,
+        "ATLAS_TEXTURE": texture,
+    }
+    tint = normalize_tint_color(value.get("TINT"))
+    if tint:
+        output["TINT"] = tint
+    try:
+        tint_alpha = max(0.0, min(1.0, float(value.get("TINT_ALPHA", 0.35))))
+    except Exception:
+        tint_alpha = 0.35
+    if tint_alpha != 0.35:
+        output["TINT_ALPHA"] = tint_alpha
+    return output
+
+
 def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
@@ -555,6 +580,13 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
     seed_atlas_id = normalize_atlas_id_value(value.get("SEED_ATLAS_ID"))
     seed_atlas_texture = normalize_atlas_texture_rect(value.get("SEED_ATLAS_TEXTURE"))
     seed_tint = normalize_tint_color(value.get("SEED_TINT"))
+    seed_layers: list[dict[str, Any]] = []
+    raw_seed_layers = value.get("SEED_LAYERS", [])
+    if isinstance(raw_seed_layers, list):
+        for raw_layer in raw_seed_layers[:8]:
+            layer = sanitize_seed_layer_entry(raw_layer)
+            if layer is not None:
+                seed_layers.append(layer)
 
     # tree-related fields
     tree_leaves: dict[str, Any] | None = None
@@ -635,6 +667,8 @@ def sanitize_seed_entry(value: Any) -> dict[str, Any] | None:
         output["SEED_ATLAS_TEXTURE"] = seed_atlas_texture
     if seed_tint:
         output["SEED_TINT"] = seed_tint
+    if seed_layers:
+        output["SEED_LAYERS"] = seed_layers
     # only create TREE object if there are any settings to persist
     if (
         tree_tint
